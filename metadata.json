@@ -1,0 +1,5 @@
+{
+  "name": "Schäfer Tours Routenplanung",
+  "description": "Ein professionelles Tool für Disponenten zum Erstellen, Verwalten und Drucken von Busfahrplänen mit Auslastungsanalyse und Kapazitätsprüfung.",
+  "requestFramePermissions": []
+}
