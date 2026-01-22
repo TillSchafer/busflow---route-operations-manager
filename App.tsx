@@ -1,292 +1,340 @@
+import React, { useEffect, useState } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Bus, Leaf } from 'lucide-react';
+import Home from './pages/Home';
+import Admin from './pages/Admin';
+import Profile from './pages/Profile';
+import BusflowApp from './apps/BusflowApp';
 
-import React, { useState, useEffect } from 'react';
-import { Route, BusType, Worker } from './types';
-import RouteEditor from './components/RouteEditor';
-import RouteList from './components/RouteList';
-import PrintPreview from './components/PrintPreview';
-import Settings from './components/Settings';
-import { Bus, Plus, List, ArrowLeft, Printer, Settings as SettingsIcon } from 'lucide-react';
+const AUTH_KEY = 'busflow_auth_v1';
+const USERS_KEY = 'busflow_users_v1';
 
-const STORAGE_KEY = 'busflow_routes_v1';
-const SETTINGS_KEY = 'busflow_settings_v1';
+type Role = 'ADMIN' | 'DISPATCH' | 'VIEWER';
+
+type User = {
+  id: string;
+  name: string;
+  password: string;
+  role: Role;
+  email?: string;
+  avatarUrl?: string;
+  allowedApps?: string[];
+};
+
+type AuthUser = {
+  id: string;
+  name: string;
+  role: Role;
+};
 
 const App: React.FC = () => {
-  const [routes, setRoutes] = useState<Route[]>([]);
-  const [currentRoute, setCurrentRoute] = useState<Route | null>(null);
-  const [view, setView] = useState<'LIST' | 'EDITOR' | 'PRINT' | 'SETTINGS'>('LIST');
-  const [busTypes, setBusTypes] = useState<BusType[]>([]);
-  const [workers, setWorkers] = useState<Worker[]>([]);
+  const navigate = useNavigate();
+  const [auth, setAuth] = useState<AuthUser | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [usersLoaded, setUsersLoaded] = useState(false);
 
-  const normalizeRoute = (route: Route): Route => {
-    let current = 0;
-    const stops = (route.stops || []).map(stop => {
-      const boarding = Number(stop.boarding) || 0;
-      const leaving = Number(stop.leaving) || 0;
-      const hasCurrent = Number.isFinite(Number(stop.currentTotal));
-      current = hasCurrent ? Number(stop.currentTotal) : current + boarding - leaving;
-      return {
-        ...stop,
-        boarding,
-        leaving,
-        arrivalTime: stop.arrivalTime || '',
-        departureTime: stop.departureTime || '',
-        currentTotal: current
-      };
-    });
+  const [loginName, setLoginName] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
 
-    return {
-      ...route,
-      capacity: Number(route.capacity) || 0,
-      status: route.status === 'Published' ? 'Published' : 'Draft',
-      stops,
-      busTypeId: route.busTypeId || undefined,
-      workerId: route.workerId || undefined,
-      operationalNotes: route.operationalNotes || '',
-      kmStartBetrieb: route.kmStartBetrieb || '',
-      kmStartCustomer: route.kmStartCustomer || '',
-      kmEndCustomer: route.kmEndCustomer || '',
-      kmEndBetrieb: route.kmEndBetrieb || '',
-      totalKm: route.totalKm || '',
-      timeReturnBetrieb: route.timeReturnBetrieb || '',
-      timeReturnCustomer: route.timeReturnCustomer || ''
-    };
-  };
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState<Role>('DISPATCH');
 
-  const buildInitialExample = (): Route => ({
-    id: '1',
-    name: 'Schulbus Tour Nord',
-    date: '2026-01-09',
-    busNumber: 'TÖN-TS 112',
-    driverName: 'Mustermann',
-    capacity: 55,
-    status: 'Published',
-    operationalNotes: [
-      'Schülerausweise / Tickets an jeder Einstiegshaltestelle prüfen.',
-      'Ankunftszeiten sind Zielzeiten; Sicherheit geht vor Geschwindigkeit.',
-      'Verspätungen von mehr als 10 Minuten sofort an die Leitstelle melden.',
-      'Dieses Dokument aufbewahren und am Schichtende abgeben.'
-    ].join('\n'),
-    kmStartBetrieb: '',
-    kmStartCustomer: '',
-    kmEndCustomer: '',
-    kmEndBetrieb: '',
-    totalKm: '',
-    timeReturnBetrieb: '',
-    timeReturnCustomer: '',
-    stops: [
-      { id: 's1', location: 'Garding', arrivalTime: '07:10', departureTime: '07:15', boarding: 18, leaving: 0, currentTotal: 18, notes: 'Zentraler Halt' },
-      { id: 's2', location: 'Tönning ZOB', arrivalTime: '07:35', departureTime: '07:40', boarding: 22, leaving: 0, currentTotal: 40 },
-      { id: 's3', location: 'Gymnasium', arrivalTime: '07:50', departureTime: '07:50', boarding: 0, leaving: 40, currentTotal: 0 }
-    ]
-  });
+  const [profileEmail, setProfileEmail] = useState('');
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState('');
+  const [profilePassword, setProfilePassword] = useState('');
 
-  // Load data
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
+    const savedAuth = localStorage.getItem(AUTH_KEY);
+    if (savedAuth) {
       try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          setRoutes(parsed.map(normalizeRoute));
-        } else if (parsed) {
-          setRoutes([normalizeRoute(parsed)]);
+        const parsed = JSON.parse(savedAuth);
+        if (parsed?.name && parsed?.role) {
+          const id = parsed.id || parsed.name;
+          setAuth({ id, name: parsed.name, role: parsed.role });
         }
       } catch (error) {
-        console.warn('Gespeicherte Routen konnten nicht geladen werden, Standarddaten werden verwendet.', error);
-        setRoutes([normalizeRoute(buildInitialExample())]);
+        console.warn('Gespeicherte Anmeldung konnte nicht geladen werden.', error);
       }
-    } else {
-      // Default example data
-      setRoutes([normalizeRoute(buildInitialExample())]);
     }
   }, []);
 
   useEffect(() => {
-    const saved = localStorage.getItem(SETTINGS_KEY);
-    if (!saved) return;
-    try {
-      const parsed = JSON.parse(saved);
-      if (parsed?.busTypes) {
-        setBusTypes(parsed.busTypes);
+    const savedUsers = localStorage.getItem(USERS_KEY);
+    if (savedUsers) {
+      try {
+        const parsed = JSON.parse(savedUsers);
+        if (Array.isArray(parsed)) {
+          const normalized = parsed.map((user: any, index: number) => ({
+            id: String(user.id ?? index),
+            name: String(user.name ?? '').trim(),
+            password: typeof user.password === 'string' && user.password.trim()
+              ? user.password.trim()
+              : 'admin123',
+            role: user.role === 'ADMIN' || user.role === 'DISPATCH' || user.role === 'VIEWER'
+              ? user.role
+              : 'DISPATCH',
+            email: typeof user.email === 'string' ? user.email : '',
+            avatarUrl: typeof user.avatarUrl === 'string' ? user.avatarUrl : '',
+            allowedApps: Array.isArray(user.allowedApps) ? user.allowedApps : undefined
+          }));
+          const filtered = normalized.filter(user => user.name);
+          if (filtered.length > 0) {
+            setUsers(filtered);
+            setUsersLoaded(true);
+            return;
+          }
+        }
+      } catch (error) {
+        console.warn('Gespeicherte Benutzer konnten nicht geladen werden.', error);
       }
-      if (parsed?.workers) {
-        setWorkers(parsed.workers);
-      }
-    } catch (error) {
-      console.warn('Gespeicherte Einstellungen konnten nicht geladen werden.', error);
     }
-  }, []);
-
-  // Save data
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(routes));
-  }, [routes]);
-
-  useEffect(() => {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ busTypes, workers }));
-  }, [busTypes, workers]);
-
-  const handleCreateNew = () => {
-    const newRoute: Route = {
-      id: Date.now().toString(),
-      name: '',
-      date: new Date().toISOString().split('T')[0],
-      busNumber: '',
-      driverName: '',
-      capacity: 50,
-      status: 'Draft',
-      stops: [],
-      busTypeId: busTypes[0]?.id,
-      workerId: workers[0]?.id,
-      operationalNotes: '',
-      kmStartBetrieb: '',
-      kmStartCustomer: '',
-      kmEndCustomer: '',
-      kmEndBetrieb: '',
-      totalKm: '',
-      timeReturnBetrieb: '',
-      timeReturnCustomer: ''
+    const defaultAdmin: User = {
+      id: 'admin',
+      name: 'Admin',
+      password: 'admin123',
+      role: 'ADMIN',
+      email: '',
+      avatarUrl: '',
+      allowedApps: ['busflow']
     };
-    setCurrentRoute(newRoute);
-    setView('EDITOR');
-  };
+    setUsers([defaultAdmin]);
+    localStorage.setItem(USERS_KEY, JSON.stringify([defaultAdmin]));
+    setUsersLoaded(true);
+  }, []);
 
-  const handleEditRoute = (route: Route) => {
-    setCurrentRoute(route);
-    setView('EDITOR');
-  };
+  useEffect(() => {
+    if (!usersLoaded) return;
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  }, [users, usersLoaded]);
 
-  const handlePrintRoute = (route: Route) => {
-    setCurrentRoute(route);
-    setView('PRINT');
-    setTimeout(() => window.print(), 300);
-  };
+  const currentUser = auth ? users.find(user => user.id === auth.id) : undefined;
 
-  const handleSaveRoute = (updatedRoute: Route) => {
-    setRoutes(prev => {
-      const exists = prev.find(r => r.id === updatedRoute.id);
-      if (exists) {
-        return prev.map(r => r.id === updatedRoute.id ? updatedRoute : r);
-      }
-      return [...prev, updatedRoute];
-    });
-    setView('LIST');
-  };
+  useEffect(() => {
+    if (!currentUser) return;
+    setProfileEmail(currentUser.email || '');
+    setProfileAvatarUrl(currentUser.avatarUrl || '');
+    setProfilePassword('');
+  }, [currentUser]);
 
-  const handleDeleteRoute = (id: string) => {
-    if (confirm('Möchten Sie diese Route wirklich löschen?')) {
-      setRoutes(prev => prev.filter(r => r.id !== id));
+  const handleLogin = () => {
+    setLoginError('');
+    const name = loginName.trim();
+    const password = loginPassword.trim();
+    if (!name || !password) {
+      setLoginError('Bitte Name und Passwort eingeben.');
+      return;
     }
+    const user = users.find(u => u.name.toLowerCase() === name.toLowerCase());
+    if (!user || user.password !== password) {
+      setLoginError('Ungültige Anmeldedaten.');
+      return;
+    }
+    const nextAuth = { id: user.id, name: user.name, role: user.role };
+    setAuth(nextAuth);
+    localStorage.setItem(AUTH_KEY, JSON.stringify(nextAuth));
+    setLoginPassword('');
   };
 
-  const handleAddBusType = (busType: BusType) => {
-    setBusTypes(prev => [...prev, busType]);
+  const handleLogout = () => {
+    setAuth(null);
+    localStorage.removeItem(AUTH_KEY);
+    navigate('/');
   };
 
-  const handleRemoveBusType = (id: string) => {
-    setBusTypes(prev => prev.filter(b => b.id !== id));
+  const handleAddUser = () => {
+    const name = newUserName.trim();
+    const password = newUserPassword.trim();
+    if (!name || !password) return;
+    if (users.some(user => user.name.toLowerCase() === name.toLowerCase())) return;
+    setUsers(prev => [
+      ...prev,
+      { id: Date.now().toString(), name, password, role: newUserRole, allowedApps: ['busflow'] }
+    ]);
+    setNewUserName('');
+    setNewUserPassword('');
+    setNewUserRole('DISPATCH');
   };
 
-  const handleAddWorker = (worker: Worker) => {
-    setWorkers(prev => [...prev, worker]);
+  const handleRemoveUser = (id: string) => {
+    if (auth?.id === id) return;
+    setUsers(prev => prev.filter(user => user.id !== id));
   };
 
-  const handleRemoveWorker = (id: string) => {
-    setWorkers(prev => prev.filter(w => w.id !== id));
+  const handleUpdateUser = (id: string, updates: Partial<User>) => {
+    setUsers(prev => prev.map(user => (user.id === id ? { ...user, ...updates } : user)));
   };
+
+  const handleSaveProfile = () => {
+    if (!currentUser) return;
+    const updates: Partial<User> = {
+      email: profileEmail.trim(),
+      avatarUrl: profileAvatarUrl.trim()
+    };
+    if (profilePassword.trim()) {
+      updates.password = profilePassword.trim();
+    }
+    handleUpdateUser(currentUser.id, updates);
+    setProfilePassword('');
+  };
+
+  const apps = [
+    {
+      id: 'busflow',
+      title: 'BusFlow Routenplanung',
+      description: 'Routen, Halte, Fahrgastzahlen und Druckansicht verwalten.',
+      icon: Bus,
+      roles: ['ADMIN', 'DISPATCH', 'VIEWER'] as const,
+      onClick: () => navigate('/busflow')
+    }
+  ];
+
+  const allowedAppIds = auth
+    ? users.find(user => user.id === auth.id)?.allowedApps
+    : undefined;
+  const visibleApps = auth
+    ? apps.filter(app => app.roles.includes(auth.role) && (!allowedAppIds || allowedAppIds.includes(app.id)))
+    : apps;
+
+  const contentClass = !auth ? 'pointer-events-none blur-sm' : '';
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Navbar - Hidden on print */}
-      <nav className="bg-slate-900 text-white p-4 sticky top-0 z-50 no-print flex items-center justify-between shadow-lg">
-        <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setView('LIST')}>
-          <Bus className="w-8 h-8 text-blue-400" />
-          <h1 className="text-xl font-bold tracking-tight">Schäfer Tours Routenplanung</h1>
-        </div>
-        <div className="flex space-x-4">
-          <button 
-            onClick={() => setView('LIST')}
-            className={`flex items-center space-x-1 px-3 py-1.5 rounded-md transition-colors ${view === 'LIST' ? 'bg-slate-800' : 'hover:bg-slate-800'}`}
-          >
-            <List className="w-4 h-4" />
-          <span>Meine Routen</span>
-          </button>
-          <button 
-            onClick={() => setView('SETTINGS')}
-            className={`flex items-center space-x-1 px-3 py-1.5 rounded-md transition-colors ${view === 'SETTINGS' ? 'bg-slate-800' : 'hover:bg-slate-800'}`}
-          >
-            <SettingsIcon className="w-4 h-4" />
-            <span>Einstellungen</span>
-          </button>
-          <button 
-            onClick={handleCreateNew}
-            className="flex items-center space-x-1 bg-blue-600 hover:bg-blue-500 px-4 py-1.5 rounded-md transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Route erstellen</span>
-          </button>
-        </div>
-      </nav>
-
-      {/* Main Content */}
-      <main className="flex-1 p-4 md:p-8 no-print max-w-7xl mx-auto w-full">
-        {view === 'LIST' && (
-          <RouteList 
-            routes={routes} 
-            busTypes={busTypes}
-            onEdit={handleEditRoute} 
-            onPrint={handlePrintRoute} 
-            onDelete={handleDeleteRoute} 
-          />
-        )}
-        {view === 'EDITOR' && currentRoute && (
-          <div className="space-y-6">
-            <button 
-              onClick={() => setView('LIST')}
-              className="flex items-center space-x-2 text-slate-500 hover:text-slate-800 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Zur Übersicht</span>
-            </button>
-            <RouteEditor 
-              route={currentRoute} 
-              onSave={handleSaveRoute} 
-              onCancel={() => setView('LIST')} 
-              busTypes={busTypes}
-              workers={workers}
-            />
+      {!usersLoaded && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/10 backdrop-blur-sm">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-lg px-10 py-8 flex flex-col items-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <Leaf className="w-8 h-8 animate-spin" />
+            </div>
+            <p className="text-sm font-semibold text-slate-600">Lade Daten ...</p>
           </div>
-        )}
-        {view === 'SETTINGS' && (
-          <Settings
-            busTypes={busTypes}
-            workers={workers}
-            onAddBusType={handleAddBusType}
-            onRemoveBusType={handleRemoveBusType}
-            onAddWorker={handleAddWorker}
-            onRemoveWorker={handleRemoveWorker}
-          />
-        )}
-        {view === 'PRINT' && currentRoute && (
-          <div className="flex flex-col items-center space-y-4">
-             <div className="bg-white p-8 border rounded-lg shadow-sm w-full max-w-4xl opacity-50 select-none">
-                <p className="text-center italic">Die Druckvorschau wird erstellt. Falls sie nicht automatisch geöffnet wurde, klicken Sie unten.</p>
-             </div>
-             <button 
-                onClick={() => window.print()}
-                className="bg-slate-900 text-white px-6 py-2 rounded-lg flex items-center space-x-2"
-             >
-                <Printer className="w-5 h-5" />
-                <span>Druckdialog öffnen</span>
-             </button>
-             <button onClick={() => setView('LIST')} className="text-blue-600">Zurück zur App</button>
+        </div>
+      )}
+      {!auth && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm no-print">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl px-8 py-6 w-full max-w-md">
+            <h2 className="text-xl font-bold text-slate-900 mb-2">Anmeldung</h2>
+            <p className="text-sm text-slate-500 mb-6">Bitte melden Sie sich an, um fortzufahren.</p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Name</label>
+                <input
+                  type="text"
+                  value={loginName}
+                  onChange={e => setLoginName(e.target.value)}
+                  className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
+                  placeholder="z. B. Max Mustermann"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Passwort</label>
+                <input
+                  type="password"
+                  value={loginPassword}
+                  onChange={e => setLoginPassword(e.target.value)}
+                  className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
+                  placeholder="••••••••"
+                />
+              </div>
+              {loginError && <p className="text-sm text-red-600">{loginError}</p>}
+              <button
+                onClick={handleLogin}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors"
+              >
+                Anmelden
+              </button>
+              <p className="text-xs text-slate-400">Standard-Admin: Admin / admin123</p>
+            </div>
           </div>
-        )}
-      </main>
-
-      {/* Print Overlay - Hidden on screen, visible on print */}
-      <div className="print-only">
-        {currentRoute && <PrintPreview route={currentRoute} busTypes={busTypes} />}
+        </div>
+      )}
+      <div className={contentClass}>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <Home
+                apps={visibleApps}
+                auth={currentUser ? { name: currentUser.name, role: currentUser.role, avatarUrl: currentUser.avatarUrl } : null}
+                onProfile={() => navigate('/profile')}
+                onAdmin={() => navigate('/admin')}
+                onLogout={handleLogout}
+                onHome={() => navigate('/')}
+              />
+            }
+          />
+          <Route
+            path="/busflow"
+            element={
+              <BusflowApp
+                authUser={currentUser ? { name: currentUser.name, role: currentUser.role, avatarUrl: currentUser.avatarUrl } : null}
+                onProfile={() => navigate('/profile')}
+                onLogout={handleLogout}
+                onGoHome={() => navigate('/')}
+                onAdmin={() => navigate('/admin')}
+              />
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              auth?.role === 'ADMIN' ? (
+                <Admin
+                  users={users}
+                  apps={apps.map(app => ({ id: app.id, title: app.title }))}
+                  currentUserId={auth?.id}
+                  newUserName={newUserName}
+                  newUserPassword={newUserPassword}
+                  newUserRole={newUserRole}
+                  onNewUserName={setNewUserName}
+                  onNewUserPassword={setNewUserPassword}
+                  onNewUserRole={setNewUserRole}
+                  onAddUser={handleAddUser}
+                  onRemoveUser={handleRemoveUser}
+                  onUpdateUser={handleUpdateUser}
+                  header={{
+                    title: 'Adminbereich',
+                    user: currentUser ? { name: currentUser.name, role: currentUser.role, avatarUrl: currentUser.avatarUrl } : null,
+                    onHome: () => navigate('/'),
+                    onProfile: () => navigate('/profile'),
+                    onAdmin: () => navigate('/admin'),
+                    onLogout: handleLogout
+                  }}
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              currentUser ? (
+                <Profile
+                  name={currentUser.name}
+                  role={currentUser.role}
+                  avatarUrl={currentUser.avatarUrl}
+                  email={currentUser.email || ''}
+                  profileEmail={profileEmail}
+                  profileAvatarUrl={profileAvatarUrl}
+                  profilePassword={profilePassword}
+                  onEmailChange={setProfileEmail}
+                  onAvatarChange={setProfileAvatarUrl}
+                  onPasswordChange={setProfilePassword}
+                  onSave={handleSaveProfile}
+                  onGoHome={() => navigate('/')}
+                  onLogout={handleLogout}
+                  onProfile={() => navigate('/profile')}
+                  onAdmin={() => navigate('/admin')}
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </div>
     </div>
   );

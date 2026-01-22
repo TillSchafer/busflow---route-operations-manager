@@ -145,7 +145,13 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
                       </button>
                       <button 
                         onClick={() => onPrint(route)}
-                        className="flex items-center space-x-2 bg-slate-900 hover:bg-slate-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                        disabled={route.status !== 'Published'}
+                        className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                          route.status === 'Published'
+                            ? 'bg-slate-900 hover:bg-slate-800 text-white'
+                            : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        }`}
+                        title={route.status === 'Published' ? 'Drucken' : 'Nur veröffentlichte Routen können gedruckt werden'}
                       >
                         <Printer className="w-4 h-4" />
                         <span>Drucken</span>
