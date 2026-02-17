@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, List, ArrowLeft, Printer, Settings as SettingsIcon, Leaf } from 'lucide-react';
+import { Plus, List, ArrowLeft, Printer, Settings as SettingsIcon, Leaf, Search, History, Calendar } from 'lucide-react';
 import RouteEditor from './components/RouteEditor';
 import RouteList from './components/RouteList';
 import PrintPreview from './components/PrintPreview';
@@ -31,6 +31,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   const [busTypes, setBusTypes] = useState<BusType[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Load Initial Data
   useEffect(() => {
@@ -79,7 +80,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       busNumber: '',
       driverName: '', // Default empty, user selects
       capacity: 50,
-      status: 'Draft' as const,
+      status: 'Entwurf' as const,
       operationalNotes: ''
     };
 
@@ -137,7 +138,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   };
 
   const handlePrintRoute = (route: Route) => {
-    if (route.status !== 'Published') return;
+    // if (route.status !== 'Aktiv' && route.status !== 'Geplant') return;
     setCurrentRoute(route);
     setView('PRINT');
     setTimeout(() => window.print(), 300);
@@ -151,8 +152,18 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
         date: updatedRoute.date,
         status: updatedRoute.status,
         driverName: updatedRoute.driverName,
-        operationalNotes: updatedRoute.operationalNotes
-        // TODO: bus_type_id etc.
+        customerName: updatedRoute.customerName,
+        operationalNotes: updatedRoute.operationalNotes,
+        capacity: updatedRoute.capacity,
+        busTypeId: updatedRoute.busTypeId,
+        workerId: updatedRoute.workerId,
+        kmStartBetrieb: updatedRoute.kmStartBetrieb,
+        kmStartCustomer: updatedRoute.kmStartCustomer,
+        kmEndCustomer: updatedRoute.kmEndCustomer,
+        kmEndBetrieb: updatedRoute.kmEndBetrieb,
+        totalKm: updatedRoute.totalKm,
+        timeReturnBetrieb: updatedRoute.timeReturnBetrieb,
+        timeReturnCustomer: updatedRoute.timeReturnCustomer
       });
 
       // 2. Update Stops
@@ -206,6 +217,48 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
     setWorkers(prev => prev.filter(w => w.id !== id));
   };
 
+  // Filter & Split Logic
+  const filteredRoutes = routes.filter(route => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+
+    // Helper to find bus type name
+    const busTypeName = busTypes.find(b => b.id === route.busTypeId)?.name || '';
+
+    return (
+      route.name.toLowerCase().includes(q) ||
+      (route.driverName || '').toLowerCase().includes(q) ||
+      (route.customerName || '').toLowerCase().includes(q) ||
+      (route.busNumber || '').toLowerCase().includes(q) ||
+      (route.status || '').toLowerCase().includes(q) ||
+      (route.date || '').includes(q) ||
+      busTypeName.toLowerCase().includes(q)
+    );
+  });
+
+  // Split Logic: Aktiv vs Others
+  // We sort both by date descending (newest first)
+  const activeSection = filteredRoutes.filter(r => r.status === 'Aktiv').sort((a, b) => b.date.localeCompare(a.date));
+  const otherSection = filteredRoutes.filter(r => r.status !== 'Aktiv').sort((a, b) => b.date.localeCompare(a.date));
+
+  const isSearching = searchQuery.length > 0;
+
+  // Shared Search Input Component
+  const SearchInput = (
+    <div className="relative w-full max-w-md">
+      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <Search className="h-4 w-4 text-slate-400" />
+      </div>
+      <input
+        type="text"
+        placeholder="Suche (Name, Kunde, Datum, Status...)"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="block w-full pl-10 pr-3 py-1.5 border border-slate-600 rounded-md leading-5 bg-slate-800 text-slate-100 placeholder-slate-400 focus:outline-none focus:bg-slate-700 focus:border-slate-500 sm:text-sm transition-colors"
+      />
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -221,20 +274,15 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
     <div className="min-h-screen flex flex-col">
       <AppHeader
         title="Schäfer Tours Routenplanung"
-        user={authUser}
+        user={view === 'EDITOR' ? null : authUser}
         onHome={onGoHome}
         onProfile={onProfile}
         onAdmin={onAdmin}
         onLogout={onLogout}
-        actions={(
+        searchBar={view === 'LIST' ? SearchInput : undefined}
+        actions={view === 'LIST' ? (
           <>
-            <button
-              onClick={() => setView('LIST')}
-              className={`flex items-center space-x-1 px-3 py-1.5 rounded-md transition-colors ${view === 'LIST' ? 'bg-slate-800' : 'hover:bg-slate-800'}`}
-            >
-              <List className="w-4 h-4" />
-              <span>Meine Routen</span>
-            </button>
+
             <button
               onClick={() => setView('SETTINGS')}
               className={`flex items-center space-x-1 px-3 py-1.5 rounded-md transition-colors ${view === 'SETTINGS' ? 'bg-slate-800' : 'hover:bg-slate-800'}`}
@@ -242,26 +290,104 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
               <SettingsIcon className="w-4 h-4" />
               <span>Einstellungen</span>
             </button>
-            <button
-              onClick={handleCreateNew}
-              className="flex items-center space-x-1 bg-blue-600 hover:bg-blue-500 px-4 py-1.5 rounded-md transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Route erstellen</span>
-            </button>
+
           </>
-        )}
+        ) : undefined}
       />
 
       <main className="flex-1 p-4 md:p-8 no-print max-w-7xl mx-auto w-full">
         {view === 'LIST' && (
-          <RouteList
-            routes={routes}
-            busTypes={busTypes}
-            onEdit={handleEditRoute}
-            onPrint={handlePrintRoute}
-            onDelete={handleDeleteRoute}
-          />
+          <div className="space-y-12">
+
+            {/* SEARCH RESULTS VIEW */}
+            {isSearching ? (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
+                  <Search className="w-5 h-5 text-blue-600" />
+                  <h2 className="text-xl font-bold text-slate-800">Suchergebnisse</h2>
+                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                    {filteredRoutes.length}
+                  </span>
+                </div>
+                {filteredRoutes.length > 0 ? (
+                  <RouteList
+                    routes={filteredRoutes}
+                    busTypes={busTypes}
+                    onEdit={handleEditRoute}
+                    onPrint={handlePrintRoute}
+                    onDelete={handleDeleteRoute}
+                  />
+                ) : (
+                  <div className="text-center py-10 bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                    <p className="text-slate-500">Keine Routen gefunden für "{searchQuery}".</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* SPLIT VIEW (Default) */
+              <>
+                {/* Active Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="w-5 h-5 text-emerald-600" />
+                      <h2 className="text-xl font-bold text-slate-800">Aktive Routen</h2>
+                      <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                        {activeSection.length}
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleCreateNew}
+                      className="flex items-center space-x-1 bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-md transition-colors whitespace-nowrap shadow-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Route erstellen</span>
+                    </button>
+                  </div>
+
+                  {activeSection.length > 0 ? (
+                    <RouteList
+                      routes={activeSection}
+                      busTypes={busTypes}
+                      onEdit={handleEditRoute}
+                      onPrint={handlePrintRoute}
+                      onDelete={handleDeleteRoute}
+                    />
+                  ) : (
+                    <div className="text-center py-10 bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                      <p className="text-slate-500">Keine aktiven Routen.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Others Section */}
+                <div className="space-y-4 opacity-75 hover:opacity-100 transition-opacity">
+                  <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
+                    <History className="w-5 h-5 text-slate-500" />
+                    <h2 className="text-xl font-bold text-slate-700">Andere (Geplant, Entwurf, Archiv)</h2>
+                    <span className="bg-slate-100 text-slate-600 text-xs font-semibold px-2 py-0.5 rounded-full">
+                      {otherSection.length}
+                    </span>
+                  </div>
+
+                  {otherSection.length > 0 ? (
+                    <RouteList
+                      routes={otherSection}
+                      busTypes={busTypes}
+                      onEdit={handleEditRoute}
+                      onPrint={handlePrintRoute}
+                      onDelete={handleDeleteRoute}
+                    />
+                  ) : (
+                    <div className="text-center py-6">
+                      <p className="text-slate-400 text-sm">Keine weiteren Routen.</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+          </div>
         )}
         {view === 'EDITOR' && currentRoute && (
           <div className="space-y-6">

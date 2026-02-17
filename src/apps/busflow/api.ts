@@ -29,7 +29,17 @@ export const BusFlowApi = {
                 date: route.date,
                 status: route.status,
                 driver_name: route.driverName,
-                operational_notes: route.operationalNotes
+                customer_name: route.customerName,
+                operational_notes: route.operationalNotes,
+                capacity: route.capacity,
+                worker_id: route.workerId,
+                km_start_betrieb: route.kmStartBetrieb,
+                km_start_customer: route.kmStartCustomer,
+                km_end_customer: route.kmEndCustomer,
+                km_end_betrieb: route.kmEndBetrieb,
+                total_km: route.totalKm,
+                time_return_betrieb: route.timeReturnBetrieb,
+                time_return_customer: route.timeReturnCustomer
             })
             .select()
             .single();
@@ -46,7 +56,17 @@ export const BusFlowApi = {
                 date: updates.date,
                 status: updates.status,
                 driver_name: updates.driverName,
-                operational_notes: updates.operationalNotes
+                customer_name: updates.customerName,
+                operational_notes: updates.operationalNotes,
+                capacity: updates.capacity,
+                worker_id: updates.workerId,
+                km_start_betrieb: updates.kmStartBetrieb,
+                km_start_customer: updates.kmStartCustomer,
+                km_end_customer: updates.kmEndCustomer,
+                km_end_betrieb: updates.kmEndBetrieb,
+                total_km: updates.totalKm,
+                time_return_betrieb: updates.timeReturnBetrieb,
+                time_return_customer: updates.timeReturnCustomer
             })
             .eq('id', id);
 

@@ -20,9 +20,10 @@ export interface Route {
   date: string;
   busNumber: string;
   driverName: string;
+  customerName?: string;
   capacity: number;
   stops: Stop[];
-  status: 'Draft' | 'Published';
+  status: 'Aktiv' | 'Geplant' | 'Entwurf' | 'Archiviert';
   busTypeId?: string;
   workerId?: string;
   operationalNotes?: string;
@@ -35,7 +36,7 @@ export interface Route {
   timeReturnCustomer?: string;
 }
 
-export type RouteAction = 
+export type RouteAction =
   | { type: 'ADD_ROUTE'; payload: Route }
   | { type: 'UPDATE_ROUTE'; payload: Route }
   | { type: 'DELETE_ROUTE'; payload: string }

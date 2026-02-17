@@ -24,7 +24,7 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
       s.currentTotal,
       `"${s.notes || ''}"`
     ]);
-    
+
     const csvContent = [
       [
         `"Route: ${route.name}"`,
@@ -82,10 +82,12 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
                       {route.date}
                     </div>
                   </div>
-                  <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                    route.status === 'Published' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-                  }`}>
-                    {route.status === 'Published' ? 'Veröffentlicht' : 'Entwurf'}
+                  <span className={`px-2 py-1 rounded text-xs font-semibold ${route.status === 'Aktiv' ? 'bg-green-100 text-green-700' :
+                    route.status === 'Geplant' ? 'bg-blue-100 text-blue-700' :
+                      route.status === 'Archiviert' ? 'bg-slate-100 text-slate-600' :
+                        'bg-amber-100 text-amber-700'
+                    }`}>
+                    {route.status}
                   </span>
                 </div>
 
@@ -110,9 +112,9 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
                     <span>{loadPercentage}%</span>
                   </div>
                   <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full ${loadPercentage > 90 ? 'bg-red-500' : 'bg-blue-500'}`} 
-                      style={{ width: `${Math.min(100, loadPercentage)}%` }} 
+                    <div
+                      className={`h-full rounded-full ${loadPercentage > 90 ? 'bg-red-500' : 'bg-blue-500'}`}
+                      style={{ width: `${Math.min(100, loadPercentage)}%` }}
                     />
                   </div>
                 </div>
@@ -120,14 +122,14 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
                 <div className="flex flex-col space-y-2 border-t border-slate-100 pt-4">
                   <div className="flex items-center justify-between">
                     <div className="flex space-x-1">
-                      <button 
+                      <button
                         onClick={() => onEdit(route)}
                         className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-colors rounded-lg"
                         title="Route bearbeiten"
                       >
                         <Edit className="w-5 h-5" />
                       </button>
-                      <button 
+                      <button
                         onClick={() => onDelete(route.id)}
                         className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 transition-colors rounded-lg"
                         title="Route löschen"
@@ -136,22 +138,17 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
                       </button>
                     </div>
                     <div className="flex space-x-2">
-                      <button 
+                      <button
                         onClick={() => exportToCSV(route)}
                         className="p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-colors rounded-lg"
                         title="CSV exportieren"
                       >
                         <Download className="w-5 h-5" />
                       </button>
-                      <button 
+                      <button
                         onClick={() => onPrint(route)}
-                        disabled={route.status !== 'Published'}
-                        className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                          route.status === 'Published'
-                            ? 'bg-slate-900 hover:bg-slate-800 text-white'
-                            : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                        }`}
-                        title={route.status === 'Published' ? 'Drucken' : 'Nur veröffentlichte Routen können gedruckt werden'}
+                        className="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-slate-900 hover:bg-slate-800 text-white"
+                        title="Drucken"
                       >
                         <Printer className="w-4 h-4" />
                         <span>Drucken</span>

@@ -29,7 +29,7 @@ const ProfileMenu: React.FC<Props> = ({ user, variant = 'header', onProfile, onA
   const isHome = variant === 'home';
   const buttonClass = isHome
     ? 'flex items-center space-x-3 bg-white border border-slate-200 rounded-full px-4 py-2 shadow-sm'
-    : 'flex items-center space-x-2 px-3 py-1.5 rounded-full bg-slate-800/70 hover:bg-slate-800 transition-colors';
+    : 'flex items-center space-x-2 px-3 py-1.5 rounded-full bg-slate-700 hover:bg-slate-600 transition-colors whitespace-nowrap';
   const menuClass = isHome
     ? 'absolute right-0 mt-2 w-44 rounded-lg border border-slate-200 bg-white text-slate-900 shadow-lg'
     : 'absolute right-0 mt-2 w-44 rounded-lg border border-slate-700 bg-slate-900 text-white shadow-lg';
