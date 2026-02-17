@@ -5,6 +5,7 @@ import RouteList from './components/RouteList';
 import PrintPreview from './components/PrintPreview';
 import Settings from './components/Settings';
 import AppHeader from '../../shared/components/AppHeader';
+import ConfirmDialog from '../../shared/components/ConfirmDialog';
 import { BusType, Route, Worker } from './types';
 import { BusFlowApi } from './api';
 
@@ -30,6 +31,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [routeIdToDelete, setRouteIdToDelete] = useState<string | null>(null);
 
   // Load Initial Data
   useEffect(() => {
@@ -125,15 +127,19 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
     }
   };
 
-  const handleDeleteRoute = async (id: string) => {
-    if (confirm('Möchten Sie diese Route wirklich löschen?')) {
-      try {
-        await BusFlowApi.deleteRoute(id);
-        setRoutes(prev => prev.filter(r => r.id !== id));
-      } catch (e) {
-        console.error(e);
-        alert('Fehler beim Löschen.');
-      }
+  const handleDeleteRoute = (id: string) => {
+    setRouteIdToDelete(id);
+  };
+
+  const handleConfirmDeleteRoute = async () => {
+    if (!routeIdToDelete) return;
+    try {
+      await BusFlowApi.deleteRoute(routeIdToDelete);
+      setRoutes(prev => prev.filter(r => r.id !== routeIdToDelete));
+      setRouteIdToDelete(null);
+    } catch (e) {
+      console.error(e);
+      alert('Fehler beim Löschen.');
     }
   };
 
@@ -230,6 +236,18 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
 
   return (
     <div className="min-h-screen flex flex-col">
+      <ConfirmDialog
+        isOpen={!!routeIdToDelete}
+        title="Fahrt löschen"
+        message="Möchtest du diese Fahrt wirklich löschen?"
+        confirmText="Löschen"
+        cancelText="Nein"
+        type="danger"
+        cancelButtonClassName="px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg font-semibold transition-colors"
+        confirmButtonClassName="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg font-bold shadow-sm transition-colors"
+        onConfirm={handleConfirmDeleteRoute}
+        onCancel={() => setRouteIdToDelete(null)}
+      />
       <AppHeader
         title="Schäfer Tours Routenplanung"
         user={view === 'EDITOR' ? null : authUser}
@@ -366,14 +384,23 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
           </div>
         )}
         {view === 'SETTINGS' && (
-          <Settings
-            busTypes={busTypes}
-            workers={workers}
-            onAddBusType={handleAddBusType}
-            onRemoveBusType={handleRemoveBusType}
-            onAddWorker={handleAddWorker}
-            onRemoveWorker={handleRemoveWorker}
-          />
+          <div className="space-y-6">
+            <button
+              onClick={() => setView('LIST')}
+              className="flex items-center space-x-2 text-slate-500 hover:text-slate-800 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Zur Übersicht</span>
+            </button>
+            <Settings
+              busTypes={busTypes}
+              workers={workers}
+              onAddBusType={handleAddBusType}
+              onRemoveBusType={handleRemoveBusType}
+              onAddWorker={handleAddWorker}
+              onRemoveWorker={handleRemoveWorker}
+            />
+          </div>
         )}
         {view === 'PRINT' && currentRoute && (
           <div className="flex flex-col items-center space-y-4">

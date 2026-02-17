@@ -10,6 +10,8 @@ interface Props {
     confirmText?: string;
     cancelText?: string;
     type?: 'danger' | 'warning' | 'info';
+    confirmButtonClassName?: string;
+    cancelButtonClassName?: string;
 }
 
 const ConfirmDialog: React.FC<Props> = ({
@@ -20,7 +22,9 @@ const ConfirmDialog: React.FC<Props> = ({
     onCancel,
     confirmText = 'Bestätigen',
     cancelText = 'Abbrechen',
-    type = 'warning'
+    type = 'warning',
+    confirmButtonClassName,
+    cancelButtonClassName
 }) => {
     if (!isOpen) return null;
 
@@ -40,14 +44,13 @@ const ConfirmDialog: React.FC<Props> = ({
                     <div className="flex justify-end space-x-3">
                         <button
                             onClick={onCancel}
-                            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors"
+                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${cancelButtonClassName || 'text-slate-600 hover:bg-slate-100'}`}
                         >
                             {cancelText}
                         </button>
                         <button
                             onClick={onConfirm}
-                            className={`px-4 py-2 text-white rounded-lg font-bold shadow-sm transition-colors ${type === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-600 hover:bg-amber-700'
-                                }`}
+                            className={`px-4 py-2 text-white rounded-lg font-bold shadow-sm transition-colors ${confirmButtonClassName || (type === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-600 hover:bg-amber-700')}`}
                         >
                             {confirmText}
                         </button>
