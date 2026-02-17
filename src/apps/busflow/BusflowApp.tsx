@@ -8,8 +8,6 @@ import AppHeader from '../../shared/components/AppHeader';
 import { BusType, Route, Worker } from './types';
 import { BusFlowApi } from './api';
 
-const WORKERS_KEY = 'busflow_workers_v1';
-
 interface User {
   name: string;
   role: 'ADMIN' | 'DISPATCH' | 'VIEWER';
@@ -38,12 +36,14 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
     const loadData = async () => {
       setLoading(true);
       try {
-        const [fetchedRoutes, fetchedBusTypes] = await Promise.all([
+        const [fetchedRoutes, fetchedBusTypes, fetchedWorkers] = await Promise.all([
           BusFlowApi.getRoutes(),
-          BusFlowApi.getBusTypes()
+          BusFlowApi.getBusTypes(),
+          BusFlowApi.getWorkers()
         ]);
         setRoutes(fetchedRoutes);
         setBusTypes(fetchedBusTypes);
+        setWorkers(fetchedWorkers);
       } catch (error) {
         console.error('Fehler beim Laden der Daten:', error);
       } finally {
@@ -51,22 +51,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       }
     };
     loadData();
-
-    // Load local workers (pending DB migration)
-    const savedWorkers = localStorage.getItem(WORKERS_KEY);
-    if (savedWorkers) {
-      try {
-        setWorkers(JSON.parse(savedWorkers));
-      } catch (e) {
-        // ignore
-      }
-    }
   }, []);
-
-  // Save workers locally
-  useEffect(() => {
-    localStorage.setItem(WORKERS_KEY, JSON.stringify(workers));
-  }, [workers]);
 
   const refreshRoutes = async () => {
     const fetched = await BusFlowApi.getRoutes();
@@ -79,52 +64,15 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       date: new Date().toISOString().split('T')[0],
       busNumber: '',
       driverName: '', // Default empty, user selects
-      capacity: 50,
+      capacity: 0,
       status: 'Entwurf' as const,
       operationalNotes: ''
     };
 
     try {
       const created = await BusFlowApi.createRoute(newRouteData as any);
-      // Transform DB result if needed or just use it. 
-      // Our API returns the DB row. we need to match Route type.
-      // API createRoute returns 'data' which matches the DB columns.
-      // We might need to map it if column names differ from Route type.
-      // api.ts createRoute maps input to DB columns.
-      // Let's assume api.ts returns compatible object or we re-fetch.
       await refreshRoutes();
-
-      const newRoute: Route = {
-        ...created,
-        // Ensure defaults for missing fields
-        stops: [],
-        busTypeId: busTypes[0]?.id,
-        workerId: workers[0]?.id
-      } as any; // Cast for now due to camelCase vs snake_case potential mismatch if Supabase returns snake_case
-
-      // Wait! Supabase returns exactly what's in DB (snake_case generally unless typed).
-      // My API `getRoutes` maps props. `createRoute` returns raw DB response.
-      // I should fix `createRoute` in API to map response OR just re-fetch all routes (easier).
-
-      // We refreshed routes above. Now find the new one? 
-      // Sorting by date/created_at might be needed.
-      // Simpler: Just set view to editor with a placeholder that we know will be updated.
-      // Actually `createRoute` return value is useful. 
-      // Let's just find the latest route or use `created` id.
-
-      const routeToEdit: Route = {
-        id: created.id,
-        name: created.name,
-        date: created.date,
-        status: created.status,
-        busNumber: '',
-        driverName: created.driver_name || '',
-        capacity: 0,
-        stops: [],
-        operationalNotes: created.operational_notes || ''
-      };
-
-      setCurrentRoute(routeToEdit);
+      setCurrentRoute(created);
       setView('EDITOR');
     } catch (e) {
       console.error(e);
@@ -208,13 +156,23 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
     }
   };
 
-  // Local Workers for now
-  const handleAddWorker = (worker: Worker) => {
-    setWorkers(prev => [...prev, worker]);
+  const handleAddWorker = async (worker: Worker) => {
+    try {
+      await BusFlowApi.createWorker({ name: worker.name, role: worker.role });
+      const fetched = await BusFlowApi.getWorkers();
+      setWorkers(fetched);
+    } catch (e) {
+      alert('Fehler beim Speichern des Mitarbeiters.');
+    }
   };
 
-  const handleRemoveWorker = (id: string) => {
-    setWorkers(prev => prev.filter(w => w.id !== id));
+  const handleRemoveWorker = async (id: string) => {
+    try {
+      await BusFlowApi.deleteWorker(id);
+      setWorkers(prev => prev.filter(w => w.id !== id));
+    } catch (e) {
+      alert('Fehler beim Löschen des Mitarbeiters.');
+    }
   };
 
   // Filter & Split Logic

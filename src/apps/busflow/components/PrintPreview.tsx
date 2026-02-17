@@ -9,6 +9,7 @@ interface Props {
 
 const PrintPreview: React.FC<Props> = ({ route, busTypes }) => {
   const busTypeName = busTypes.find(busType => busType.id === route.busTypeId)?.name;
+  const busTypeCapacity = busTypes.find(busType => busType.id === route.busTypeId)?.capacity;
   return (
     <div className="p-8 max-w-[210mm] mx-auto bg-white text-black leading-snug text-[13px]">
       {/* Header */}
@@ -35,7 +36,7 @@ const PrintPreview: React.FC<Props> = ({ route, busTypes }) => {
         </div>
         <div className="border p-3">
           <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Fahrzeugkapazität</p>
-          <p className="text-base font-bold">{route.capacity} Sitze</p>
+          <p className="text-base font-bold">{busTypeCapacity || route.capacity} Sitze</p>
         </div>
       </div>
 

@@ -50,14 +50,22 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
     [formData.stops]
   );
 
+  const selectedBusTypeCapacity = useMemo(
+    () => busTypes.find(busType => busType.id === formData.busTypeId)?.capacity || 0,
+    [busTypes, formData.busTypeId]
+  );
+
   const validate = () => {
     const newErrors: string[] = [];
     if (!formData.name) newErrors.push('Der Routenname ist erforderlich.');
-    if (formData.capacity <= 0) newErrors.push('Die Kapazität muss größer als 0 sein.');
+    if (formData.capacity < 0) newErrors.push('Die belegten Plätze dürfen nicht negativ sein.');
+    if (selectedBusTypeCapacity > 0 && formData.capacity > selectedBusTypeCapacity) {
+      newErrors.push(`Belegte Plätze (${formData.capacity}) überschreiten die Buskapazität (${selectedBusTypeCapacity}).`);
+    }
 
     updatedStops.forEach((stop, idx) => {
-      if (stop.currentTotal > formData.capacity) {
-        newErrors.push(`Halt "${stop.location || idx + 1}" überschreitet die Buskapazität (${stop.currentTotal}/${formData.capacity}).`);
+      if (selectedBusTypeCapacity > 0 && stop.currentTotal > selectedBusTypeCapacity) {
+        newErrors.push(`Halt "${stop.location || idx + 1}" überschreitet die Buskapazität (${stop.currentTotal}/${selectedBusTypeCapacity}).`);
       }
       if (stop.currentTotal < 0) {
         newErrors.push(`Halt "${stop.location || idx + 1}" führt zu negativen Fahrgastzahlen.`);
@@ -270,11 +278,9 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
               <select
                 value={formData.busTypeId || ''}
                 onChange={e => {
-                  const selected = busTypes.find(busType => busType.id === e.target.value);
                   setFormData({
                     ...formData,
-                    busTypeId: e.target.value || undefined,
-                    capacity: selected ? selected.capacity : formData.capacity
+                    busTypeId: e.target.value || undefined
                   });
                 }}
                 className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
@@ -310,13 +316,18 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
               </select>
             </div>
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Kapazität (Sitze)</label>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Kapazität (belegte Plätze)</label>
               <input
                 type="number"
                 value={formData.capacity}
                 onChange={e => setFormData({ ...formData, capacity: parseInt(e.target.value) || 0 })}
                 className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
               />
+              {selectedBusTypeCapacity > 0 && (
+                <p className="text-xs text-slate-500 mt-1">
+                  Buskapazität aus Bustyp: {selectedBusTypeCapacity} Sitze
+                </p>
+              )}
             </div>
             <div className="col-span-1 md:col-span-2 lg:col-span-4">
               <label className="block text-sm font-semibold text-slate-700 mb-1">Betriebliche Hinweise</label>
@@ -508,7 +519,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                         type="number"
                         value={stop.currentTotal}
                         onChange={e => handleUpdateStop(stop.id, { currentTotal: parseInt(e.target.value) || 0 })}
-                        className={`w-full border-transparent bg-transparent focus:ring-0 p-1 text-center font-bold ${stop.currentTotal > formData.capacity ? 'text-red-600' : 'text-slate-700'}`}
+                        className={`w-full border-transparent bg-transparent focus:ring-0 p-1 text-center font-bold ${selectedBusTypeCapacity > 0 && stop.currentTotal > selectedBusTypeCapacity ? 'text-red-600' : 'text-slate-700'}`}
                       />
                     </td>
                     <td className="px-4 py-3">

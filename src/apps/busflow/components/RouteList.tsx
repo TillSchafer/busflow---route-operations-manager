@@ -15,6 +15,30 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
   const getBusTypeName = (busTypeId?: string) =>
     busTypes.find(busType => busType.id === busTypeId)?.name || '';
 
+  const getBusTypeCapacity = (busTypeId?: string) =>
+    busTypes.find(busType => busType.id === busTypeId)?.capacity || 0;
+
+  const getMaxLoad = (route: Route) => {
+    const directMax = Math.max(0, ...route.stops.map(s => Number(s.currentTotal) || 0));
+
+    // Fallback for legacy/partial data where currentTotal may be missing:
+    // derive running occupancy from boarding/leaving values.
+    let running = 0;
+    let derivedMax = 0;
+    route.stops.forEach(stop => {
+      running += (Number(stop.boarding) || 0) - (Number(stop.leaving) || 0);
+      derivedMax = Math.max(derivedMax, running);
+    });
+
+    return Math.max(directMax, derivedMax, 0);
+  };
+
+  const getOccupiedSeats = (route: Route) => {
+    const explicitOccupied = Number(route.capacity) || 0;
+    if (explicitOccupied > 0) return explicitOccupied;
+    return getMaxLoad(route);
+  };
+
   const exportToCSV = (route: Route) => {
     const headers = ['Ort', 'Ankunft', 'Abfahrt', 'Personen', 'Notizen'];
     const rows = route.stops.map(s => [
@@ -67,9 +91,10 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {routes.map(route => {
-          const maxLoad = Math.max(0, ...route.stops.map(s => s.currentTotal || 0));
-          const safeCapacity = Math.max(1, route.capacity || 0);
-          const loadPercentage = Math.round((maxLoad / safeCapacity) * 100);
+          const busCapacity = Math.max(1, getBusTypeCapacity(route.busTypeId) || Number(route.capacity) || 1);
+          const occupiedSeats = getOccupiedSeats(route);
+          const loadPercentage = Math.round((occupiedSeats / busCapacity) * 100);
+          const remainingSeats = Math.max(0, busCapacity - occupiedSeats);
 
           return (
             <div key={route.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
@@ -109,7 +134,7 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
                 <div className="mb-6">
                   <div className="flex justify-between text-xs font-semibold text-slate-500 mb-1">
                     <span>MAXIMALE AUSLASTUNG</span>
-                    <span>{loadPercentage}%</span>
+                    <span>{loadPercentage}% ({occupiedSeats}/{busCapacity}, {remainingSeats} frei)</span>
                   </div>
                   <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                     <div
