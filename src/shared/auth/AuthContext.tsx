@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
 export type Role = 'ADMIN' | 'DISPATCH' | 'VIEWER';
@@ -27,32 +27,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        fetchProfile(session.user.id, session.user.email);
-      } else {
-        setLoading(false);
-      }
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        fetchProfile(session.user.id, session.user.email);
-      } else {
-        setUser(null);
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const fetchProfile = async (userId: string, email?: string) => {
+  const fetchProfile = useCallback(async (userId: string, email?: string) => {
     try {
       const { data: profile, error } = await supabase
         .from('profiles')
@@ -105,7 +82,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setSessionUserId(session.user.id);
+        fetchProfile(session.user.id, session.user.email);
+      } else {
+        setSessionUserId(null);
+        setLoading(false);
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setSessionUserId(session.user.id);
+        fetchProfile(session.user.id, session.user.email);
+      } else {
+        setSessionUserId(null);
+        setUser(null);
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [fetchProfile]);
+
+  useEffect(() => {
+    if (!sessionUserId) return;
+
+    const channel = supabase
+      .channel(`auth-role-sync-${sessionUserId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${sessionUserId}` },
+        () => fetchProfile(sessionUserId)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'app_permissions', filter: `user_id=eq.${sessionUserId}` },
+        () => fetchProfile(sessionUserId)
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchProfile, sessionUserId]);
 
   const login = async () => {
     // For simplicity, we'll use Google OAuth or Magic Link

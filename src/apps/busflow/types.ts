@@ -16,6 +16,7 @@ export interface Stop {
 
 export interface Route {
   id: string;
+  updatedAt?: string;
   name: string;
   date: string;
   busNumber: string;
@@ -53,4 +54,10 @@ export interface Worker {
   id: string;
   name: string;
   role?: string;
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  notes?: string;
 }

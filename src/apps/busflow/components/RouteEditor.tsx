@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef } from 'react';
-import { Route, Stop, BusType, Worker } from '../types';
+import { Route, Stop, BusType, Worker, Customer } from '../types';
 import { Save, Plus, Trash2, AlertCircle, Download } from 'lucide-react';
 import RouteMap from './RouteMap';
 
@@ -12,13 +12,17 @@ interface Props {
   onCancel: () => void;
   busTypes: BusType[];
   workers: Worker[];
+  customers: Customer[];
 }
 
-const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, workers }) => {
+const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, workers, customers }) => {
   const [formData, setFormData] = useState<Route>({ ...route });
   const [errors, setErrors] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<Record<string, Array<{ label: string; lat: number; lon: number }>>>({});
   const [activeStopId, setActiveStopId] = useState<string | null>(null);
+  const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
+  const [isBusTypeDropdownOpen, setIsBusTypeDropdownOpen] = useState(false);
+  const [isWorkerDropdownOpen, setIsWorkerDropdownOpen] = useState(false);
   const searchTimeouts = useRef<Record<string, number>>({});
   const searchControllers = useRef<Record<string, AbortController>>({});
 
@@ -53,6 +57,24 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
   const selectedBusTypeCapacity = useMemo(
     () => busTypes.find(busType => busType.id === formData.busTypeId)?.capacity || 0,
     [busTypes, formData.busTypeId]
+  );
+
+  const filteredCustomers = useMemo(() => {
+    const q = (formData.customerName || '').trim().toLowerCase();
+    if (!q) return customers.slice(0, 8);
+    return customers
+      .filter(customer => customer.name.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [customers, formData.customerName]);
+
+  const selectedBusType = useMemo(
+    () => busTypes.find(busType => busType.id === formData.busTypeId),
+    [busTypes, formData.busTypeId]
+  );
+
+  const selectedWorker = useMemo(
+    () => workers.find(worker => worker.id === formData.workerId),
+    [workers, formData.workerId]
   );
 
   const validate = () => {
@@ -266,13 +288,38 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
             </div>
             <div className="col-span-1 md:col-span-2">
               <label className="block text-sm font-semibold text-slate-700 mb-1">Kunde / Auftraggeber</label>
-              <input
-                type="text"
-                value={formData.customerName || ''}
-                onChange={e => setFormData({ ...formData, customerName: e.target.value })}
-                className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
-                placeholder="z. B. Stadtwerke GmbH"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={formData.customerName || ''}
+                  onChange={e => {
+                    setFormData({ ...formData, customerName: e.target.value });
+                    setIsCustomerDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsCustomerDropdownOpen(true)}
+                  onBlur={() => window.setTimeout(() => setIsCustomerDropdownOpen(false), 150)}
+                  className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
+                  placeholder="z. B. Stadtwerke GmbH"
+                />
+                {isCustomerDropdownOpen && filteredCustomers.length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+                    {filteredCustomers.map(customer => (
+                      <button
+                        key={customer.id}
+                        type="button"
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => {
+                          setFormData({ ...formData, customerName: customer.name });
+                          setIsCustomerDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                      >
+                        {customer.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Datum</label>
@@ -285,45 +332,101 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Bustyp</label>
-              <select
-                value={formData.busTypeId || ''}
-                onChange={e => {
-                  setFormData({
-                    ...formData,
-                    busTypeId: e.target.value || undefined
-                  });
-                }}
-                className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
-              >
-                <option value="">Bustyp auswählen</option>
-                {busTypes.map(busType => (
-                  <option key={busType.id} value={busType.id}>
-                    {busType.name} ({busType.capacity})
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsBusTypeDropdownOpen(prev => !prev)}
+                  onBlur={() => window.setTimeout(() => setIsBusTypeDropdownOpen(false), 150)}
+                  className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all text-left flex items-center justify-between"
+                >
+                  <span className={selectedBusType ? 'text-slate-800' : 'text-slate-400'}>
+                    {selectedBusType ? `${selectedBusType.name} (${selectedBusType.capacity})` : 'Bustyp auswählen'}
+                  </span>
+                  <span className="text-slate-400 text-xs">▼</span>
+                </button>
+                {isBusTypeDropdownOpen && (
+                  <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+                    <button
+                      type="button"
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => {
+                        setFormData({ ...formData, busTypeId: undefined });
+                        setIsBusTypeDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      Bustyp auswählen
+                    </button>
+                    {busTypes.map(busType => (
+                      <button
+                        key={busType.id}
+                        type="button"
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => {
+                          setFormData({ ...formData, busTypeId: busType.id });
+                          setIsBusTypeDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                      >
+                        {busType.name} ({busType.capacity})
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Fahrer</label>
-              <select
-                value={formData.workerId || ''}
-                onChange={e => {
-                  const selected = workers.find(worker => worker.id === e.target.value);
-                  setFormData({
-                    ...formData,
-                    workerId: e.target.value || undefined,
-                    driverName: selected ? selected.name : formData.driverName
-                  });
-                }}
-                className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
-              >
-                <option value="">Fahrer auswählen</option>
-                {workers.map(worker => (
-                  <option key={worker.id} value={worker.id}>
-                    {worker.name}{worker.role ? ` (${worker.role})` : ''}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsWorkerDropdownOpen(prev => !prev)}
+                  onBlur={() => window.setTimeout(() => setIsWorkerDropdownOpen(false), 150)}
+                  className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all text-left flex items-center justify-between"
+                >
+                  <span className={selectedWorker ? 'text-slate-800' : 'text-slate-400'}>
+                    {selectedWorker ? `${selectedWorker.name}${selectedWorker.role ? ` (${selectedWorker.role})` : ''}` : 'Fahrer auswählen'}
+                  </span>
+                  <span className="text-slate-400 text-xs">▼</span>
+                </button>
+                {isWorkerDropdownOpen && (
+                  <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+                    <button
+                      type="button"
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          workerId: undefined,
+                          driverName: ''
+                        });
+                        setIsWorkerDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      Fahrer auswählen
+                    </button>
+                    {workers.map(worker => (
+                      <button
+                        key={worker.id}
+                        type="button"
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => {
+                          setFormData({
+                            ...formData,
+                            workerId: worker.id,
+                            driverName: worker.name
+                          });
+                          setIsWorkerDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                      >
+                        {worker.name}{worker.role ? ` (${worker.role})` : ''}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Kapazität (belegte Plätze)</label>

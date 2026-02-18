@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, List, ArrowLeft, Printer, Settings as SettingsIcon, Leaf, Search, History, Calendar } from 'lucide-react';
 import RouteEditor from './components/RouteEditor';
 import RouteList from './components/RouteList';
@@ -6,8 +6,9 @@ import PrintPreview from './components/PrintPreview';
 import Settings from './components/Settings';
 import AppHeader from '../../shared/components/AppHeader';
 import ConfirmDialog from '../../shared/components/ConfirmDialog';
-import { BusType, Route, Worker } from './types';
+import { BusType, Customer, Route, Worker } from './types';
 import { BusFlowApi } from './api';
+import { supabase } from '../../shared/lib/supabase';
 
 interface User {
   name: string;
@@ -29,25 +30,31 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   const [view, setView] = useState<'LIST' | 'EDITOR' | 'PRINT' | 'SETTINGS'>('LIST');
   const [busTypes, setBusTypes] = useState<BusType[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [routeIdToDelete, setRouteIdToDelete] = useState<string | null>(null);
+  const [editConflictMessage, setEditConflictMessage] = useState<string | null>(null);
   const canManageRoutes = authUser?.role === 'ADMIN' || authUser?.role === 'DISPATCH';
   const canManageSettings = canManageRoutes;
+  const routesRefreshTimeout = useRef<number | null>(null);
+  const settingsRefreshTimeout = useRef<number | null>(null);
 
   // Load Initial Data
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [fetchedRoutes, fetchedBusTypes, fetchedWorkers] = await Promise.all([
+        const [fetchedRoutes, fetchedBusTypes, fetchedWorkers, fetchedCustomers] = await Promise.all([
           BusFlowApi.getRoutes(),
           BusFlowApi.getBusTypes(),
-          BusFlowApi.getWorkers()
+          BusFlowApi.getWorkers(),
+          BusFlowApi.getCustomers()
         ]);
         setRoutes(fetchedRoutes);
         setBusTypes(fetchedBusTypes);
         setWorkers(fetchedWorkers);
+        setCustomers(fetchedCustomers);
       } catch (error) {
         console.error('Fehler beim Laden der Daten:', error);
       } finally {
@@ -61,6 +68,52 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
     const fetched = await BusFlowApi.getRoutes();
     setRoutes(fetched);
   };
+
+  const refreshSettingsData = async () => {
+    const [fetchedBusTypes, fetchedWorkers, fetchedCustomers] = await Promise.all([
+      BusFlowApi.getBusTypes(),
+      BusFlowApi.getWorkers(),
+      BusFlowApi.getCustomers()
+    ]);
+    setBusTypes(fetchedBusTypes);
+    setWorkers(fetchedWorkers);
+    setCustomers(fetchedCustomers);
+  };
+
+  useEffect(() => {
+    const scheduleRoutesRefresh = () => {
+      if (routesRefreshTimeout.current) {
+        window.clearTimeout(routesRefreshTimeout.current);
+      }
+      routesRefreshTimeout.current = window.setTimeout(() => {
+        refreshRoutes().catch(err => console.error('Realtime route refresh failed:', err));
+      }, 200);
+    };
+
+    const scheduleSettingsRefresh = () => {
+      if (settingsRefreshTimeout.current) {
+        window.clearTimeout(settingsRefreshTimeout.current);
+      }
+      settingsRefreshTimeout.current = window.setTimeout(() => {
+        refreshSettingsData().catch(err => console.error('Realtime settings refresh failed:', err));
+      }, 200);
+    };
+
+    const channel = supabase
+      .channel('busflow-live-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_routes' }, scheduleRoutesRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_stops' }, scheduleRoutesRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_bus_types' }, scheduleSettingsRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_workers' }, scheduleSettingsRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_customers' }, scheduleSettingsRefresh)
+      .subscribe();
+
+    return () => {
+      if (routesRefreshTimeout.current) window.clearTimeout(routesRefreshTimeout.current);
+      if (settingsRefreshTimeout.current) window.clearTimeout(settingsRefreshTimeout.current);
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const handleCreateNew = async () => {
     if (!canManageRoutes) {
@@ -81,6 +134,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
     try {
       const created = await BusFlowApi.createRoute(newRouteData as any);
       await refreshRoutes();
+      setEditConflictMessage(null);
       setCurrentRoute(created);
       setView('EDITOR');
     } catch (e) {
@@ -94,6 +148,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       alert('Sie haben nur Leserechte.');
       return;
     }
+    setEditConflictMessage(null);
     setCurrentRoute(route);
     setView('EDITOR');
   };
@@ -112,33 +167,33 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
     }
 
     try {
-      // 1. Update Route details
-      await BusFlowApi.updateRoute(updatedRoute.id, {
-        name: updatedRoute.name,
-        date: updatedRoute.date,
-        status: updatedRoute.status,
-        driverName: updatedRoute.driverName,
-        customerName: updatedRoute.customerName,
-        operationalNotes: updatedRoute.operationalNotes,
-        capacity: updatedRoute.capacity,
-        busTypeId: updatedRoute.busTypeId,
-        workerId: updatedRoute.workerId,
-        kmStartBetrieb: updatedRoute.kmStartBetrieb,
-        kmStartCustomer: updatedRoute.kmStartCustomer,
-        kmEndCustomer: updatedRoute.kmEndCustomer,
-        kmEndBetrieb: updatedRoute.kmEndBetrieb,
-        totalKm: updatedRoute.totalKm,
-        timeReturnBetrieb: updatedRoute.timeReturnBetrieb,
-        timeReturnCustomer: updatedRoute.timeReturnCustomer
-      });
-
-      // 2. Update Stops
-      await BusFlowApi.updateStops(updatedRoute.id, updatedRoute.stops);
+      setEditConflictMessage(null);
+      await BusFlowApi.saveRouteWithStops(updatedRoute, updatedRoute.updatedAt);
 
       await refreshRoutes();
       setView('LIST');
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      if (e?.code === 'ROUTE_CONFLICT') {
+        const fetched = await BusFlowApi.getRoutes();
+        setRoutes(fetched);
+        const latestRoute = fetched.find(r => r.id === updatedRoute.id) || null;
+        if (latestRoute) {
+          setCurrentRoute(latestRoute);
+          setEditConflictMessage('Die Route wurde von einem anderen Benutzer geändert. Die neuesten Daten wurden geladen.');
+          setView('EDITOR');
+          return;
+        }
+        setEditConflictMessage(null);
+        setView('LIST');
+        return;
+      }
+      if (e?.code === 'ROUTE_NOT_FOUND') {
+        alert('Diese Route wurde bereits gelöscht.');
+        await refreshRoutes();
+        setView('LIST');
+        return;
+      }
       alert('Fehler beim Speichern.');
     }
   };
@@ -214,6 +269,33 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       setWorkers(prev => prev.filter(w => w.id !== id));
     } catch (e) {
       alert('Fehler beim Löschen des Mitarbeiters.');
+    }
+  };
+
+  const handleAddCustomer = async (customer: Customer) => {
+    if (!canManageSettings) {
+      alert('Sie haben keine Berechtigung für Einstellungen.');
+      return;
+    }
+    try {
+      await BusFlowApi.createCustomer({ name: customer.name, notes: customer.notes });
+      const fetched = await BusFlowApi.getCustomers();
+      setCustomers(fetched);
+    } catch (e: any) {
+      alert(`Fehler beim Speichern des Kunden.${e?.message ? ` ${e.message}` : ''}`);
+    }
+  };
+
+  const handleRemoveCustomer = async (id: string) => {
+    if (!canManageSettings) {
+      alert('Sie haben keine Berechtigung für Einstellungen.');
+      return;
+    }
+    try {
+      await BusFlowApi.deleteCustomer(id);
+      setCustomers(prev => prev.filter(c => c.id !== id));
+    } catch (e) {
+      alert('Fehler beim Löschen des Kunden.');
     }
   };
 
@@ -414,12 +496,19 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
               <ArrowLeft className="w-4 h-4" />
               <span>Zur Übersicht</span>
             </button>
+            {editConflictMessage && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-sm text-amber-900 font-medium">{editConflictMessage}</p>
+              </div>
+            )}
             <RouteEditor
+              key={`${currentRoute.id}-${currentRoute.updatedAt || ''}`}
               route={currentRoute}
               onSave={handleSaveRoute}
               onCancel={() => setView('LIST')}
               busTypes={busTypes}
               workers={workers}
+              customers={customers}
             />
           </div>
         )}
@@ -439,6 +528,9 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
               onRemoveBusType={handleRemoveBusType}
               onAddWorker={handleAddWorker}
               onRemoveWorker={handleRemoveWorker}
+              customers={customers}
+              onAddCustomer={handleAddCustomer}
+              onRemoveCustomer={handleRemoveCustomer}
               canManage={canManageSettings}
             />
           </div>

@@ -1,5 +1,5 @@
 import { supabase } from '../../shared/lib/supabase';
-import { Route as RouteType, Stop, BusType, Worker } from './types';
+import { Route as RouteType, Stop, BusType, Worker, Customer } from './types';
 
 const mapStopFromDb = (stop: any): Stop => ({
     id: stop.id,
@@ -18,6 +18,7 @@ const mapStopFromDb = (stop: any): Stop => ({
 
 const mapRouteFromDb = (route: any): RouteType => ({
     id: route.id,
+    updatedAt: route.updated_at || undefined,
     name: route.name || '',
     date: route.date || '',
     busNumber: route.bus_number || '',
@@ -110,6 +111,50 @@ export const BusFlowApi = {
             .eq('id', id);
 
         if (error) throw error;
+    },
+
+    async saveRouteWithStops(route: RouteType, expectedUpdatedAt?: string) {
+        const { data, error } = await supabase.rpc('save_busflow_route_with_stops', {
+            p_route_id: route.id,
+            p_expected_updated_at: expectedUpdatedAt || null,
+            p_route: {
+                name: route.name,
+                date: route.date,
+                status: route.status,
+                busNumber: route.busNumber,
+                driverName: route.driverName,
+                customerName: route.customerName,
+                operationalNotes: route.operationalNotes,
+                capacity: route.capacity,
+                busTypeId: route.busTypeId,
+                workerId: route.workerId,
+                kmStartBetrieb: route.kmStartBetrieb,
+                kmStartCustomer: route.kmStartCustomer,
+                kmEndCustomer: route.kmEndCustomer,
+                kmEndBetrieb: route.kmEndBetrieb,
+                totalKm: route.totalKm,
+                timeReturnBetrieb: route.timeReturnBetrieb,
+                timeReturnCustomer: route.timeReturnCustomer
+            },
+            p_stops: route.stops
+        });
+
+        if (error) throw error;
+
+        if (data?.ok === false && data?.code === 'ROUTE_CONFLICT') {
+            const conflictError: any = new Error('ROUTE_CONFLICT');
+            conflictError.code = 'ROUTE_CONFLICT';
+            conflictError.latestUpdatedAt = data.updated_at;
+            throw conflictError;
+        }
+
+        if (data?.ok === false && data?.code === 'ROUTE_NOT_FOUND') {
+            const notFoundError: any = new Error('ROUTE_NOT_FOUND');
+            notFoundError.code = 'ROUTE_NOT_FOUND';
+            throw notFoundError;
+        }
+
+        return data;
     },
 
     async deleteRoute(id: string) {
@@ -245,6 +290,40 @@ export const BusFlowApi = {
     async deleteWorker(id: string) {
         const { error } = await supabase
             .from('busflow_workers')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+    },
+
+    // --- Customers ---
+    async getCustomers() {
+        const { data, error } = await supabase
+            .from('busflow_customers')
+            .select('*')
+            .order('name');
+
+        if (error) throw error;
+        return data as Customer[];
+    },
+
+    async createCustomer(customer: Omit<Customer, 'id'>) {
+        const { data, error } = await supabase
+            .from('busflow_customers')
+            .insert({
+                name: customer.name,
+                notes: customer.notes
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data as Customer;
+    },
+
+    async deleteCustomer(id: string) {
+        const { error } = await supabase
+            .from('busflow_customers')
             .delete()
             .eq('id', id);
 
