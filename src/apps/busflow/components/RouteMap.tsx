@@ -33,6 +33,7 @@ const RouteMap: React.FC<Props> = ({ stops }) => {
 
     markersRef.current.forEach(marker => marker.remove());
     markersRef.current = [];
+
     if (routeRef.current) {
       routeRef.current.remove();
       routeRef.current = null;
@@ -66,13 +67,25 @@ const RouteMap: React.FC<Props> = ({ stops }) => {
     const controller = new AbortController();
     routeRequest.current = controller;
     const coordinates = validStops.map(stop => `${stop.lon},${stop.lat}`).join(';');
+    const fallbackPolyline = () => {
+      if (routeRef.current) {
+        routeRef.current.remove();
+      }
+      routeRef.current = L.polyline(
+        validStops.map(stop => [stop.lat, stop.lon]),
+        { color: '#2563eb', weight: 4 }
+      ).addTo(mapInstance.current);
+    };
 
     fetch(`https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson`, {
       signal: controller.signal
     })
       .then(response => response.json())
       .then(data => {
-        if (!data?.routes?.length) return;
+        if (!data?.routes?.length) {
+          fallbackPolyline();
+          return;
+        }
         const line = data.routes[0].geometry;
         routeRef.current = L.geoJSON(line, {
           style: { color: '#2563eb', weight: 4 }
@@ -80,6 +93,7 @@ const RouteMap: React.FC<Props> = ({ stops }) => {
       })
       .catch(error => {
         if (error?.name === 'AbortError') return;
+        fallbackPolyline();
       });
   }, [stops]);
 

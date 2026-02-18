@@ -119,16 +119,26 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
       searchControllers.current[stopId] = controller;
 
       try {
+        const hasHouseNumber = /\d/.test(trimmed);
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(trimmed)}&accept-language=de`,
+          `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&dedupe=1&countrycodes=de&limit=8&q=${encodeURIComponent(trimmed)}&accept-language=de`,
           { signal: controller.signal }
         );
         const results = await response.json();
-        const mapped = (results || []).map((item: any) => ({
-          label: item.display_name,
-          lat: Number(item.lat),
-          lon: Number(item.lon)
-        }));
+        const mapped = (results || [])
+          .map((item: any) => ({
+            label: item.display_name,
+            lat: Number(item.lat),
+            lon: Number(item.lon),
+            score: (() => {
+              // Prioritize precise street/house matches when user typed a house number.
+              if (!hasHouseNumber) return 0;
+              const hasExactHouseNumber = item?.address?.house_number || /\d/.test(item.display_name || '');
+              return hasExactHouseNumber ? 1 : 0;
+            })()
+          }))
+          .sort((a: any, b: any) => b.score - a.score)
+          .map(({ label, lat, lon }: any) => ({ label, lat, lon }));
         setSuggestions(prev => ({ ...prev, [stopId]: mapped }));
         setActiveStopId(stopId);
       } catch (error) {
