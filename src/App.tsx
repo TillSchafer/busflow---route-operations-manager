@@ -7,6 +7,7 @@ import Admin from './pages/Admin';
 import Profile from './pages/Profile';
 import BusflowApp from './apps/busflow/BusflowApp';
 import { AuthProvider, useAuth } from './shared/auth/AuthContext';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 const InnerApp: React.FC = () => {
   const navigate = useNavigate();
@@ -247,6 +248,7 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <InnerApp />
+      <SpeedInsights />
     </AuthProvider>
   );
 };
