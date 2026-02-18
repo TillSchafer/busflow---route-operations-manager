@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
 export type Role = 'ADMIN' | 'DISPATCH' | 'VIEWER';
+type GlobalRole = 'ADMIN' | 'USER';
+type AppPermissionRole = 'ADMIN' | 'DISPATCH' | 'VIEWER';
 
 export interface User {
   id: string;
@@ -52,7 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchProfile = async (userId: string, email?: string) => {
     try {
-      const { data, error } = await supabase
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
@@ -67,19 +69,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: 'VIEWER', // Default safe role
           email: email
         });
-      } else if (data) {
-        // Fetch permissions for apps could happen here or separately
-        // For now, mapping global_role to app role simplified
+      } else if (profile) {
+        const { data: permissionRow, error: permissionError } = await supabase
+          .from('app_permissions')
+          .select('role')
+          .eq('user_id', userId)
+          .eq('app_id', 'busflow')
+          .maybeSingle();
+
+        if (permissionError) {
+          console.error('Error fetching app permission:', permissionError);
+        }
+
+        const globalRole = profile.global_role as GlobalRole;
+        const appRole = permissionRow?.role as AppPermissionRole | undefined;
+
+        // Effective frontend role:
+        // - Platform admins stay ADMIN (can open admin area)
+        // - BusFlow ADMIN/DISPATCH both map to DISPATCH rights in current UI
+        // - VIEWER stays read-only
         let role: Role = 'VIEWER';
-        if (data.global_role === 'ADMIN') role = 'ADMIN';
-        else role = 'DISPATCH'; // Default user role for now, or fetch from permissions table
+        if (globalRole === 'ADMIN') role = 'ADMIN';
+        else if (appRole === 'ADMIN' || appRole === 'DISPATCH') role = 'DISPATCH';
 
         setUser({
-          id: data.id,
-          name: data.full_name || email?.split('@')[0] || 'User',
+          id: profile.id,
+          name: profile.full_name || email?.split('@')[0] || 'User',
           role: role,
-          email: data.email,
-          avatarUrl: data.avatar_url
+          email: profile.email,
+          avatarUrl: profile.avatar_url
         });
       }
     } catch (error) {

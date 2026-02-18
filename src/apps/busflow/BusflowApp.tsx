@@ -32,6 +32,8 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [routeIdToDelete, setRouteIdToDelete] = useState<string | null>(null);
+  const canManageRoutes = authUser?.role === 'ADMIN' || authUser?.role === 'DISPATCH';
+  const canManageSettings = canManageRoutes;
 
   // Load Initial Data
   useEffect(() => {
@@ -61,6 +63,11 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   };
 
   const handleCreateNew = async () => {
+    if (!canManageRoutes) {
+      alert('Sie haben nur Leserechte.');
+      return;
+    }
+
     const newRouteData = {
       name: 'Neue Route',
       date: new Date().toISOString().split('T')[0],
@@ -83,6 +90,10 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   };
 
   const handleEditRoute = (route: Route) => {
+    if (!canManageRoutes) {
+      alert('Sie haben nur Leserechte.');
+      return;
+    }
     setCurrentRoute(route);
     setView('EDITOR');
   };
@@ -95,6 +106,11 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   };
 
   const handleSaveRoute = async (updatedRoute: Route) => {
+    if (!canManageRoutes) {
+      alert('Sie haben nur Leserechte.');
+      return;
+    }
+
     try {
       // 1. Update Route details
       await BusFlowApi.updateRoute(updatedRoute.id, {
@@ -128,6 +144,10 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   };
 
   const handleDeleteRoute = (id: string) => {
+    if (!canManageRoutes) {
+      alert('Sie haben nur Leserechte.');
+      return;
+    }
     setRouteIdToDelete(id);
   };
 
@@ -144,6 +164,10 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   };
 
   const handleAddBusType = async (busType: BusType) => {
+    if (!canManageSettings) {
+      alert('Sie haben keine Berechtigung für Einstellungen.');
+      return;
+    }
     try {
       await BusFlowApi.createBusType(busType);
       const fetched = await BusFlowApi.getBusTypes();
@@ -154,6 +178,10 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   };
 
   const handleRemoveBusType = async (id: string) => {
+    if (!canManageSettings) {
+      alert('Sie haben keine Berechtigung für Einstellungen.');
+      return;
+    }
     try {
       await BusFlowApi.deleteBusType(id);
       setBusTypes(prev => prev.filter(b => b.id !== id));
@@ -163,6 +191,10 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   };
 
   const handleAddWorker = async (worker: Worker) => {
+    if (!canManageSettings) {
+      alert('Sie haben keine Berechtigung für Einstellungen.');
+      return;
+    }
     try {
       await BusFlowApi.createWorker({ name: worker.name, role: worker.role });
       const fetched = await BusFlowApi.getWorkers();
@@ -173,6 +205,10 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   };
 
   const handleRemoveWorker = async (id: string) => {
+    if (!canManageSettings) {
+      alert('Sie haben keine Berechtigung für Einstellungen.');
+      return;
+    }
     try {
       await BusFlowApi.deleteWorker(id);
       setWorkers(prev => prev.filter(w => w.id !== id));
@@ -256,7 +292,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
         onAdmin={onAdmin}
         onLogout={onLogout}
         searchBar={view === 'LIST' ? SearchInput : undefined}
-        actions={view === 'LIST' ? (
+        actions={view === 'LIST' && canManageSettings ? (
           <>
 
             <button
@@ -292,6 +328,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
                     onEdit={handleEditRoute}
                     onPrint={handlePrintRoute}
                     onDelete={handleDeleteRoute}
+                    canManageRoutes={canManageRoutes}
                   />
                 ) : (
                   <div className="text-center py-10 bg-slate-50 rounded-lg border border-dashed border-slate-300">
@@ -313,8 +350,9 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
                       </span>
                     </div>
                     <button
+                      disabled={!canManageRoutes}
                       onClick={handleCreateNew}
-                      className="flex items-center space-x-1 bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-md transition-colors whitespace-nowrap shadow-sm"
+                      className={`flex items-center space-x-1 px-4 py-1.5 rounded-md whitespace-nowrap shadow-sm ${canManageRoutes ? 'bg-blue-600 hover:bg-blue-500 text-white transition-colors' : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`}
                     >
                       <Plus className="w-4 h-4" />
                       <span>Route erstellen</span>
@@ -328,6 +366,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
                       onEdit={handleEditRoute}
                       onPrint={handlePrintRoute}
                       onDelete={handleDeleteRoute}
+                      canManageRoutes={canManageRoutes}
                     />
                   ) : (
                     <div className="text-center py-10 bg-slate-50 rounded-lg border border-dashed border-slate-300">
@@ -353,6 +392,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
                       onEdit={handleEditRoute}
                       onPrint={handlePrintRoute}
                       onDelete={handleDeleteRoute}
+                      canManageRoutes={canManageRoutes}
                     />
                   ) : (
                     <div className="text-center py-6">
@@ -399,6 +439,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
               onRemoveBusType={handleRemoveBusType}
               onAddWorker={handleAddWorker}
               onRemoveWorker={handleRemoveWorker}
+              canManage={canManageSettings}
             />
           </div>
         )}

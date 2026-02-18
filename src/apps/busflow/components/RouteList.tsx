@@ -9,9 +9,10 @@ interface Props {
   onEdit: (route: Route) => void;
   onPrint: (route: Route) => void;
   onDelete: (id: string) => void;
+  canManageRoutes?: boolean;
 }
 
-const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelete }) => {
+const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelete, canManageRoutes = true }) => {
   const getBusTypeName = (busTypeId?: string) =>
     busTypes.find(busType => busType.id === busTypeId)?.name || '';
 
@@ -148,15 +149,17 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
                   <div className="flex items-center justify-between">
                     <div className="flex space-x-1">
                       <button
+                        disabled={!canManageRoutes}
                         onClick={() => onEdit(route)}
-                        className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-colors rounded-lg"
+                        className={`p-2 transition-colors rounded-lg ${canManageRoutes ? 'text-slate-600 hover:text-blue-600 hover:bg-blue-50' : 'text-slate-300 cursor-not-allowed'}`}
                         title="Route bearbeiten"
                       >
                         <Edit className="w-5 h-5" />
                       </button>
                       <button
+                        disabled={!canManageRoutes}
                         onClick={() => onDelete(route.id)}
-                        className="p-2 text-slate-600 hover:text-red-600 hover:bg-red-50 transition-colors rounded-lg"
+                        className={`p-2 transition-colors rounded-lg ${canManageRoutes ? 'text-slate-600 hover:text-red-600 hover:bg-red-50' : 'text-slate-300 cursor-not-allowed'}`}
                         title="Route löschen"
                       >
                         <Trash2 className="w-5 h-5" />

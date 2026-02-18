@@ -9,6 +9,7 @@ interface Props {
   onRemoveBusType: (id: string) => void;
   onAddWorker: (worker: Worker) => void;
   onRemoveWorker: (id: string) => void;
+  canManage?: boolean;
 }
 
 const Settings: React.FC<Props> = ({
@@ -17,7 +18,8 @@ const Settings: React.FC<Props> = ({
   onAddBusType,
   onRemoveBusType,
   onAddWorker,
-  onRemoveWorker
+  onRemoveWorker,
+  canManage = true
 }) => {
   const [busTypeName, setBusTypeName] = useState('');
   const [busTypeCapacity, setBusTypeCapacity] = useState(50);
@@ -26,6 +28,7 @@ const Settings: React.FC<Props> = ({
   const [workerRole, setWorkerRole] = useState('');
 
   const handleAddBusType = () => {
+    if (!canManage) return;
     if (!busTypeName.trim()) return;
     onAddBusType({
       id: Date.now().toString(),
@@ -39,6 +42,7 @@ const Settings: React.FC<Props> = ({
   };
 
   const handleAddWorker = () => {
+    if (!canManage) return;
     if (!workerName.trim()) return;
     onAddWorker({
       id: Date.now().toString(),
@@ -62,6 +66,7 @@ const Settings: React.FC<Props> = ({
               type="text"
               value={busTypeName}
               onChange={e => setBusTypeName(e.target.value)}
+              disabled={!canManage}
               className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
               placeholder="z. B. Stadtbus 40"
             />
@@ -72,12 +77,14 @@ const Settings: React.FC<Props> = ({
               type="number"
               value={busTypeCapacity}
               onChange={e => setBusTypeCapacity(parseInt(e.target.value, 10) || 0)}
+              disabled={!canManage}
               className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
             />
           </div>
           <div className="flex items-end">
             <button
               onClick={handleAddBusType}
+              disabled={!canManage}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -90,6 +97,7 @@ const Settings: React.FC<Props> = ({
               type="text"
               value={busTypeNotes}
               onChange={e => setBusTypeNotes(e.target.value)}
+              disabled={!canManage}
               className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
               placeholder="Optionale Notizen"
             />
@@ -109,7 +117,8 @@ const Settings: React.FC<Props> = ({
               </div>
               <button
                 onClick={() => onRemoveBusType(busType.id)}
-                className="text-slate-400 hover:text-red-600 transition-colors p-2"
+                disabled={!canManage}
+                className={`transition-colors p-2 ${canManage ? 'text-slate-400 hover:text-red-600' : 'text-slate-300 cursor-not-allowed'}`}
                 title="Bustyp entfernen"
               >
                 <Trash2 className="w-4 h-4" />
@@ -130,6 +139,7 @@ const Settings: React.FC<Props> = ({
               type="text"
               value={workerName}
               onChange={e => setWorkerName(e.target.value)}
+              disabled={!canManage}
               className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
               placeholder="z. B. Alex Schmidt"
             />
@@ -140,6 +150,7 @@ const Settings: React.FC<Props> = ({
               type="text"
               value={workerRole}
               onChange={e => setWorkerRole(e.target.value)}
+              disabled={!canManage}
               className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
               placeholder="Fahrer"
             />
@@ -147,6 +158,7 @@ const Settings: React.FC<Props> = ({
           <div className="flex items-end">
             <button
               onClick={handleAddWorker}
+              disabled={!canManage}
               className="w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -167,7 +179,8 @@ const Settings: React.FC<Props> = ({
               </div>
               <button
                 onClick={() => onRemoveWorker(worker.id)}
-                className="text-slate-400 hover:text-red-600 transition-colors p-2"
+                disabled={!canManage}
+                className={`transition-colors p-2 ${canManage ? 'text-slate-400 hover:text-red-600' : 'text-slate-300 cursor-not-allowed'}`}
                 title="Mitarbeiter entfernen"
               >
                 <Trash2 className="w-4 h-4" />

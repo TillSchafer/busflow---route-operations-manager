@@ -13,7 +13,15 @@ interface Profile {
   email: string;
   full_name: string;
   global_role: 'ADMIN' | 'USER';
-  // We will join app_permissions if possible, or fetch separately
+}
+
+interface AppPermission {
+  user_id: string;
+  role: 'ADMIN' | 'DISPATCH' | 'VIEWER';
+}
+
+interface AdminUser extends Profile {
+  busflow_role: 'ADMIN' | 'DISPATCH' | 'VIEWER';
 }
 
 interface Props {
@@ -42,7 +50,7 @@ interface Props {
 }
 
 const Admin: React.FC<Props> = ({ apps, currentUserId, header }) => {
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -51,27 +59,72 @@ const Admin: React.FC<Props> = ({ apps, currentUserId, header }) => {
 
   const fetchProfiles = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const [profilesRes, permissionsRes] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('app_permissions')
+        .select('user_id, role')
+        .eq('app_id', 'busflow')
+    ]);
 
-    if (error) {
-      console.error('Error fetching profiles:', error);
-    } else {
-      setProfiles(data as any[]);
+    if (profilesRes.error) {
+      console.error('Error fetching profiles:', profilesRes.error);
+      setLoading(false);
+      return;
     }
+
+    if (permissionsRes.error) {
+      console.error('Error fetching app permissions:', permissionsRes.error);
+      setLoading(false);
+      return;
+    }
+
+    const permissionByUser = new Map<string, AppPermission['role']>();
+    (permissionsRes.data as AppPermission[]).forEach((permission) => {
+      permissionByUser.set(permission.user_id, permission.role);
+    });
+
+    const mergedUsers: AdminUser[] = (profilesRes.data as Profile[]).map((profile) => ({
+      ...profile,
+      busflow_role: permissionByUser.get(profile.id) || 'DISPATCH'
+    }));
+
+    setUsers(mergedUsers);
     setLoading(false);
   };
 
-  const handleUpdateRole = async (userId: string, newRole: string) => {
+  const handleUpdateGlobalRole = async (userId: string, newRole: 'ADMIN' | 'USER') => {
+    if (currentUserId === userId) return;
+
     const { error } = await supabase
       .from('profiles')
       .update({ global_role: newRole })
       .eq('id', userId);
 
     if (error) {
-      alert('Fehler beim Aktualisieren der Rolle.');
+      alert(`Fehler beim Aktualisieren der Plattformrolle: ${error.message}`);
+    } else {
+      fetchProfiles();
+    }
+  };
+
+  const handleUpdateBusflowRole = async (userId: string, newRole: 'ADMIN' | 'DISPATCH' | 'VIEWER') => {
+    const { error } = await supabase
+      .from('app_permissions')
+      .upsert(
+        {
+          user_id: userId,
+          app_id: 'busflow',
+          role: newRole
+        },
+        { onConflict: 'user_id,app_id' }
+      );
+
+    if (error) {
+      alert(`Fehler beim Aktualisieren der BusFlow-Rolle: ${error.message}`);
     } else {
       fetchProfiles();
     }
@@ -88,7 +141,7 @@ const Admin: React.FC<Props> = ({ apps, currentUserId, header }) => {
       .eq('id', userId);
 
     if (error) {
-      alert('Fehler beim Entfernen.');
+      alert(`Fehler beim Entfernen: ${error.message}`);
     } else {
       fetchProfiles();
     }
@@ -134,7 +187,7 @@ const Admin: React.FC<Props> = ({ apps, currentUserId, header }) => {
             </div>
           ) : (
             <div className="space-y-3">
-              {profiles.map(profile => (
+              {users.map(profile => (
                 <div key={profile.id} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center border border-slate-200 rounded-lg p-4">
                   <div className="md:col-span-1">
                     <p className="text-sm font-bold text-slate-900">{profile.full_name || 'Kein Name'}</p>
@@ -142,23 +195,32 @@ const Admin: React.FC<Props> = ({ apps, currentUserId, header }) => {
                   </div>
 
                   <div className="md:col-span-1">
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">Rolle</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Plattformrolle</label>
                     <select
                       value={profile.global_role || 'USER'}
-                      onChange={(e) => handleUpdateRole(profile.id, e.target.value)}
+                      onChange={(e) => handleUpdateGlobalRole(profile.id, e.target.value as 'ADMIN' | 'USER')}
                       className="w-full border-slate-300 rounded-lg p-2 text-sm"
                       disabled={currentUserId === profile.id}
                     >
-                      <option value="USER">Benutzer / Dispatch</option>
+                      <option value="USER">Benutzer</option>
                       <option value="ADMIN">Administrator</option>
                     </select>
                   </div>
 
-                  <div className="md:col-span-2 flex justify-end">
-                    {/* 
-                           App Permissions could go here. 
-                           For now, 'USER' role implies Dispatch access to BusFlow in our simplified model.
-                        */}
+                  <div className="md:col-span-1">
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">BusFlow-Rolle</label>
+                    <select
+                      value={profile.busflow_role}
+                      onChange={(e) => handleUpdateBusflowRole(profile.id, e.target.value as 'ADMIN' | 'DISPATCH' | 'VIEWER')}
+                      className="w-full border-slate-300 rounded-lg p-2 text-sm"
+                    >
+                      <option value="VIEWER">Nur Lesen</option>
+                      <option value="DISPATCH">Bearbeiten</option>
+                      <option value="ADMIN">Admin</option>
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-1 flex justify-end">
                     <button
                       onClick={() => handleDeleteProfile(profile.id)}
                       disabled={currentUserId === profile.id}
@@ -173,7 +235,7 @@ const Admin: React.FC<Props> = ({ apps, currentUserId, header }) => {
                 </div>
               ))}
 
-              {profiles.length === 0 && (
+              {users.length === 0 && (
                 <p className="text-center text-slate-500 py-4">Keine Benutzer gefunden.</p>
               )}
             </div>
