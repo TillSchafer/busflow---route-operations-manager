@@ -1,20 +1,43 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# BusFlow Route Operations Manager
 
-# Run and deploy your AI Studio app
+BusFlow is a React + Vite app with Supabase auth, database, RLS, and realtime sync.
 
-This contains everything you need to run your app locally.
+## Stack
+- React 19 + TypeScript
+- Vite
+- Supabase (`@supabase/supabase-js`)
+- Tailwind utility classes
 
-View your app in AI Studio: https://ai.studio/apps/drive/1RM41O9kW7gYCqWLMAFF4i9ALU0s3RC4C
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
+## Local Development
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. Create `.env.local` with:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+3. Start dev server:
    `npm run dev`
+4. Build production bundle:
+   `npm run build`
+
+## Supabase Migration Map
+- `supabase_schema.sql`: initial baseline schema (historical base)
+- `supabase_migration_workers.sql`: workers table
+- `supabase_migration_phase3.sql`: legacy `customer_name` route column
+- `supabase_migration_phase4.sql`: status migration to German statuses
+- `supabase_migration_phase5.sql`: route operational fields
+- `supabase_migration_phase6.sql`: bus number + stop geo/actual times
+- `supabase_migration_phase7_roles.sql`: admin/app-permission model + signup defaults
+- `supabase_migration_phase8_customers.sql`: customer master table + RLS
+- `supabase_migration_phase9_concurrency.sql`: `updated_at` + atomic route save RPC
+- `supabase_migration_phase10_customer_fk.sql`: `customer_id` FK + backfill + RPC FK support
+- `supabase_migration_phase11_customer_name_cleanup.sql`: optional legacy `customer_name` drop
+- `supabase_migration_phase12_backend_cleanup.sql`: canonical trigger/RPC cleanup + policy checks
+
+## Canonical Backend Write Path
+- Routes + stops are saved through RPC: `save_busflow_route_with_stops`
+- Frontend write entrypoint: `BusFlowApi.saveRouteWithStops(...)`
+- Concurrency guard: optimistic lock via `updated_at`
+
+## Legacy Scripts
+- Deprecated SQL helpers are archived in `sql/legacy/`.
+- Do not execute archived scripts in production.

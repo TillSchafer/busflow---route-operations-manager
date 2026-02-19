@@ -142,7 +142,6 @@ const InnerApp: React.FC = () => {
     );
   }
 
-  // Define apps list (could come from DB later)
   const apps = [
     {
       id: 'busflow',
@@ -186,12 +185,8 @@ const InnerApp: React.FC = () => {
           path="/admin"
           element={
             user.role === 'ADMIN' ? (
-              // Temporarily simplified Admin page or placeholder
-              // The original Admin page relied on passing 'users' prop which we deleted.
-              // We need to either refactor Admin page to fetch users from Supabase or hide it for now.
-              // Let's pass empty props or better yet, refactor Admin page next.
               <Admin
-                users={[]} // TODO: Fetch from Supabase
+                users={[]}
                 apps={apps}
                 currentUserId={user.id}
                 newUserName=""

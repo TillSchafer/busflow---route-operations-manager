@@ -1,7 +1,54 @@
 import { supabase } from '../../shared/lib/supabase';
 import { Route as RouteType, Stop, BusType, Worker, Customer } from './types';
 
-const mapStopFromDb = (stop: any): Stop => ({
+type DbStop = {
+    id: string;
+    location: string | null;
+    arrival_time: string | null;
+    departure_time: string | null;
+    actual_arrival_time?: string | null;
+    actual_departure_time?: string | null;
+    boarding: number | string | null;
+    leaving: number | string | null;
+    current_total: number | string | null;
+    lat?: number | string | null;
+    lon?: number | string | null;
+    notes?: string | null;
+    sequence_order?: number | null;
+};
+
+type DbCustomer = {
+    id: string;
+    name: string;
+    notes?: string | null;
+};
+
+type DbRoute = {
+    id: string;
+    updated_at?: string | null;
+    name: string | null;
+    date: string | null;
+    bus_number?: string | null;
+    driver_name?: string | null;
+    customer_id?: string | null;
+    customer_name?: string | null;
+    capacity?: number | string | null;
+    busflow_stops?: DbStop[];
+    status?: string | null;
+    bus_type_id?: string | null;
+    worker_id?: string | null;
+    operational_notes?: string | null;
+    km_start_betrieb?: string | null;
+    km_start_customer?: string | null;
+    km_end_customer?: string | null;
+    km_end_betrieb?: string | null;
+    total_km?: string | null;
+    time_return_betrieb?: string | null;
+    time_return_customer?: string | null;
+    busflow_customers?: DbCustomer | DbCustomer[] | null;
+};
+
+const mapStopFromDb = (stop: DbStop): Stop => ({
     id: stop.id,
     location: stop.location || '',
     arrivalTime: stop.arrival_time || '',
@@ -16,7 +63,7 @@ const mapStopFromDb = (stop: any): Stop => ({
     notes: stop.notes || undefined
 });
 
-const mapRouteFromDb = (route: any): RouteType => {
+const mapRouteFromDb = (route: DbRoute): RouteType => {
     const linkedCustomer = Array.isArray(route.busflow_customers)
         ? route.busflow_customers[0]
         : route.busflow_customers;
@@ -32,7 +79,7 @@ const mapRouteFromDb = (route: any): RouteType => {
     customerName: linkedCustomer?.name || route.customer_name || '',
     capacity: Number(route.capacity) || 0,
     stops: (route.busflow_stops || [])
-        .sort((a: any, b: any) => (a.sequence_order || 0) - (b.sequence_order || 0))
+        .sort((a, b) => (a.sequence_order || 0) - (b.sequence_order || 0))
         .map(mapStopFromDb),
     status: (route.status || 'Entwurf') as RouteType['status'],
     busTypeId: route.bus_type_id || undefined,
@@ -62,7 +109,7 @@ export const BusFlowApi = {
 
         if (error) throw error;
 
-        return (data || []).map(mapRouteFromDb);
+        return ((data || []) as DbRoute[]).map(mapRouteFromDb);
     },
 
     async createRoute(route: Omit<RouteType, 'id'>) {
@@ -93,34 +140,6 @@ export const BusFlowApi = {
 
         if (error) throw error;
         return mapRouteFromDb({ ...data, busflow_stops: [] });
-    },
-
-    async updateRoute(id: string, updates: Partial<RouteType>) {
-        const { error } = await supabase
-            .from('busflow_routes')
-            .update({
-                name: updates.name,
-                date: updates.date,
-                status: updates.status,
-                bus_number: updates.busNumber,
-                driver_name: updates.driverName,
-                customer_id: updates.customerId || null,
-                customer_name: updates.customerName,
-                operational_notes: updates.operationalNotes,
-                capacity: updates.capacity,
-                bus_type_id: updates.busTypeId,
-                worker_id: updates.workerId,
-                km_start_betrieb: updates.kmStartBetrieb,
-                km_start_customer: updates.kmStartCustomer,
-                km_end_customer: updates.kmEndCustomer,
-                km_end_betrieb: updates.kmEndBetrieb,
-                total_km: updates.totalKm,
-                time_return_betrieb: updates.timeReturnBetrieb,
-                time_return_customer: updates.timeReturnCustomer
-            })
-            .eq('id', id);
-
-        if (error) throw error;
     },
 
     async saveRouteWithStops(route: RouteType, expectedUpdatedAt?: string) {
@@ -175,68 +194,6 @@ export const BusFlowApi = {
             .eq('id', id);
 
         if (error) throw error;
-    },
-
-    // --- Stops ---
-    async updateStops(routeId: string, stops: Stop[]) {
-        // 1. Delete existing stops for this route (simple replacement strategy)
-        // In a real optimized app, we would upsert.
-        const { error: deleteError } = await supabase
-            .from('busflow_stops')
-            .delete()
-            .eq('route_id', routeId);
-
-        if (deleteError) throw deleteError;
-
-        if (stops.length === 0) return;
-
-        const mappedWithExtendedFields = stops.map((stop, index) => ({
-            route_id: routeId,
-            location: stop.location,
-            arrival_time: stop.arrivalTime,
-            departure_time: stop.departureTime,
-            actual_arrival_time: stop.actualArrivalTime || null,
-            actual_departure_time: stop.actualDepartureTime || null,
-            boarding: stop.boarding,
-            leaving: stop.leaving,
-            current_total: stop.currentTotal,
-            sequence_order: index,
-            lat: typeof stop.lat === 'number' ? stop.lat : null,
-            lon: typeof stop.lon === 'number' ? stop.lon : null,
-            notes: stop.notes
-        }));
-
-        // 2. Insert new stops
-        const { error: insertError } = await supabase
-            .from('busflow_stops')
-            .insert(mappedWithExtendedFields);
-
-        if (!insertError) return;
-
-        // Backward compatibility: if migration wasn't applied yet, store the legacy subset.
-        const message = String((insertError as any)?.message || '').toLowerCase();
-        const isMissingColumn =
-            message.includes('actual_arrival_time') ||
-            message.includes('actual_departure_time') ||
-            message.includes('column') && (message.includes('lat') || message.includes('lon'));
-
-        if (!isMissingColumn) throw insertError;
-
-        const { error: fallbackError } = await supabase
-            .from('busflow_stops')
-            .insert(stops.map((stop, index) => ({
-                route_id: routeId,
-                location: stop.location,
-                arrival_time: stop.arrivalTime,
-                departure_time: stop.departureTime,
-                boarding: stop.boarding,
-                leaving: stop.leaving,
-                current_total: stop.currentTotal,
-                sequence_order: index,
-                notes: stop.notes
-            })));
-
-        if (fallbackError) throw fallbackError;
     },
 
     // --- Bus Types ---

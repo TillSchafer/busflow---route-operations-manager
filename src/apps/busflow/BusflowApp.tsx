@@ -35,6 +35,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   const [searchQuery, setSearchQuery] = useState('');
   const [routeIdToDelete, setRouteIdToDelete] = useState<string | null>(null);
   const [editConflictMessage, setEditConflictMessage] = useState<string | null>(null);
+  const [isNewRouteDraft, setIsNewRouteDraft] = useState(false);
   const canManageRoutes = authUser?.role === 'ADMIN' || authUser?.role === 'DISPATCH';
   const canManageSettings = canManageRoutes;
   const routesRefreshTimeout = useRef<number | null>(null);
@@ -121,26 +122,26 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       return;
     }
 
-    const newRouteData = {
-      name: 'Neue Route',
+    const newRouteDraft: Route = {
+      id: `draft-${Date.now()}`,
+      name: '',
       date: new Date().toISOString().split('T')[0],
       busNumber: '',
-      driverName: '', // Default empty, user selects
+      driverName: '',
+      customerId: undefined,
+      customerName: '',
       capacity: 0,
-      status: 'Entwurf' as const,
-      operationalNotes: ''
+      stops: [],
+      status: 'Entwurf',
+      operationalNotes: '',
+      busTypeId: undefined,
+      workerId: undefined
     };
 
-    try {
-      const created = await BusFlowApi.createRoute(newRouteData as any);
-      await refreshRoutes();
-      setEditConflictMessage(null);
-      setCurrentRoute(created);
-      setView('EDITOR');
-    } catch (e) {
-      console.error(e);
-      alert('Fehler beim Erstellen der Route.');
-    }
+    setEditConflictMessage(null);
+    setIsNewRouteDraft(true);
+    setCurrentRoute(newRouteDraft);
+    setView('EDITOR');
   };
 
   const handleEditRoute = (route: Route) => {
@@ -149,6 +150,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       return;
     }
     setEditConflictMessage(null);
+    setIsNewRouteDraft(false);
     setCurrentRoute(route);
     setView('EDITOR');
   };
@@ -168,9 +170,19 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
 
     try {
       setEditConflictMessage(null);
-      await BusFlowApi.saveRouteWithStops(updatedRoute, updatedRoute.updatedAt);
+      if (isNewRouteDraft) {
+        const { id: _draftId, updatedAt: _draftUpdatedAt, ...createPayload } = updatedRoute;
+        const created = await BusFlowApi.createRoute(createPayload);
+        await BusFlowApi.saveRouteWithStops(
+          { ...updatedRoute, id: created.id, updatedAt: created.updatedAt },
+          created.updatedAt
+        );
+      } else {
+        await BusFlowApi.saveRouteWithStops(updatedRoute, updatedRoute.updatedAt);
+      }
 
       await refreshRoutes();
+      setIsNewRouteDraft(false);
       setView('LIST');
     } catch (e: any) {
       console.error(e);

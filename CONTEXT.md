@@ -1,54 +1,55 @@
-BusFlow Route Operations Manager - Context
+# BusFlow Context
 
-Overview
-- React + Vite single-page app for managing bus routes, stops, and passenger load.
-- Main features: route list, route editor, print preview, CSV export, passenger load chart.
-- State stored in localStorage under key `busflow_routes_v1`.
+## Overview
+BusFlow is a role-based route planning app running on Supabase.
+It supports route management, stop planning, customer linking, settings data, and print/export.
 
-Entry Points
-- `index.html`: loads Tailwind CDN + Google Inter font, importmap for React, Recharts, lucide-react, and mounts `index.tsx`.
-- `index.tsx`: React root mounting `App`.
-- `App.tsx`: top-level state, route list/editor/print view, localStorage persistence.
+## Runtime Architecture
+- SPA: React + Vite + TypeScript
+- Auth: Supabase Auth (email/password)
+- Data: Supabase Postgres tables with RLS
+- Live refresh: Supabase Realtime subscriptions (`busflow_routes`, `busflow_stops`, settings tables)
 
-Core Data Types (`types.ts`)
-- `Route`: id, name, date, busNumber, driverName, capacity, status ('Draft' | 'Published'), stops.
-- `Stop`: id, location, arrivalTime, departureTime, boarding, leaving, currentTotal, notes?.
+## Core Backend Entities
+- `profiles`: platform user profile + `global_role`
+- `app_permissions`: per-app role (`busflow`: `ADMIN`/`DISPATCH`/`VIEWER`)
+- `busflow_routes`: route header (includes `customer_id`, legacy `customer_name`, `updated_at`)
+- `busflow_stops`: ordered stops with passenger and geo fields
+- `busflow_bus_types`: vehicle templates/capacity
+- `busflow_workers`: driver/team master data
+- `busflow_customers`: global customer master data
 
-App Flow (`App.tsx`)
-- Manages `routes`, `currentRoute`, and `view` ('LIST' | 'EDITOR' | 'PRINT').
-- On load: reads localStorage; normalizes routes/stops; falls back to default example data if missing or invalid.
-- On save: persists routes to localStorage.
-- `normalizeRoute` recalculates stop `currentTotal` sequentially and sanitizes numbers.
-- Printing: switches to PRINT view then calls `window.print()`. Print overlay uses `PrintPreview`.
+## Role Model
+- Platform admin: `profiles.global_role = 'ADMIN'`
+- BusFlow app role: `app_permissions` for `app_id='busflow'`
+- Effective frontend role:
+  - global `ADMIN` => `ADMIN`
+  - else `app_permissions.role` => `DISPATCH`/`VIEWER`
 
-Key Components
-- `components/RouteList.tsx`:
-  - Displays route cards, capacity load bar, actions for edit/print/delete/export.
-  - CSV export creates a file from route/stops data (safe filename fallback).
-  - Capacity load uses safe capacity guard to avoid divide-by-zero.
-- `components/RouteEditor.tsx`:
-  - Form for route metadata + editable stop table.
-  - `updatedStops` recomputes `currentTotal` via useMemo.
-  - Validations: required name, capacity > 0, capacity overflow, negative totals, arrival after departure.
-  - CSV export for the currently edited route.
-- `components/PassengerChart.tsx`:
-  - Recharts area chart of passenger totals with capacity reference line.
-- `components/PrintPreview.tsx`:
-  - Printable layout with route metadata, stop table, and driver instructions.
+## Canonical Save Flow
+- Frontend calls `BusFlowApi.saveRouteWithStops(route, expectedUpdatedAt)`
+- Backend RPC `save_busflow_route_with_stops` updates route + replaces stops atomically
+- RPC returns conflict code when `updated_at` differs
 
-Storage
-- Local storage key: `busflow_routes_v1`.
-- Content: array of `Route`. Normalization is applied on load to ensure `currentTotal` and numeric fields are consistent.
+## Customer Linking Model
+- Routes use FK `busflow_routes.customer_id -> busflow_customers.id`
+- UI displays customer label from join (`route.customerName` derived)
+- Legacy text column `customer_name` is temporary compatibility
 
-UI / Styling
-- Tailwind via CDN in `index.html`. Global print styles hide `.no-print` and show `.print-only`.
-- Print view uses `PrintPreview` rendered inside a `.print-only` container in `App.tsx`.
+## Current Migration Order
+1. `supabase_schema.sql`
+2. `supabase_migration_workers.sql`
+3. `supabase_migration_phase3.sql`
+4. `supabase_migration_phase4.sql`
+5. `supabase_migration_phase5.sql`
+6. `supabase_migration_phase6.sql`
+7. `supabase_migration_phase7_roles.sql`
+8. `supabase_migration_phase8_customers.sql`
+9. `supabase_migration_phase9_concurrency.sql`
+10. `supabase_migration_phase10_customer_fk.sql`
+11. `supabase_migration_phase11_customer_name_cleanup.sql` (optional later)
+12. `supabase_migration_phase12_backend_cleanup.sql`
 
-Known Behaviors / Notes
-- Print is triggered after setting view to PRINT (via setTimeout).
-- CSV download uses Blob + object URL, then programmatic click.
-- Default sample route in `App.tsx` if no data exists or parse fails.
-
-Suggested Next Maintenance
-- If adding fields to `Route` or `Stop`, update normalization in `App.tsx` and CSV export in `RouteEditor.tsx` and `RouteList.tsx`.
-- If adding new views, extend `view` union in `App.tsx`.
+## Notes
+- Deprecated helper scripts are under `sql/legacy/` and must not be run in production.
+- Route/customer hard enforcement (`customer_id NOT NULL`) is intentionally deferred.

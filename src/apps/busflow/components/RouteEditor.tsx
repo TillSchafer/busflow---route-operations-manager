@@ -284,7 +284,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                 value={formData.name}
                 onChange={e => setFormData({ ...formData, name: e.target.value })}
                 className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
-                placeholder="z. B. Morgenlinie A"
+                placeholder="Neue Route"
               />
             </div>
             <div className="col-span-1 md:col-span-2">
