@@ -21,7 +21,7 @@ export interface Route {
   date: string;
   busNumber: string;
   driverName: string;
-  customerId?: string;
+  customerId: string;
   customerName?: string;
   customerContactId?: string;
   customerContactName?: string;

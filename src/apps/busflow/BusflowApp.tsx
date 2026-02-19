@@ -32,6 +32,7 @@ interface User {
 
 interface Props {
   authUser: User | null;
+  activeAccountId: string | null;
   onProfile: () => void;
   onLogout: () => void;
   onGoHome: () => void;
@@ -45,7 +46,7 @@ const getErrorCode = (error: unknown): string | undefined =>
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : '';
 
-const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, onAdmin }) => {
+const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onLogout, onGoHome, onAdmin }) => {
   const { pushToast, clearToasts } = useToast();
   const defaultMapViewFallback: MapDefaultView = { address: 'Deutschland', lat: 51.1657, lon: 10.4515, zoom: 6 };
   const [routes, setRoutes] = useState<Route[]>([]);
@@ -64,9 +65,21 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   const canManageSettings = canManageRoutes;
   const routesRefreshTimeout = useRef<number | null>(null);
   const settingsRefreshTimeout = useRef<number | null>(null);
-
   // Load Initial Data
   useEffect(() => {
+    BusFlowApi.setActiveAccountId(activeAccountId);
+  }, [activeAccountId]);
+
+  useEffect(() => {
+    if (!activeAccountId) {
+      setRoutes([]);
+      setBusTypes([]);
+      setWorkers([]);
+      setCustomers([]);
+      setLoading(false);
+      return;
+    }
+
     const loadData = async () => {
       setLoading(true);
       try {
@@ -89,7 +102,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       }
     };
     loadData();
-  }, []);
+  }, [activeAccountId]);
 
   const refreshRoutes = async () => {
     const fetched = await BusFlowApi.getRoutes();
@@ -110,6 +123,8 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   };
 
   useEffect(() => {
+    if (!activeAccountId) return;
+
     const scheduleRoutesRefresh = () => {
       if (routesRefreshTimeout.current) {
         window.clearTimeout(routesRefreshTimeout.current);
@@ -128,15 +143,16 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       }, 200);
     };
 
+    const accountFilter = `account_id=eq.${activeAccountId}`;
     const channel = supabase
-      .channel('busflow-live-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_routes' }, scheduleRoutesRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_stops' }, scheduleRoutesRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_bus_types' }, scheduleSettingsRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_workers' }, scheduleSettingsRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_customers' }, scheduleSettingsRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_customer_contacts' }, scheduleSettingsRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_app_settings' }, scheduleSettingsRefresh)
+      .channel(`busflow-live-sync-${activeAccountId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_routes', filter: accountFilter }, scheduleRoutesRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_stops', filter: accountFilter }, scheduleRoutesRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_bus_types', filter: accountFilter }, scheduleSettingsRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_workers', filter: accountFilter }, scheduleSettingsRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_customers', filter: accountFilter }, scheduleSettingsRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_customer_contacts', filter: accountFilter }, scheduleSettingsRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_app_settings', filter: accountFilter }, scheduleSettingsRefresh)
       .subscribe();
 
     return () => {
@@ -144,7 +160,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       if (settingsRefreshTimeout.current) window.clearTimeout(settingsRefreshTimeout.current);
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [activeAccountId]);
 
   const handleCreateNew = async () => {
     if (!canManageRoutes) {
@@ -162,7 +178,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       date: new Date().toISOString().split('T')[0],
       busNumber: '',
       driverName: '',
-      customerId: undefined,
+      customerId: '',
       customerName: '',
       customerContactId: undefined,
       customerContactName: '',
@@ -258,6 +274,46 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
         });
         await refreshRoutes();
         setView('LIST');
+        return;
+      }
+      if (getErrorCode(error) === 'CUSTOMER_REQUIRED') {
+        pushToast({
+          type: 'error',
+          title: 'Kunde erforderlich',
+          message: 'Bitte wählen Sie einen Kunden aus der Liste aus.'
+        });
+        return;
+      }
+      if (getErrorCode(error) === 'CUSTOMER_CONTACT_MISMATCH') {
+        pushToast({
+          type: 'error',
+          title: 'Kontakt passt nicht',
+          message: 'Der ausgewählte Kontakt gehört nicht zum gewählten Kunden.'
+        });
+        return;
+      }
+      if (getErrorCode(error) === 'CONTACT_NOT_FOUND') {
+        pushToast({
+          type: 'error',
+          title: 'Kontakt nicht gefunden',
+          message: 'Bitte wählen Sie die Kontaktperson erneut aus.'
+        });
+        return;
+      }
+      if (getErrorCode(error) === 'WORKER_NOT_FOUND' || getErrorCode(error) === 'WORKER_ACCOUNT_MISMATCH') {
+        pushToast({
+          type: 'error',
+          title: 'Fahrer ungültig',
+          message: 'Der ausgewählte Fahrer gehört nicht zu Ihrem Account.'
+        });
+        return;
+      }
+      if (getErrorCode(error) === 'BUS_TYPE_NOT_FOUND' || getErrorCode(error) === 'BUS_TYPE_ACCOUNT_MISMATCH') {
+        pushToast({
+          type: 'error',
+          title: 'Bustyp ungültig',
+          message: 'Der ausgewählte Bustyp gehört nicht zu Ihrem Account.'
+        });
         return;
       }
       pushToast({
@@ -730,6 +786,17 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
     );
   }
 
+  if (!activeAccountId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 text-center">
+          <h2 className="text-lg font-bold text-slate-900 mb-2">Kein Account zugewiesen</h2>
+          <p className="text-sm text-slate-600">Ihr Benutzer hat noch keinen aktiven Mandanten. Bitte Administrator kontaktieren.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <ConfirmDialog
@@ -754,7 +821,6 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
         searchBar={view === 'LIST' ? SearchInput : undefined}
         actions={view === 'LIST' && canManageSettings ? (
           <>
-
             <button
               onClick={() => setView('SETTINGS')}
               className={`flex items-center space-x-1 px-3 py-1.5 rounded-md transition-colors ${view === 'SETTINGS' ? 'bg-slate-800' : 'hover:bg-slate-800'}`}

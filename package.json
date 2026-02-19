@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "npm run test:smoke",
+    "test:smoke": "npm run check",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "check": "npm run typecheck && npm run lint && npm run build"
@@ -18,8 +20,7 @@
     "lucide-react": "^0.562.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "react-router-dom": "^6.26.2",
-    "recharts": "^3.6.0"
+    "react-router-dom": "^6.26.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -30,6 +31,7 @@
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "globals": "^16.5.0",
+    "supabase": "^2.76.11",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

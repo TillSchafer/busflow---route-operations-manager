@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 
 export type Role = 'ADMIN' | 'DISPATCH' | 'VIEWER';
 type GlobalRole = 'ADMIN' | 'USER';
-type AppPermissionRole = 'ADMIN' | 'DISPATCH' | 'VIEWER';
+type MembershipRole = 'ADMIN' | 'DISPATCH' | 'VIEWER';
 
 export interface User {
   id: string;
@@ -12,80 +12,142 @@ export interface User {
   email?: string;
   avatarUrl?: string;
   allowedApps?: string[];
+  isPlatformAdmin?: boolean;
+}
+
+export interface AccountSummary {
+  id: string;
+  name: string;
+  slug: string;
+  role: Role;
 }
 
 interface AuthContextType {
   user: User | null;
+  activeAccountId: string | null;
+  activeAccount: AccountSummary | null;
   loading: boolean;
-  login: () => Promise<void>; // Modified to trigger OAuth/MagicLink
+  login: () => Promise<void>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const toRole = (value: MembershipRole | undefined): Role => {
+  if (value === 'ADMIN' || value === 'DISPATCH' || value === 'VIEWER') {
+    return value;
+  }
+  return 'VIEWER';
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [activeAccountId, setActiveAccountId] = useState<string | null>(null);
+  const [activeAccount, setActiveAccount] = useState<AccountSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+
+  const fetchActiveMembership = useCallback(async (userId: string, isPlatformAdmin: boolean): Promise<AccountSummary | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('account_memberships')
+        .select(`
+          account_id,
+          role,
+          status,
+          created_at,
+          platform_accounts!inner (id, name, slug)
+        `)
+        .eq('user_id', userId)
+        .eq('status', 'ACTIVE')
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      if (error || !data || data.length === 0) {
+        setActiveAccount(null);
+        setActiveAccountId(null);
+        return null;
+      }
+
+      const row = data[0] as {
+        account_id: string;
+        role: MembershipRole;
+        platform_accounts: { id: string; name: string; slug: string } | { id: string; name: string; slug: string }[];
+      };
+
+      const account = Array.isArray(row.platform_accounts) ? row.platform_accounts[0] : row.platform_accounts;
+      const membershipRole = isPlatformAdmin ? 'ADMIN' : toRole(row.role);
+
+      const summary: AccountSummary = {
+        id: account?.id || row.account_id,
+        name: account?.name || 'Account',
+        slug: account?.slug || '',
+        role: membershipRole
+      };
+
+      setActiveAccount(summary);
+      setActiveAccountId(summary.id);
+      return summary;
+    } catch (error) {
+      console.error('Unexpected error fetching memberships:', error);
+      setActiveAccount(null);
+      setActiveAccountId(null);
+      return null;
+    }
+  }, []);
 
   const fetchProfile = useCallback(async (userId: string, email?: string) => {
     try {
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, email, full_name, avatar_url, global_role')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        console.error('Error fetching profile:', error);
-        // If profile doesn't exist yet (race condition with trigger), fallback to basic info
+      if (error || !profile) {
+        const fallbackName = email?.split('@')[0] || 'User';
         setUser({
           id: userId,
-          name: email?.split('@')[0] || 'User',
-          role: 'VIEWER', // Default safe role
-          email: email
+          name: fallbackName,
+          role: 'VIEWER',
+          email
         });
-      } else if (profile) {
-        const { data: permissionRow, error: permissionError } = await supabase
-          .from('app_permissions')
-          .select('role')
-          .eq('user_id', userId)
-          .eq('app_id', 'busflow')
-          .maybeSingle();
-
-        if (permissionError) {
-          console.error('Error fetching app permission:', permissionError);
-        }
-
-        const globalRole = profile.global_role as GlobalRole;
-        const appRole = permissionRow?.role as AppPermissionRole | undefined;
-
-        // Effective frontend role:
-        // - Platform admins stay ADMIN (can open admin area)
-        // - BusFlow ADMIN/DISPATCH both map to DISPATCH rights in current UI
-        // - VIEWER stays read-only
-        let role: Role = 'VIEWER';
-        if (globalRole === 'ADMIN') role = 'ADMIN';
-        else if (appRole === 'ADMIN' || appRole === 'DISPATCH') role = 'DISPATCH';
-
-        setUser({
-          id: profile.id,
-          name: profile.full_name || email?.split('@')[0] || 'User',
-          role: role,
-          email: profile.email,
-          avatarUrl: profile.avatar_url
-        });
+        setActiveAccount(null);
+        setActiveAccountId(null);
+        return;
       }
+
+      const isPlatformAdmin = (profile.global_role as GlobalRole) === 'ADMIN';
+      let membership = await fetchActiveMembership(profile.id, isPlatformAdmin);
+
+      if (!membership && !isPlatformAdmin) {
+        const { data: claimResult, error: claimError } = await supabase.rpc('claim_my_invitation', {
+          p_account_id: null
+        });
+        if (!claimError && claimResult?.ok) {
+          membership = await fetchActiveMembership(profile.id, isPlatformAdmin);
+        }
+      }
+
+      const effectiveRole: Role = isPlatformAdmin ? 'ADMIN' : membership?.role || 'VIEWER';
+
+      setUser({
+        id: profile.id,
+        name: profile.full_name || email?.split('@')[0] || 'User',
+        role: effectiveRole,
+        email: profile.email,
+        avatarUrl: profile.avatar_url,
+        isPlatformAdmin
+      });
     } catch (error) {
       console.error('Unexpected error fetching profile:', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchActiveMembership]);
 
   useEffect(() => {
-    // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setSessionUserId(session.user.id);
@@ -105,6 +167,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setSessionUserId(null);
         setUser(null);
+        setActiveAccount(null);
+        setActiveAccountId(null);
         setLoading(false);
       }
     });
@@ -124,7 +188,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'app_permissions', filter: `user_id=eq.${sessionUserId}` },
+        { event: '*', schema: 'public', table: 'account_memberships', filter: `user_id=eq.${sessionUserId}` },
         () => fetchProfile(sessionUserId)
       )
       .subscribe();
@@ -135,20 +199,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [fetchProfile, sessionUserId]);
 
   const login = async () => {
-    // For simplicity, we'll use Google OAuth or Magic Link
-    // Here we use Google as stored in Supabase project settings
-    // Or we can just prompt for email in a real UI form.
-    // Let's implement a generic "signInWithMsg" for now or redirect
     console.warn('Login action is handled directly in App.tsx form flow.');
   };
 
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null);
+    setActiveAccount(null);
+    setActiveAccountId(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, activeAccountId, activeAccount, loading, login, logout, isAuthenticated: !!user }}>
       {!loading && children}
     </AuthContext.Provider>
   );

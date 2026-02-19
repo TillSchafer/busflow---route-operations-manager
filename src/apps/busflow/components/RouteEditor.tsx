@@ -82,7 +82,9 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
       .filter(customer => customer.name.toLowerCase().includes(q))
       .slice(0, 8);
   }, [customers, formData.customerName]);
-  const hasUnlinkedCustomerText = Boolean((formData.customerName || '').trim()) && !formData.customerId;
+  const customerRequiredForStatus = formData.status !== 'Entwurf';
+  const hasUnlinkedCustomerText =
+    customerRequiredForStatus && Boolean((formData.customerName || '').trim()) && formData.customerId === '';
 
   useEffect(() => {
     let isMounted = true;
@@ -117,6 +119,9 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
   const validate = () => {
     const newErrors: string[] = [];
     if (!formData.name) newErrors.push('Der Routenname ist erforderlich.');
+    if (customerRequiredForStatus && !formData.customerId) {
+      newErrors.push('Bitte wählen Sie einen Kunden aus der Liste aus (für Geplant/Aktiv/Archiviert).');
+    }
     if (formData.capacity < 0) newErrors.push('Die belegten Plätze dürfen nicht negativ sein.');
     if (selectedBusTypeCapacity > 0 && formData.capacity > selectedBusTypeCapacity) {
       newErrors.push(`Belegte Plätze (${formData.capacity}) überschreiten die Buskapazität (${selectedBusTypeCapacity}).`);
@@ -302,7 +307,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                     setFormData({
                       ...formData,
                       customerName: e.target.value,
-                      customerId: undefined,
+                      customerId: '',
                       customerContactId: undefined,
                       customerContactName: undefined
                     });
@@ -339,7 +344,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                 )}
               </div>
               {hasUnlinkedCustomerText && (
-                <p className="text-xs text-slate-500 mt-1">Optional: Kunde aus der Liste verknüpfen oder Freitext verwenden.</p>
+                <p className="text-xs text-amber-600 mt-1">Für Geplant/Aktiv/Archiviert muss ein Kunde aus der Liste gewählt werden.</p>
               )}
             </div>
             <div>

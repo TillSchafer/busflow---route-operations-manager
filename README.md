@@ -19,6 +19,7 @@ BusFlow is a React + Vite app with Supabase auth, database, RLS, and realtime sy
 2. Create `.env.local` with:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
+   - See `.env.example` for environment separation guidance.
 3. Start dev server:
    `npm run dev`
 4. Run quality gate:
@@ -51,11 +52,27 @@ BusFlow is a React + Vite app with Supabase auth, database, RLS, and realtime sy
 - `supabase_migration_phase17_customer_contacts.sql`: company + multi-contact model + route contact FK
 - `supabase_migration_phase17b_customer_contacts_rpc.sql`: canonical route+stops RPC with `customer_contact_id`
 - `supabase_migration_phase18_sql_governance.sql`: migration-first governance comments + trigger/policy/index sanity checks
+- `supabase_migration_phase19_rls_audit.sql`: launch security audit warnings for RLS/policies/triggers/linking
+- `supabase_migration_phase20_strict_customer_fk.sql`: strict relational enforcement (`customer_id` required on routes)
+- `supabase_migration_phase20b_rpc_strict_customer.sql`: canonical strict RPC (`customerId` required; no free-text writes)
+- `supabase_migration_phase21_customer_name_drop.sql`: post-pilot cleanup (drop legacy `customer_name`)
+- `supabase_migration_phase22_tenant_foundation.sql`: tenant core tables (`platform_accounts`, memberships, admin audit) + helper functions
+- `supabase_migration_phase23_account_columns_backfill.sql`: `account_id` rollout/backfill across all BusFlow tables
+- `supabase_migration_phase24_tenant_rls_enforcement.sql`: strict account-based RLS + integrity + admin audit triggers
+- `supabase_migration_phase25_account_constraints.sql`: `account_id` NOT NULL + tenant uniqueness constraints
+- `supabase_migration_phase26_rpc_account_scope.sql`: account-scoped canonical route/stops RPC
+- `supabase_migration_phase28_legacy_cleanup_prep.sql`: non-destructive prep marker before app_permissions deprecation
 
 ## Canonical Backend Write Path
 - Routes + stops are saved through RPC: `save_busflow_route_with_stops`
 - Frontend write entrypoint: `BusFlowApi.saveRouteWithStops(...)`
 - Concurrency guard: optimistic lock via `updated_at`
+- Launch mode requires relational company linkage (`customerId` mandatory)
+
+## Launch Operations
+- Launch Phase 1 checklist: `LAUNCH_PHASE1_CHECKLIST.md`
+- Pilot recommendation: invite-only initial customer rollout with manual role assignment.
+- Multi-tenant rollout starts with `pilot-account` default backfill and can be expanded safely afterwards.
 
 ## Legacy Scripts
 - Deprecated SQL helpers are archived in `sql/legacy/`.

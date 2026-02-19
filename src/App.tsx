@@ -17,53 +17,30 @@ import ProgressViewport from './shared/components/ProgressViewport';
 
 const InnerApp: React.FC = () => {
   const navigate = useNavigate();
-  const { user, loading, logout } = useAuth();
+  const { user, activeAccountId, loading, logout } = useAuth();
   const { pushToast } = useToast();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
-  const [loginMessage, setLoginMessage] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
-    setLoginMessage('');
     setIsLoggingIn(true);
 
     try {
-      if (isRegistering) {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: email.split('@')[0],
-              avatar_url: ''
-            }
-          }
-        });
-        if (error) throw error;
-        if (data.session) {
-          // Auto logged in
-        } else if (data.user) {
-          setLoginMessage('Registrierung erfolgreich! Bitte überprüfen Sie Ihre E-Mails zur Bestätigung.');
-          setIsLoggingIn(false);
-          return;
-        }
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-      }
-    } catch (error: any) {
-      setLoginError(error.message || 'Ein Fehler ist aufgetreten.');
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+    } catch (error: unknown) {
+      const fallbackMessage = 'Anmeldung fehlgeschlagen.';
+      setLoginError(error instanceof Error ? error.message || fallbackMessage : fallbackMessage);
     } finally {
-      if (!loginMessage) setIsLoggingIn(false);
+      setIsLoggingIn(false);
     }
   };
 
@@ -89,11 +66,11 @@ const InnerApp: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <div className="bg-white border border-slate-200 rounded-2xl shadow-xl px-8 py-8 w-full max-w-md">
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">
-            {isRegistering ? 'Konto erstellen' : 'Anmeldung'}
-          </h2>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Anmeldung</h2>
           <p className="text-sm text-slate-500 mb-6">
-            {isRegistering ? 'Erstellen Sie ein neues Konto für die Plattform.' : 'Bitte melden Sie sich an, um fortzufahren.'}
+            Bitte melden Sie sich an, um fortzufahren.
+            <br />
+            <span className="font-medium text-slate-700">Zugang nur per Einladung.</span>
           </p>
           <form onSubmit={handleAuth} className="space-y-4">
             <div>
@@ -120,29 +97,15 @@ const InnerApp: React.FC = () => {
               />
             </div>
             {loginError && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{loginError}</p>}
-            {loginMessage && <p className="text-sm text-green-600 bg-green-50 p-2 rounded">{loginMessage}</p>}
 
             <button
               type="submit"
               disabled={isLoggingIn}
               className="w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors disabled:opacity-50"
             >
-              {isLoggingIn ? 'Verarbeite...' : (isRegistering ? 'Registrieren' : 'Anmelden')}
+              {isLoggingIn ? 'Verarbeite...' : 'Anmelden'}
             </button>
           </form>
-
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => {
-                setIsRegistering(!isRegistering);
-                setLoginError('');
-                setLoginMessage('');
-              }}
-              className="text-sm text-slate-500 hover:text-slate-800 underline"
-            >
-              {isRegistering ? 'Bereits ein Konto? Anmelden' : 'Noch kein Konto? Registrieren'}
-            </button>
-          </div>
         </div>
       </div>
     );
@@ -180,6 +143,7 @@ const InnerApp: React.FC = () => {
           element={
             <BusflowApp
               authUser={user}
+              activeAccountId={activeAccountId}
               onProfile={() => navigate('/profile')}
               onLogout={handleLogout}
               onGoHome={() => navigate('/')}
@@ -192,18 +156,10 @@ const InnerApp: React.FC = () => {
           element={
             user.role === 'ADMIN' ? (
               <Admin
-                users={[]}
                 apps={apps}
                 currentUserId={user.id}
-                newUserName=""
-                newUserPassword=""
-                newUserRole="DISPATCH"
-                onNewUserName={() => { }}
-                onNewUserPassword={() => { }}
-                onNewUserRole={() => { }}
-                onAddUser={() => pushToast({ type: 'info', title: 'Info', message: 'Admin-Funktion wird direkt über Supabase verwaltet.' })}
-                onRemoveUser={() => pushToast({ type: 'info', title: 'Info', message: 'Admin-Funktion wird direkt über Supabase verwaltet.' })}
-                onUpdateUser={() => pushToast({ type: 'info', title: 'Info', message: 'Admin-Funktion wird direkt über Supabase verwaltet.' })}
+                activeAccountId={activeAccountId}
+                isPlatformAdmin={user.isPlatformAdmin}
                 header={{
                   title: 'Adminbereich',
                   user: user,

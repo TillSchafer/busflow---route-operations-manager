@@ -5,7 +5,7 @@
 --
 -- Canonical owners:
 -- - public.handle_new_user -> supabase_migration_phase12_backend_cleanup.sql
--- - public.save_busflow_route_with_stops -> supabase_migration_phase17b_customer_contacts_rpc.sql
+-- - public.save_busflow_route_with_stops -> supabase_migration_phase20b_rpc_strict_customer.sql
 
 -- Keep expected lookup indexes idempotent.
 create index if not exists idx_busflow_routes_customer_id
@@ -19,7 +19,7 @@ comment on function public.handle_new_user()
   is 'Canonical owner migration: supabase_migration_phase12_backend_cleanup.sql. Do not patch manually.';
 
 comment on function public.save_busflow_route_with_stops(uuid, timestamp with time zone, jsonb, jsonb)
-  is 'Canonical owner migration: supabase_migration_phase17b_customer_contacts_rpc.sql. Do not patch manually.';
+  is 'Canonical owner migration: supabase_migration_phase20b_rpc_strict_customer.sql. Do not patch manually.';
 
 -- Sanity checks: raise warnings if required objects are missing.
 do $$
