@@ -1,18 +1,33 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { Customer } from '../types';
+import { CustomerContactListItem } from '../types';
+
+export interface CustomerContactFormPayload {
+  companyName: string;
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  phone?: string;
+  street?: string;
+  postalCode?: string;
+  city?: string;
+  country?: string;
+  email?: string;
+  notes?: string;
+  metadata?: Record<string, string>;
+}
 
 interface Props {
   isOpen: boolean;
   mode: 'create' | 'edit';
-  customer?: Customer | null;
+  customer?: CustomerContactListItem | null;
   onClose: () => void;
-  onCreate?: (payload: Omit<Customer, 'id'>) => Promise<void>;
-  onSave?: (id: string, patch: Partial<Omit<Customer, 'id'>>) => Promise<void>;
+  onCreate?: (payload: CustomerContactFormPayload) => Promise<void>;
+  onSave?: (id: string, patch: CustomerContactFormPayload) => Promise<void>;
 }
 
 const CustomerEditDialog: React.FC<Props> = ({ isOpen, mode, customer = null, onClose, onCreate, onSave }) => {
-  const [form, setForm] = useState<Partial<Omit<Customer, 'id'>>>({});
+  const [form, setForm] = useState<Partial<CustomerContactFormPayload>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,7 +36,10 @@ const CustomerEditDialog: React.FC<Props> = ({ isOpen, mode, customer = null, on
 
     if (mode === 'edit' && customer) {
       setForm({
-        name: customer.name || '',
+        companyName: customer.companyName || '',
+        firstName: customer.firstName || '',
+        lastName: customer.lastName || '',
+        fullName: customer.fullName || '',
         notes: customer.notes || '',
         phone: customer.phone || '',
         street: customer.street || '',
@@ -29,12 +47,14 @@ const CustomerEditDialog: React.FC<Props> = ({ isOpen, mode, customer = null, on
         city: customer.city || '',
         country: customer.country || '',
         email: customer.email || '',
-        contactPerson: customer.contactPerson || '',
         metadata: customer.metadata || {}
       });
     } else {
       setForm({
-        name: '',
+        companyName: '',
+        firstName: '',
+        lastName: '',
+        fullName: '',
         notes: '',
         phone: '',
         street: '',
@@ -42,7 +62,6 @@ const CustomerEditDialog: React.FC<Props> = ({ isOpen, mode, customer = null, on
         city: '',
         country: '',
         email: '',
-        contactPerson: '',
         metadata: {}
       });
     }
@@ -53,47 +72,43 @@ const CustomerEditDialog: React.FC<Props> = ({ isOpen, mode, customer = null, on
   if (mode === 'edit' && !customer) return null;
 
   const handleSubmit = async () => {
-    const name = (form.name || '').trim();
-    if (!name) {
-      setError('Name ist erforderlich.');
+    const companyName = (form.companyName || '').trim();
+    if (!companyName) {
+      setError('Firmenname ist erforderlich.');
       return;
     }
+
+    const firstName = (form.firstName || '').trim();
+    const lastName = (form.lastName || '').trim();
+    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || (form.fullName || '').trim() || undefined;
+
     setIsSaving(true);
     setError(null);
     try {
       const payload = {
         ...form,
-        name,
+        companyName,
+        firstName: firstName || undefined,
+        lastName: lastName || undefined,
+        fullName,
         notes: (form.notes || '').trim() || undefined,
         phone: (form.phone || '').trim() || undefined,
         street: (form.street || '').trim() || undefined,
         postalCode: (form.postalCode || '').trim() || undefined,
         city: (form.city || '').trim() || undefined,
         country: (form.country || '').trim() || undefined,
-        email: (form.email || '').trim() || undefined,
-        contactPerson: (form.contactPerson || '').trim() || undefined
+        email: (form.email || '').trim() || undefined
       };
       if (mode === 'create') {
         if (!onCreate) throw new Error('Create handler fehlt.');
-        await onCreate({
-          name,
-          notes: payload.notes,
-          phone: payload.phone,
-          street: payload.street,
-          postalCode: payload.postalCode,
-          city: payload.city,
-          country: payload.country,
-          email: payload.email,
-          contactPerson: payload.contactPerson,
-          metadata: payload.metadata
-        });
+        await onCreate(payload as CustomerContactFormPayload);
       } else {
         if (!customer || !onSave) throw new Error('Edit handler fehlt.');
-        await onSave(customer.id, payload);
+        await onSave(customer.contactId, payload as CustomerContactFormPayload);
       }
       onClose();
     } catch (e: any) {
-      setError(e?.message || (mode === 'create' ? 'Kunde konnte nicht erstellt werden.' : 'Kunde konnte nicht gespeichert werden.'));
+      setError(e?.message || (mode === 'create' ? 'Kontakt konnte nicht erstellt werden.' : 'Kontakt konnte nicht gespeichert werden.'));
     } finally {
       setIsSaving(false);
     }
@@ -103,28 +118,36 @@ const CustomerEditDialog: React.FC<Props> = ({ isOpen, mode, customer = null, on
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[1600] px-4">
       <div className="w-full max-w-3xl bg-white rounded-xl shadow-2xl border border-slate-200">
         <div className="px-6 py-4 border-b border-slate-200">
-          <h3 className="text-lg font-bold text-slate-900">{mode === 'create' ? 'Kunde hinzufügen' : 'Kunde bearbeiten'}</h3>
+          <h3 className="text-lg font-bold text-slate-900">{mode === 'create' ? 'Kontakt hinzufügen' : 'Kontakt bearbeiten'}</h3>
           <p className="text-sm text-slate-500">
             {mode === 'create'
-              ? 'Erfassen Sie alle Kundendaten und speichern Sie den neuen Kunden.'
-              : 'Ändern Sie Kundendaten und speichern Sie die Änderungen.'}
+              ? 'Erfassen Sie Kontakt und Firma und speichern Sie den Eintrag.'
+              : 'Ändern Sie Kontakt- und Firmendaten und speichern Sie die Änderungen.'}
           </p>
         </div>
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <label className="text-sm font-medium text-slate-700">
-            Name
+          <label className="text-sm font-medium text-slate-700 md:col-span-2">
+            Firmenname
             <input
               className="mt-1 w-full border border-slate-300 rounded-lg p-2.5"
-              value={form.name || ''}
-              onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
+              value={form.companyName || ''}
+              onChange={e => setForm(prev => ({ ...prev, companyName: e.target.value }))}
             />
           </label>
           <label className="text-sm font-medium text-slate-700">
-            Ansprechpartner
+            Vorname
             <input
               className="mt-1 w-full border border-slate-300 rounded-lg p-2.5"
-              value={form.contactPerson || ''}
-              onChange={e => setForm(prev => ({ ...prev, contactPerson: e.target.value }))}
+              value={form.firstName || ''}
+              onChange={e => setForm(prev => ({ ...prev, firstName: e.target.value }))}
+            />
+          </label>
+          <label className="text-sm font-medium text-slate-700">
+            Nachname
+            <input
+              className="mt-1 w-full border border-slate-300 rounded-lg p-2.5"
+              value={form.lastName || ''}
+              onChange={e => setForm(prev => ({ ...prev, lastName: e.target.value }))}
             />
           </label>
           <label className="text-sm font-medium text-slate-700">

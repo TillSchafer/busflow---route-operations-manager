@@ -4,6 +4,7 @@ import RouteEditor from './components/RouteEditor';
 import RouteList from './components/RouteList';
 import PrintPreview from './components/PrintPreview';
 import Settings from './components/Settings';
+import { CustomerContactFormPayload } from './components/CustomerEditDialog';
 import AppHeader from '../../shared/components/AppHeader';
 import ConfirmDialog from '../../shared/components/ConfirmDialog';
 import {
@@ -13,8 +14,8 @@ import {
   CustomerImportPreview,
   CustomerImportRow,
   CustomerImportResult,
-  CustomerListParams,
-  CustomerListResult,
+  CustomerContactListParams,
+  CustomerContactListResult,
   MapDefaultView,
   Route,
   Worker
@@ -399,7 +400,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
     }
   };
 
-  const handleAddCustomer = async (customer: Customer) => {
+  const handleAddCustomerContact = async (contact: CustomerContactFormPayload) => {
     if (!canManageSettings) {
       pushToast({
         type: 'error',
@@ -409,24 +410,24 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       return;
     }
     try {
-      await BusFlowApi.createCustomer(customer);
+      await BusFlowApi.createCustomerContactWithCompany(contact);
       const fetched = await BusFlowApi.getCustomersForSuggestions();
       setCustomers(fetched);
       pushToast({
         type: 'success',
         title: 'Gespeichert',
-        message: 'Kunde wurde gespeichert.'
+        message: 'Kontakt wurde gespeichert.'
       });
     } catch (e: any) {
       pushToast({
         type: 'error',
         title: 'Speichern fehlgeschlagen',
-        message: `Kunde konnte nicht gespeichert werden.${e?.message ? ` ${e.message}` : ''}`
+        message: `Kontakt konnte nicht gespeichert werden.${e?.message ? ` ${e.message}` : ''}`
       });
     }
   };
 
-  const handleRemoveCustomer = async (id: string) => {
+  const handleRemoveCustomerContact = async (contactId: string) => {
     if (!canManageSettings) {
       pushToast({
         type: 'error',
@@ -436,36 +437,36 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       return;
     }
     try {
-      await BusFlowApi.deleteCustomer(id);
+      await BusFlowApi.deleteCustomerContact(contactId);
       const fetched = await BusFlowApi.getCustomersForSuggestions();
       setCustomers(fetched);
       pushToast({
         type: 'success',
         title: 'Gelöscht',
-        message: 'Kunde wurde entfernt.'
+        message: 'Kontakt wurde entfernt.'
       });
     } catch (e: any) {
-      if (e?.code === 'CUSTOMER_IN_USE') {
+      if (e?.code === 'CONTACT_IN_USE') {
         pushToast({
           type: 'error',
           title: 'Löschen nicht möglich',
-          message: 'Kunde kann nicht gelöscht werden, da noch Routen zugeordnet sind.'
+          message: 'Kontakt kann nicht gelöscht werden, da noch Routen zugeordnet sind.'
         });
         return;
       }
       pushToast({
         type: 'error',
         title: 'Löschen fehlgeschlagen',
-        message: 'Kunde konnte nicht gelöscht werden.'
+        message: 'Kontakt konnte nicht gelöscht werden.'
       });
     }
   };
 
-  const handleFetchCustomers = async (params: CustomerListParams): Promise<CustomerListResult> => {
-    return BusFlowApi.getCustomers(params);
+  const handleFetchCustomerContacts = async (params: CustomerContactListParams): Promise<CustomerContactListResult> => {
+    return BusFlowApi.getCustomerContactsList(params);
   };
 
-  const handleUpdateCustomer = async (id: string, patch: Partial<Omit<Customer, 'id'>>) => {
+  const handleUpdateCustomerContact = async (id: string, patch: CustomerContactFormPayload) => {
     if (!canManageSettings) {
       pushToast({
         type: 'error',
@@ -475,19 +476,19 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       return;
     }
     try {
-      await BusFlowApi.updateCustomer(id, patch);
+      await BusFlowApi.updateCustomerContact(id, patch);
       const fetched = await BusFlowApi.getCustomersForSuggestions();
       setCustomers(fetched);
       pushToast({
         type: 'success',
         title: 'Gespeichert',
-        message: 'Kunde wurde aktualisiert.'
+        message: 'Kontakt wurde aktualisiert.'
       });
     } catch (e: any) {
       pushToast({
         type: 'error',
         title: 'Speichern fehlgeschlagen',
-        message: `Kunde konnte nicht aktualisiert werden.${e?.message ? ` ${e.message}` : ''}`
+        message: `Kontakt konnte nicht aktualisiert werden.${e?.message ? ` ${e.message}` : ''}`
       });
       throw e;
     }
@@ -563,8 +564,8 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
     }
   };
 
-  const handleBulkRemoveCustomers = async (
-    items: Array<{ id: string; name: string }>,
+  const handleBulkRemoveCustomerContacts = async (
+    items: Array<{ id: string; name: string; companyName: string }>,
     onProgress?: (progress: { current: number; total: number }) => void
   ): Promise<CustomerBulkDeleteResult> => {
     if (!canManageSettings) {
@@ -573,7 +574,11 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
         title: 'Keine Berechtigung',
         message: 'Sie haben keine Berechtigung für Einstellungen.'
       });
-      return { requested: items.length, deleted: 0, failed: items.map(i => ({ id: i.id, name: i.name, reason: 'Keine Berechtigung' })) };
+      return {
+        requested: items.length,
+        deleted: 0,
+        failed: items.map(i => ({ id: i.id, name: i.name, companyName: i.companyName, reason: 'Keine Berechtigung' }))
+      };
     }
 
     const failed: CustomerBulkDeleteResult['failed'] = [];
@@ -583,20 +588,22 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
 
     for (const item of items) {
       try {
-        await BusFlowApi.deleteCustomer(item.id);
+        await BusFlowApi.deleteCustomerContact(item.id);
         deleted += 1;
       } catch (e: any) {
-        if (e?.code === 'CUSTOMER_IN_USE') {
+        if (e?.code === 'CONTACT_IN_USE') {
           failed.push({
             id: item.id,
             name: item.name,
-            code: 'CUSTOMER_IN_USE',
-            reason: 'Kunde ist noch in Routen verknüpft.'
+            companyName: item.companyName,
+            code: 'CONTACT_IN_USE',
+            reason: 'Kontakt ist noch in Routen verknüpft.'
           });
         } else {
           failed.push({
             id: item.id,
             name: item.name,
+            companyName: item.companyName,
             code: e?.code || 'UNKNOWN',
             reason: e?.message || 'Unbekannter Fehler beim Löschen.'
           });
@@ -613,7 +620,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       pushToast({
         type: 'success',
         title: 'Gelöscht',
-        message: `${deleted} Kunde(n) wurden gelöscht.`
+        message: `${deleted} Kontakt(e) wurden gelöscht.`
       });
     } else if (deleted > 0 && failed.length > 0) {
       pushToast({
@@ -625,7 +632,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       pushToast({
         type: 'error',
         title: 'Löschen fehlgeschlagen',
-        message: 'Kein ausgewählter Kunde konnte gelöscht werden.'
+        message: 'Kein ausgewählter Kontakt konnte gelöscht werden.'
       });
     }
 
@@ -892,11 +899,11 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
               onRemoveBusType={handleRemoveBusType}
               onAddWorker={handleAddWorker}
               onRemoveWorker={handleRemoveWorker}
-              onAddCustomer={handleAddCustomer}
-              onRemoveCustomer={handleRemoveCustomer}
-              onUpdateCustomer={handleUpdateCustomer}
-              onBulkRemoveCustomers={handleBulkRemoveCustomers}
-              onFetchCustomers={handleFetchCustomers}
+              onAddCustomerContact={handleAddCustomerContact}
+              onRemoveCustomerContact={handleRemoveCustomerContact}
+              onUpdateCustomerContact={handleUpdateCustomerContact}
+              onBulkRemoveCustomerContacts={handleBulkRemoveCustomerContacts}
+              onFetchCustomerContacts={handleFetchCustomerContacts}
               onPreviewCustomerImport={handlePreviewCustomerImport}
               onCommitCustomerImport={handleCommitCustomerImport}
               mapDefaultView={mapDefaultView}

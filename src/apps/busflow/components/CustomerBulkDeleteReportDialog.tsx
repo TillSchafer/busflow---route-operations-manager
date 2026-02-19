@@ -11,11 +11,12 @@ const CustomerBulkDeleteReportDialog: React.FC<Props> = ({ isOpen, report, onClo
   if (!isOpen || !report) return null;
 
   const downloadCsv = () => {
-    const lines = ['id;name;code;reason'];
+    const lines = ['id;name;company;code;reason'];
     report.failed.forEach(item => {
       const name = item.name.replace(/;/g, ',');
+      const company = (item.companyName || '').replace(/;/g, ',');
       const reason = item.reason.replace(/;/g, ',');
-      lines.push(`${item.id};${name};${item.code || ''};${reason}`);
+      lines.push(`${item.id};${name};${company};${item.code || ''};${reason}`);
     });
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -39,12 +40,13 @@ const CustomerBulkDeleteReportDialog: React.FC<Props> = ({ isOpen, report, onClo
         </div>
         <div className="p-6 max-h-[60vh] overflow-auto">
           {report.failed.length === 0 ? (
-            <p className="text-sm text-emerald-700 font-medium">Alle ausgewählten Kunden wurden erfolgreich gelöscht.</p>
+            <p className="text-sm text-emerald-700 font-medium">Alle ausgewählten Kontakte wurden erfolgreich gelöscht.</p>
           ) : (
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="text-left px-3 py-2 font-semibold text-slate-700">Name</th>
+                  <th className="text-left px-3 py-2 font-semibold text-slate-700">Kontakt</th>
+                  <th className="text-left px-3 py-2 font-semibold text-slate-700">Firma</th>
                   <th className="text-left px-3 py-2 font-semibold text-slate-700">Code</th>
                   <th className="text-left px-3 py-2 font-semibold text-slate-700">Grund</th>
                 </tr>
@@ -53,6 +55,7 @@ const CustomerBulkDeleteReportDialog: React.FC<Props> = ({ isOpen, report, onClo
                 {report.failed.map((item, idx) => (
                   <tr key={`${item.id}-${idx}`} className="border-b border-slate-100">
                     <td className="px-3 py-2 text-slate-800">{item.name}</td>
+                    <td className="px-3 py-2 text-slate-700">{item.companyName || ''}</td>
                     <td className="px-3 py-2 text-slate-600">{item.code || ''}</td>
                     <td className="px-3 py-2 text-red-700">{item.reason}</td>
                   </tr>

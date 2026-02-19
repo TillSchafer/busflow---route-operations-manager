@@ -12,6 +12,8 @@ import { Analytics } from '@vercel/analytics/react';
 import { ToastProvider } from './shared/components/ToastProvider';
 import ToastViewport from './shared/components/ToastViewport';
 import { useToast } from './shared/components/ToastProvider';
+import { ProgressProvider } from './shared/components/ProgressProvider';
+import ProgressViewport from './shared/components/ProgressViewport';
 
 const InnerApp: React.FC = () => {
   const navigate = useNavigate();
@@ -248,10 +250,13 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <ToastProvider>
-        <InnerApp />
-        <ToastViewport />
-        <SpeedInsights />
-        <Analytics />
+        <ProgressProvider>
+          <InnerApp />
+          <ProgressViewport />
+          <ToastViewport />
+          <SpeedInsights />
+          <Analytics />
+        </ProgressProvider>
       </ToastProvider>
     </AuthProvider>
   );

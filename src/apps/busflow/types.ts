@@ -89,6 +89,23 @@ export interface CustomerContact {
   metadata?: Record<string, string>;
 }
 
+export interface CustomerContactListItem {
+  contactId: string;
+  customerId: string;
+  companyName: string;
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  street?: string;
+  postalCode?: string;
+  city?: string;
+  country?: string;
+  notes?: string;
+  metadata?: Record<string, string>;
+}
+
 export interface CustomerImportRow {
   rowNumber: number;
   companyName: string;
@@ -148,9 +165,23 @@ export interface CustomerListResult {
   pageSize: number;
 }
 
+export interface CustomerContactListParams {
+  query?: string;
+  page: number;
+  pageSize: number;
+}
+
+export interface CustomerContactListResult {
+  items: CustomerContactListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface CustomerBulkDeleteFailure {
   id: string;
   name: string;
+  companyName?: string;
   reason: string;
   code?: string;
 }
