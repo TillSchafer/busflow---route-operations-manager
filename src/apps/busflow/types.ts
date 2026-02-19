@@ -21,6 +21,7 @@ export interface Route {
   date: string;
   busNumber: string;
   driverName: string;
+  customerId?: string;
   customerName?: string;
   capacity: number;
   stops: Stop[];

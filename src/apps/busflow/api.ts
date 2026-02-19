@@ -16,14 +16,20 @@ const mapStopFromDb = (stop: any): Stop => ({
     notes: stop.notes || undefined
 });
 
-const mapRouteFromDb = (route: any): RouteType => ({
+const mapRouteFromDb = (route: any): RouteType => {
+    const linkedCustomer = Array.isArray(route.busflow_customers)
+        ? route.busflow_customers[0]
+        : route.busflow_customers;
+
+    return {
     id: route.id,
     updatedAt: route.updated_at || undefined,
     name: route.name || '',
     date: route.date || '',
     busNumber: route.bus_number || '',
     driverName: route.driver_name || '',
-    customerName: route.customer_name || '',
+    customerId: route.customer_id || linkedCustomer?.id || undefined,
+    customerName: linkedCustomer?.name || route.customer_name || '',
     capacity: Number(route.capacity) || 0,
     stops: (route.busflow_stops || [])
         .sort((a: any, b: any) => (a.sequence_order || 0) - (b.sequence_order || 0))
@@ -39,7 +45,8 @@ const mapRouteFromDb = (route: any): RouteType => ({
     totalKm: route.total_km || '',
     timeReturnBetrieb: route.time_return_betrieb || '',
     timeReturnCustomer: route.time_return_customer || ''
-});
+    };
+};
 
 export const BusFlowApi = {
     // --- Routes ---
@@ -48,7 +55,8 @@ export const BusFlowApi = {
             .from('busflow_routes')
             .select(`
         *,
-        busflow_stops (*)
+        busflow_stops (*),
+        busflow_customers!busflow_routes_customer_id_fkey (id, name, notes)
       `)
             .order('date', { ascending: true });
 
@@ -66,6 +74,7 @@ export const BusFlowApi = {
                 status: route.status,
                 bus_number: route.busNumber,
                 driver_name: route.driverName,
+                customer_id: route.customerId || null,
                 customer_name: route.customerName,
                 operational_notes: route.operationalNotes,
                 capacity: route.capacity,
@@ -95,6 +104,7 @@ export const BusFlowApi = {
                 status: updates.status,
                 bus_number: updates.busNumber,
                 driver_name: updates.driverName,
+                customer_id: updates.customerId || null,
                 customer_name: updates.customerName,
                 operational_notes: updates.operationalNotes,
                 capacity: updates.capacity,
@@ -123,6 +133,7 @@ export const BusFlowApi = {
                 status: route.status,
                 busNumber: route.busNumber,
                 driverName: route.driverName,
+                customerId: route.customerId,
                 customerName: route.customerName,
                 operationalNotes: route.operationalNotes,
                 capacity: route.capacity,
@@ -327,6 +338,14 @@ export const BusFlowApi = {
             .delete()
             .eq('id', id);
 
-        if (error) throw error;
+        if (!error) return;
+
+        if ((error as any)?.code === '23503') {
+            const inUseError: any = new Error('CUSTOMER_IN_USE');
+            inUseError.code = 'CUSTOMER_IN_USE';
+            throw inUseError;
+        }
+
+        throw error;
     }
 };

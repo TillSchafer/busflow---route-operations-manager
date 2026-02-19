@@ -294,7 +294,11 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
     try {
       await BusFlowApi.deleteCustomer(id);
       setCustomers(prev => prev.filter(c => c.id !== id));
-    } catch (e) {
+    } catch (e: any) {
+      if (e?.code === 'CUSTOMER_IN_USE') {
+        alert('Kunde kann nicht gelöscht werden, da noch Routen zugeordnet sind.');
+        return;
+      }
       alert('Fehler beim Löschen des Kunden.');
     }
   };

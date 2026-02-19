@@ -66,6 +66,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
       .filter(customer => customer.name.toLowerCase().includes(q))
       .slice(0, 8);
   }, [customers, formData.customerName]);
+  const hasUnlinkedCustomerText = Boolean((formData.customerName || '').trim()) && !formData.customerId;
 
   const selectedBusType = useMemo(
     () => busTypes.find(busType => busType.id === formData.busTypeId),
@@ -293,7 +294,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                   type="text"
                   value={formData.customerName || ''}
                   onChange={e => {
-                    setFormData({ ...formData, customerName: e.target.value });
+                    setFormData({ ...formData, customerName: e.target.value, customerId: undefined });
                     setIsCustomerDropdownOpen(true);
                   }}
                   onFocus={() => setIsCustomerDropdownOpen(true)}
@@ -309,7 +310,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                         type="button"
                         onMouseDown={e => e.preventDefault()}
                         onClick={() => {
-                          setFormData({ ...formData, customerName: customer.name });
+                          setFormData({ ...formData, customerName: customer.name, customerId: customer.id });
                           setIsCustomerDropdownOpen(false);
                         }}
                         className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
@@ -320,6 +321,9 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                   </div>
                 )}
               </div>
+              {hasUnlinkedCustomerText && (
+                <p className="text-xs text-amber-600 mt-1">Kunde ist noch nicht aus der Liste verknüpft.</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Datum</label>
