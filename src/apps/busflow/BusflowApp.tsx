@@ -6,9 +6,22 @@ import PrintPreview from './components/PrintPreview';
 import Settings from './components/Settings';
 import AppHeader from '../../shared/components/AppHeader';
 import ConfirmDialog from '../../shared/components/ConfirmDialog';
-import { BusType, Customer, Route, Worker } from './types';
+import {
+  BusType,
+  Customer,
+  CustomerBulkDeleteResult,
+  CustomerImportPreview,
+  CustomerImportRow,
+  CustomerImportResult,
+  CustomerListParams,
+  CustomerListResult,
+  MapDefaultView,
+  Route,
+  Worker
+} from './types';
 import { BusFlowApi } from './api';
 import { supabase } from '../../shared/lib/supabase';
+import { useToast } from '../../shared/components/ToastProvider';
 
 interface User {
   name: string;
@@ -25,6 +38,8 @@ interface Props {
 }
 
 const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, onAdmin }) => {
+  const { pushToast, clearToasts } = useToast();
+  const defaultMapViewFallback: MapDefaultView = { address: 'Deutschland', lat: 51.1657, lon: 10.4515, zoom: 6 };
   const [routes, setRoutes] = useState<Route[]>([]);
   const [currentRoute, setCurrentRoute] = useState<Route | null>(null);
   const [view, setView] = useState<'LIST' | 'EDITOR' | 'PRINT' | 'SETTINGS'>('LIST');
@@ -36,6 +51,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
   const [routeIdToDelete, setRouteIdToDelete] = useState<string | null>(null);
   const [editConflictMessage, setEditConflictMessage] = useState<string | null>(null);
   const [isNewRouteDraft, setIsNewRouteDraft] = useState(false);
+  const [mapDefaultView, setMapDefaultView] = useState<MapDefaultView>(defaultMapViewFallback);
   const canManageRoutes = authUser?.role === 'ADMIN' || authUser?.role === 'DISPATCH';
   const canManageSettings = canManageRoutes;
   const routesRefreshTimeout = useRef<number | null>(null);
@@ -50,12 +66,14 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
           BusFlowApi.getRoutes(),
           BusFlowApi.getBusTypes(),
           BusFlowApi.getWorkers(),
-          BusFlowApi.getCustomers()
+          BusFlowApi.getCustomersForSuggestions()
         ]);
+        const fetchedMapDefault = await BusFlowApi.getMapDefaultView();
         setRoutes(fetchedRoutes);
         setBusTypes(fetchedBusTypes);
         setWorkers(fetchedWorkers);
         setCustomers(fetchedCustomers);
+        if (fetchedMapDefault) setMapDefaultView(fetchedMapDefault);
       } catch (error) {
         console.error('Fehler beim Laden der Daten:', error);
       } finally {
@@ -74,11 +92,13 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
     const [fetchedBusTypes, fetchedWorkers, fetchedCustomers] = await Promise.all([
       BusFlowApi.getBusTypes(),
       BusFlowApi.getWorkers(),
-      BusFlowApi.getCustomers()
+      BusFlowApi.getCustomersForSuggestions()
     ]);
+    const fetchedMapDefault = await BusFlowApi.getMapDefaultView();
     setBusTypes(fetchedBusTypes);
     setWorkers(fetchedWorkers);
     setCustomers(fetchedCustomers);
+    if (fetchedMapDefault) setMapDefaultView(fetchedMapDefault);
   };
 
   useEffect(() => {
@@ -107,6 +127,8 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_bus_types' }, scheduleSettingsRefresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_workers' }, scheduleSettingsRefresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_customers' }, scheduleSettingsRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_customer_contacts' }, scheduleSettingsRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_app_settings' }, scheduleSettingsRefresh)
       .subscribe();
 
     return () => {
@@ -118,7 +140,11 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
 
   const handleCreateNew = async () => {
     if (!canManageRoutes) {
-      alert('Sie haben nur Leserechte.');
+      pushToast({
+        type: 'error',
+        title: 'Keine Berechtigung',
+        message: 'Sie haben nur Leserechte.'
+      });
       return;
     }
 
@@ -130,6 +156,8 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       driverName: '',
       customerId: undefined,
       customerName: '',
+      customerContactId: undefined,
+      customerContactName: '',
       capacity: 0,
       stops: [],
       status: 'Entwurf',
@@ -146,7 +174,11 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
 
   const handleEditRoute = (route: Route) => {
     if (!canManageRoutes) {
-      alert('Sie haben nur Leserechte.');
+      pushToast({
+        type: 'error',
+        title: 'Keine Berechtigung',
+        message: 'Sie haben nur Leserechte.'
+      });
       return;
     }
     setEditConflictMessage(null);
@@ -157,6 +189,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
 
   const handlePrintRoute = (route: Route) => {
     // if (route.status !== 'Aktiv' && route.status !== 'Geplant') return;
+    clearToasts();
     setCurrentRoute(route);
     setView('PRINT');
     setTimeout(() => window.print(), 300);
@@ -164,7 +197,11 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
 
   const handleSaveRoute = async (updatedRoute: Route) => {
     if (!canManageRoutes) {
-      alert('Sie haben nur Leserechte.');
+      pushToast({
+        type: 'error',
+        title: 'Keine Berechtigung',
+        message: 'Sie haben nur Leserechte.'
+      });
       return;
     }
 
@@ -184,6 +221,11 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       await refreshRoutes();
       setIsNewRouteDraft(false);
       setView('LIST');
+      pushToast({
+        type: 'success',
+        title: 'Gespeichert',
+        message: 'Routenänderungen wurden gespeichert.'
+      });
     } catch (e: any) {
       console.error(e);
       if (e?.code === 'ROUTE_CONFLICT') {
@@ -201,18 +243,30 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
         return;
       }
       if (e?.code === 'ROUTE_NOT_FOUND') {
-        alert('Diese Route wurde bereits gelöscht.');
+        pushToast({
+          type: 'error',
+          title: 'Nicht gefunden',
+          message: 'Diese Route wurde bereits gelöscht.'
+        });
         await refreshRoutes();
         setView('LIST');
         return;
       }
-      alert('Fehler beim Speichern.');
+      pushToast({
+        type: 'error',
+        title: 'Speichern fehlgeschlagen',
+        message: 'Bitte versuchen Sie es erneut.'
+      });
     }
   };
 
   const handleDeleteRoute = (id: string) => {
     if (!canManageRoutes) {
-      alert('Sie haben nur Leserechte.');
+      pushToast({
+        type: 'error',
+        title: 'Keine Berechtigung',
+        message: 'Sie haben nur Leserechte.'
+      });
       return;
     }
     setRouteIdToDelete(id);
@@ -224,94 +278,387 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       await BusFlowApi.deleteRoute(routeIdToDelete);
       setRoutes(prev => prev.filter(r => r.id !== routeIdToDelete));
       setRouteIdToDelete(null);
+      pushToast({
+        type: 'success',
+        title: 'Gelöscht',
+        message: 'Die Route wurde gelöscht.'
+      });
     } catch (e) {
       console.error(e);
-      alert('Fehler beim Löschen.');
+      pushToast({
+        type: 'error',
+        title: 'Löschen fehlgeschlagen',
+        message: 'Die Route konnte nicht gelöscht werden.'
+      });
     }
   };
 
   const handleAddBusType = async (busType: BusType) => {
     if (!canManageSettings) {
-      alert('Sie haben keine Berechtigung für Einstellungen.');
+      pushToast({
+        type: 'error',
+        title: 'Keine Berechtigung',
+        message: 'Sie haben keine Berechtigung für Einstellungen.'
+      });
       return;
     }
     try {
       await BusFlowApi.createBusType(busType);
       const fetched = await BusFlowApi.getBusTypes();
       setBusTypes(fetched);
+      pushToast({
+        type: 'success',
+        title: 'Gespeichert',
+        message: 'Bustyp wurde gespeichert.'
+      });
     } catch (e) {
-      alert('Fehler beim Speichern des Bustyps.');
+      pushToast({
+        type: 'error',
+        title: 'Speichern fehlgeschlagen',
+        message: 'Bustyp konnte nicht gespeichert werden.'
+      });
     }
   };
 
   const handleRemoveBusType = async (id: string) => {
     if (!canManageSettings) {
-      alert('Sie haben keine Berechtigung für Einstellungen.');
+      pushToast({
+        type: 'error',
+        title: 'Keine Berechtigung',
+        message: 'Sie haben keine Berechtigung für Einstellungen.'
+      });
       return;
     }
     try {
       await BusFlowApi.deleteBusType(id);
       setBusTypes(prev => prev.filter(b => b.id !== id));
+      pushToast({
+        type: 'success',
+        title: 'Gelöscht',
+        message: 'Bustyp wurde entfernt.'
+      });
     } catch (e) {
-      alert('Fehler beim Löschen.');
+      pushToast({
+        type: 'error',
+        title: 'Löschen fehlgeschlagen',
+        message: 'Bustyp konnte nicht gelöscht werden.'
+      });
     }
   };
 
   const handleAddWorker = async (worker: Worker) => {
     if (!canManageSettings) {
-      alert('Sie haben keine Berechtigung für Einstellungen.');
+      pushToast({
+        type: 'error',
+        title: 'Keine Berechtigung',
+        message: 'Sie haben keine Berechtigung für Einstellungen.'
+      });
       return;
     }
     try {
       await BusFlowApi.createWorker({ name: worker.name, role: worker.role });
       const fetched = await BusFlowApi.getWorkers();
       setWorkers(fetched);
+      pushToast({
+        type: 'success',
+        title: 'Gespeichert',
+        message: 'Mitarbeiter wurde gespeichert.'
+      });
     } catch (e) {
-      alert('Fehler beim Speichern des Mitarbeiters.');
+      pushToast({
+        type: 'error',
+        title: 'Speichern fehlgeschlagen',
+        message: 'Mitarbeiter konnte nicht gespeichert werden.'
+      });
     }
   };
 
   const handleRemoveWorker = async (id: string) => {
     if (!canManageSettings) {
-      alert('Sie haben keine Berechtigung für Einstellungen.');
+      pushToast({
+        type: 'error',
+        title: 'Keine Berechtigung',
+        message: 'Sie haben keine Berechtigung für Einstellungen.'
+      });
       return;
     }
     try {
       await BusFlowApi.deleteWorker(id);
       setWorkers(prev => prev.filter(w => w.id !== id));
+      pushToast({
+        type: 'success',
+        title: 'Gelöscht',
+        message: 'Mitarbeiter wurde entfernt.'
+      });
     } catch (e) {
-      alert('Fehler beim Löschen des Mitarbeiters.');
+      pushToast({
+        type: 'error',
+        title: 'Löschen fehlgeschlagen',
+        message: 'Mitarbeiter konnte nicht gelöscht werden.'
+      });
     }
   };
 
   const handleAddCustomer = async (customer: Customer) => {
     if (!canManageSettings) {
-      alert('Sie haben keine Berechtigung für Einstellungen.');
+      pushToast({
+        type: 'error',
+        title: 'Keine Berechtigung',
+        message: 'Sie haben keine Berechtigung für Einstellungen.'
+      });
       return;
     }
     try {
-      await BusFlowApi.createCustomer({ name: customer.name, notes: customer.notes });
-      const fetched = await BusFlowApi.getCustomers();
+      await BusFlowApi.createCustomer(customer);
+      const fetched = await BusFlowApi.getCustomersForSuggestions();
       setCustomers(fetched);
+      pushToast({
+        type: 'success',
+        title: 'Gespeichert',
+        message: 'Kunde wurde gespeichert.'
+      });
     } catch (e: any) {
-      alert(`Fehler beim Speichern des Kunden.${e?.message ? ` ${e.message}` : ''}`);
+      pushToast({
+        type: 'error',
+        title: 'Speichern fehlgeschlagen',
+        message: `Kunde konnte nicht gespeichert werden.${e?.message ? ` ${e.message}` : ''}`
+      });
     }
   };
 
   const handleRemoveCustomer = async (id: string) => {
     if (!canManageSettings) {
-      alert('Sie haben keine Berechtigung für Einstellungen.');
+      pushToast({
+        type: 'error',
+        title: 'Keine Berechtigung',
+        message: 'Sie haben keine Berechtigung für Einstellungen.'
+      });
       return;
     }
     try {
       await BusFlowApi.deleteCustomer(id);
-      setCustomers(prev => prev.filter(c => c.id !== id));
+      const fetched = await BusFlowApi.getCustomersForSuggestions();
+      setCustomers(fetched);
+      pushToast({
+        type: 'success',
+        title: 'Gelöscht',
+        message: 'Kunde wurde entfernt.'
+      });
     } catch (e: any) {
       if (e?.code === 'CUSTOMER_IN_USE') {
-        alert('Kunde kann nicht gelöscht werden, da noch Routen zugeordnet sind.');
+        pushToast({
+          type: 'error',
+          title: 'Löschen nicht möglich',
+          message: 'Kunde kann nicht gelöscht werden, da noch Routen zugeordnet sind.'
+        });
         return;
       }
-      alert('Fehler beim Löschen des Kunden.');
+      pushToast({
+        type: 'error',
+        title: 'Löschen fehlgeschlagen',
+        message: 'Kunde konnte nicht gelöscht werden.'
+      });
+    }
+  };
+
+  const handleFetchCustomers = async (params: CustomerListParams): Promise<CustomerListResult> => {
+    return BusFlowApi.getCustomers(params);
+  };
+
+  const handleUpdateCustomer = async (id: string, patch: Partial<Omit<Customer, 'id'>>) => {
+    if (!canManageSettings) {
+      pushToast({
+        type: 'error',
+        title: 'Keine Berechtigung',
+        message: 'Sie haben keine Berechtigung für Einstellungen.'
+      });
+      return;
+    }
+    try {
+      await BusFlowApi.updateCustomer(id, patch);
+      const fetched = await BusFlowApi.getCustomersForSuggestions();
+      setCustomers(fetched);
+      pushToast({
+        type: 'success',
+        title: 'Gespeichert',
+        message: 'Kunde wurde aktualisiert.'
+      });
+    } catch (e: any) {
+      pushToast({
+        type: 'error',
+        title: 'Speichern fehlgeschlagen',
+        message: `Kunde konnte nicht aktualisiert werden.${e?.message ? ` ${e.message}` : ''}`
+      });
+      throw e;
+    }
+  };
+
+  const handlePreviewCustomerImport = async (rows: CustomerImportRow[]): Promise<CustomerImportPreview> => {
+    if (!canManageSettings) {
+      pushToast({
+        type: 'error',
+        title: 'Keine Berechtigung',
+        message: 'Sie haben keine Berechtigung für Einstellungen.'
+      });
+      return { rows: [], conflicts: [], errors: rows.map(row => ({ rowNumber: row.rowNumber, reason: 'Keine Berechtigung' })) };
+    }
+    try {
+      return await BusFlowApi.importCustomersPreview(rows);
+    } catch (e: any) {
+      pushToast({
+        type: 'error',
+        title: 'Import-Vorschau fehlgeschlagen',
+        message: `CSV konnte nicht geprüft werden.${e?.message ? ` ${e.message}` : ''}`
+      });
+      return { rows: [], conflicts: [], errors: rows.map(row => ({ rowNumber: row.rowNumber, reason: 'Vorschau fehlgeschlagen.' })) };
+    }
+  };
+
+  const handleCommitCustomerImport = async (
+    preview: CustomerImportPreview,
+    resolutions: Record<number, 'import' | 'skip'>,
+    onProgress?: (progress: { current: number; total: number }) => void
+  ): Promise<CustomerImportResult> => {
+    if (!canManageSettings) {
+      pushToast({
+        type: 'error',
+        title: 'Keine Berechtigung',
+        message: 'Sie haben keine Berechtigung für Einstellungen.'
+      });
+      return {
+        insertedCompanies: 0,
+        insertedContacts: 0,
+        updatedContacts: 0,
+        skipped: preview.rows.length,
+        conflicts: preview.conflicts.length,
+        errors: preview.rows.map(row => ({ rowNumber: row.rowNumber, reason: 'Keine Berechtigung' }))
+      };
+    }
+
+    try {
+      const result = await BusFlowApi.commitCustomerImport(preview, resolutions, onProgress);
+      const fetched = await BusFlowApi.getCustomersForSuggestions();
+      setCustomers(fetched);
+
+      pushToast({
+        type: 'success',
+        title: 'Import abgeschlossen',
+        message: `Firmen: +${result.insertedCompanies}, Kontakte: +${result.insertedContacts}, Updates: ${result.updatedContacts}.`
+      });
+      return result;
+    } catch (e: any) {
+      pushToast({
+        type: 'error',
+        title: 'Import fehlgeschlagen',
+        message: `Kunden konnten nicht importiert werden.${e?.message ? ` ${e.message}` : ''}`
+      });
+      return {
+        insertedCompanies: 0,
+        insertedContacts: 0,
+        updatedContacts: 0,
+        skipped: preview.rows.length,
+        conflicts: preview.conflicts.length,
+        errors: preview.rows.map(row => ({ rowNumber: row.rowNumber, reason: 'Import fehlgeschlagen.' }))
+      };
+    }
+  };
+
+  const handleBulkRemoveCustomers = async (
+    items: Array<{ id: string; name: string }>,
+    onProgress?: (progress: { current: number; total: number }) => void
+  ): Promise<CustomerBulkDeleteResult> => {
+    if (!canManageSettings) {
+      pushToast({
+        type: 'error',
+        title: 'Keine Berechtigung',
+        message: 'Sie haben keine Berechtigung für Einstellungen.'
+      });
+      return { requested: items.length, deleted: 0, failed: items.map(i => ({ id: i.id, name: i.name, reason: 'Keine Berechtigung' })) };
+    }
+
+    const failed: CustomerBulkDeleteResult['failed'] = [];
+    let deleted = 0;
+    let processed = 0;
+    onProgress?.({ current: 0, total: items.length });
+
+    for (const item of items) {
+      try {
+        await BusFlowApi.deleteCustomer(item.id);
+        deleted += 1;
+      } catch (e: any) {
+        if (e?.code === 'CUSTOMER_IN_USE') {
+          failed.push({
+            id: item.id,
+            name: item.name,
+            code: 'CUSTOMER_IN_USE',
+            reason: 'Kunde ist noch in Routen verknüpft.'
+          });
+        } else {
+          failed.push({
+            id: item.id,
+            name: item.name,
+            code: e?.code || 'UNKNOWN',
+            reason: e?.message || 'Unbekannter Fehler beim Löschen.'
+          });
+        }
+      }
+      processed += 1;
+      onProgress?.({ current: processed, total: items.length });
+    }
+
+    const fetched = await BusFlowApi.getCustomersForSuggestions();
+    setCustomers(fetched);
+
+    if (deleted > 0 && failed.length === 0) {
+      pushToast({
+        type: 'success',
+        title: 'Gelöscht',
+        message: `${deleted} Kunde(n) wurden gelöscht.`
+      });
+    } else if (deleted > 0 && failed.length > 0) {
+      pushToast({
+        type: 'info',
+        title: 'Teilweise gelöscht',
+        message: `${deleted} gelöscht, ${failed.length} fehlgeschlagen.`
+      });
+    } else {
+      pushToast({
+        type: 'error',
+        title: 'Löschen fehlgeschlagen',
+        message: 'Kein ausgewählter Kunde konnte gelöscht werden.'
+      });
+    }
+
+    return {
+      requested: items.length,
+      deleted,
+      failed
+    };
+  };
+
+  const handleSaveMapDefaultView = async (view: MapDefaultView) => {
+    if (!canManageSettings) {
+      pushToast({
+        type: 'error',
+        title: 'Keine Berechtigung',
+        message: 'Sie haben keine Berechtigung für Einstellungen.'
+      });
+      return;
+    }
+    try {
+      await BusFlowApi.upsertMapDefaultView(view);
+      setMapDefaultView(view);
+      pushToast({
+        type: 'success',
+        title: 'Gespeichert',
+        message: 'Karten-Standard wurde gespeichert.'
+      });
+    } catch (e) {
+      pushToast({
+        type: 'error',
+        title: 'Speichern fehlgeschlagen',
+        message: 'Karten-Standard konnte nicht gespeichert werden.'
+      });
     }
   };
 
@@ -525,6 +872,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
               busTypes={busTypes}
               workers={workers}
               customers={customers}
+              mapDefaultView={mapDefaultView}
             />
           </div>
         )}
@@ -544,9 +892,15 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
               onRemoveBusType={handleRemoveBusType}
               onAddWorker={handleAddWorker}
               onRemoveWorker={handleRemoveWorker}
-              customers={customers}
               onAddCustomer={handleAddCustomer}
               onRemoveCustomer={handleRemoveCustomer}
+              onUpdateCustomer={handleUpdateCustomer}
+              onBulkRemoveCustomers={handleBulkRemoveCustomers}
+              onFetchCustomers={handleFetchCustomers}
+              onPreviewCustomerImport={handlePreviewCustomerImport}
+              onCommitCustomerImport={handleCommitCustomerImport}
+              mapDefaultView={mapDefaultView}
+              onSaveMapDefaultView={handleSaveMapDefaultView}
               canManage={canManageSettings}
             />
           </div>

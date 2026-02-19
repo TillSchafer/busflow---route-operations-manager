@@ -23,6 +23,8 @@ export interface Route {
   driverName: string;
   customerId?: string;
   customerName?: string;
+  customerContactId?: string;
+  customerContactName?: string;
   capacity: number;
   stops: Stop[];
   status: 'Aktiv' | 'Geplant' | 'Entwurf' | 'Archiviert';
@@ -61,4 +63,107 @@ export interface Customer {
   id: string;
   name: string;
   notes?: string;
+  phone?: string;
+  street?: string;
+  postalCode?: string;
+  city?: string;
+  country?: string;
+  email?: string;
+  contactPerson?: string;
+  metadata?: Record<string, string>;
+}
+
+export interface CustomerContact {
+  id: string;
+  customerId: string;
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  street?: string;
+  postalCode?: string;
+  city?: string;
+  country?: string;
+  notes?: string;
+  metadata?: Record<string, string>;
+}
+
+export interface CustomerImportRow {
+  rowNumber: number;
+  companyName: string;
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  street?: string;
+  postalCode?: string;
+  city?: string;
+  country?: string;
+  notes?: string;
+  metadata?: Record<string, string>;
+}
+
+export interface CustomerImportConflictCandidate {
+  rowNumber: number;
+  companyName: string;
+  incomingContact: Omit<CustomerContact, 'id' | 'customerId'>;
+  existingContact: CustomerContact;
+  resolution?: 'import' | 'skip';
+}
+
+export interface CustomerImportError {
+  rowNumber: number;
+  name?: string;
+  reason: string;
+  raw?: Record<string, string>;
+}
+
+export interface CustomerImportResult {
+  insertedCompanies: number;
+  insertedContacts: number;
+  updatedContacts: number;
+  skipped: number;
+  conflicts: number;
+  errors: CustomerImportError[];
+}
+
+export interface CustomerImportPreview {
+  rows: CustomerImportRow[];
+  conflicts: CustomerImportConflictCandidate[];
+  errors: CustomerImportError[];
+}
+
+export interface CustomerListParams {
+  query?: string;
+  page: number;
+  pageSize: number;
+}
+
+export interface CustomerListResult {
+  items: Customer[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface CustomerBulkDeleteFailure {
+  id: string;
+  name: string;
+  reason: string;
+  code?: string;
+}
+
+export interface CustomerBulkDeleteResult {
+  requested: number;
+  deleted: number;
+  failed: CustomerBulkDeleteFailure[];
+}
+
+export interface MapDefaultView {
+  address: string;
+  lat: number;
+  lon: number;
+  zoom: number;
 }

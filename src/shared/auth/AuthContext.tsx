@@ -139,7 +139,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Here we use Google as stored in Supabase project settings
     // Or we can just prompt for email in a real UI form.
     // Let's implement a generic "signInWithMsg" for now or redirect
-    alert("Please implement specific login UI (Email/Password or OAuth) in the Login component.");
+    console.warn('Login action is handled directly in App.tsx form flow.');
   };
 
   const logout = async () => {

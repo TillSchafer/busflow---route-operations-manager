@@ -30,8 +30,11 @@ BusFlow is a React + Vite app with Supabase auth, database, RLS, and realtime sy
 - `supabase_migration_phase8_customers.sql`: customer master table + RLS
 - `supabase_migration_phase9_concurrency.sql`: `updated_at` + atomic route save RPC
 - `supabase_migration_phase10_customer_fk.sql`: `customer_id` FK + backfill + RPC FK support
-- `supabase_migration_phase11_customer_name_cleanup.sql`: optional legacy `customer_name` drop
+- `supabase_migration_phase11_customer_name_cleanup.sql`: deprecated for hybrid mode (do not run when free-text customer is required)
 - `supabase_migration_phase12_backend_cleanup.sql`: canonical trigger/RPC cleanup + policy checks
+- `supabase_migration_phase13_map_default_settings.sql`: persisted default map center/zoom for new routes
+- `supabase_migration_phase14_customer_hybrid_restore.sql`: restores `customer_name` for hybrid free-text + optional FK model
+- `supabase_migration_phase14b_customer_hybrid_rpc.sql`: canonical hybrid RPC write for `customer_id` + `customer_name`
 
 ## Canonical Backend Write Path
 - Routes + stops are saved through RPC: `save_busflow_route_with_stops`

@@ -9,10 +9,14 @@ import BusflowApp from './apps/busflow/BusflowApp';
 import { AuthProvider, useAuth } from './shared/auth/AuthContext';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { Analytics } from '@vercel/analytics/react';
+import { ToastProvider } from './shared/components/ToastProvider';
+import ToastViewport from './shared/components/ToastViewport';
+import { useToast } from './shared/components/ToastProvider';
 
 const InnerApp: React.FC = () => {
   const navigate = useNavigate();
   const { user, loading, logout } = useAuth();
+  const { pushToast } = useToast();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -195,9 +199,9 @@ const InnerApp: React.FC = () => {
                 onNewUserName={() => { }}
                 onNewUserPassword={() => { }}
                 onNewUserRole={() => { }}
-                onAddUser={() => alert("Admin features need to be updated for Supabase")}
-                onRemoveUser={() => alert("Admin features need to be updated for Supabase")}
-                onUpdateUser={() => alert("Admin features need to be updated for Supabase")}
+                onAddUser={() => pushToast({ type: 'info', title: 'Info', message: 'Admin-Funktion wird direkt über Supabase verwaltet.' })}
+                onRemoveUser={() => pushToast({ type: 'info', title: 'Info', message: 'Admin-Funktion wird direkt über Supabase verwaltet.' })}
+                onUpdateUser={() => pushToast({ type: 'info', title: 'Info', message: 'Admin-Funktion wird direkt über Supabase verwaltet.' })}
                 header={{
                   title: 'Adminbereich',
                   user: user,
@@ -226,7 +230,7 @@ const InnerApp: React.FC = () => {
               onEmailChange={() => { }}
               onAvatarChange={() => { }}
               onPasswordChange={() => { }}
-              onSave={() => alert("Profile updating needs to be implemented with Supabase")}
+              onSave={() => pushToast({ type: 'info', title: 'Info', message: 'Profil-Speichern wird in einer späteren Phase angebunden.' })}
               onGoHome={() => navigate('/')}
               onLogout={handleLogout}
               onProfile={() => navigate('/profile')}
@@ -243,9 +247,12 @@ const InnerApp: React.FC = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <InnerApp />
-      <SpeedInsights />
-       <Analytics />
+      <ToastProvider>
+        <InnerApp />
+        <ToastViewport />
+        <SpeedInsights />
+        <Analytics />
+      </ToastProvider>
     </AuthProvider>
   );
 };

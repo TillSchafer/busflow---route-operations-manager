@@ -18,6 +18,7 @@ It supports route management, stop planning, customer linking, settings data, an
 - `busflow_bus_types`: vehicle templates/capacity
 - `busflow_workers`: driver/team master data
 - `busflow_customers`: global customer master data
+- `busflow_app_settings`: global app settings (e.g. default map center/zoom)
 
 ## Role Model
 - Platform admin: `profiles.global_role = 'ADMIN'`
@@ -32,9 +33,10 @@ It supports route management, stop planning, customer linking, settings data, an
 - RPC returns conflict code when `updated_at` differs
 
 ## Customer Linking Model
-- Routes use FK `busflow_routes.customer_id -> busflow_customers.id`
-- UI displays customer label from join (`route.customerName` derived)
-- Legacy text column `customer_name` is temporary compatibility
+- Hybrid model: routes support free-text customer labels plus optional FK link
+- `busflow_routes.customer_name` stores what user entered (display priority)
+- `busflow_routes.customer_id -> busflow_customers.id` remains optional for list linking
+- Customer list is a convenience picker, not a hard requirement
 
 ## Current Migration Order
 1. `supabase_schema.sql`
@@ -47,8 +49,11 @@ It supports route management, stop planning, customer linking, settings data, an
 8. `supabase_migration_phase8_customers.sql`
 9. `supabase_migration_phase9_concurrency.sql`
 10. `supabase_migration_phase10_customer_fk.sql`
-11. `supabase_migration_phase11_customer_name_cleanup.sql` (optional later)
+11. `supabase_migration_phase11_customer_name_cleanup.sql` (deprecated for hybrid mode)
 12. `supabase_migration_phase12_backend_cleanup.sql`
+13. `supabase_migration_phase13_map_default_settings.sql`
+14. `supabase_migration_phase14_customer_hybrid_restore.sql`
+15. `supabase_migration_phase14b_customer_hybrid_rpc.sql`
 
 ## Notes
 - Deprecated helper scripts are under `sql/legacy/` and must not be run in production.

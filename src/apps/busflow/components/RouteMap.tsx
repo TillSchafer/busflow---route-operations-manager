@@ -3,9 +3,11 @@ import { Stop } from '../types';
 
 interface Props {
   stops: Stop[];
+  defaultCenter?: { lat: number; lon: number };
+  defaultZoom?: number;
 }
 
-const RouteMap: React.FC<Props> = ({ stops }) => {
+const RouteMap: React.FC<Props> = ({ stops, defaultCenter, defaultZoom = 6 }) => {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstance = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
@@ -18,14 +20,14 @@ const RouteMap: React.FC<Props> = ({ stops }) => {
     if (!L) return;
 
     mapInstance.current = L.map(mapRef.current, {
-      center: [51.1657, 10.4515],
-      zoom: 6
+      center: [defaultCenter?.lat ?? 51.1657, defaultCenter?.lon ?? 10.4515],
+      zoom: defaultZoom
     });
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(mapInstance.current);
-  }, []);
+  }, [defaultCenter?.lat, defaultCenter?.lon, defaultZoom]);
 
   useEffect(() => {
     const L = (window as any).L;
@@ -43,7 +45,12 @@ const RouteMap: React.FC<Props> = ({ stops }) => {
       stop => typeof stop.lat === 'number' && typeof stop.lon === 'number'
     );
 
-    if (validStops.length === 0) return;
+    if (validStops.length === 0) {
+      if (defaultCenter) {
+        mapInstance.current.setView([defaultCenter.lat, defaultCenter.lon], defaultZoom);
+      }
+      return;
+    }
 
     validStops.forEach((stop, index) => {
       const marker = L.marker([stop.lat, stop.lon]).addTo(mapInstance.current);
@@ -95,7 +102,7 @@ const RouteMap: React.FC<Props> = ({ stops }) => {
         if (error?.name === 'AbortError') return;
         fallbackPolyline();
       });
-  }, [stops]);
+  }, [stops, defaultCenter, defaultZoom]);
 
   return <div ref={mapRef} className="h-80 w-full rounded-xl border border-slate-200 overflow-hidden" />;
 };

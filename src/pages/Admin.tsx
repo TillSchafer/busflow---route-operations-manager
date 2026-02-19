@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../shared/lib/supabase';
 import AppHeader from '../shared/components/AppHeader';
 import { Leaf } from 'lucide-react';
+import { useToast } from '../shared/components/ToastProvider';
+import ConfirmDialog from '../shared/components/ConfirmDialog';
 
 interface AppCard {
   id: string;
@@ -50,8 +52,10 @@ interface Props {
 }
 
 const Admin: React.FC<Props> = ({ apps, currentUserId, header }) => {
+  const { pushToast } = useToast();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userIdToDelete, setUserIdToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProfiles();
@@ -105,8 +109,17 @@ const Admin: React.FC<Props> = ({ apps, currentUserId, header }) => {
       .eq('id', userId);
 
     if (error) {
-      alert(`Fehler beim Aktualisieren der Plattformrolle: ${error.message}`);
+      pushToast({
+        type: 'error',
+        title: 'Aktualisierung fehlgeschlagen',
+        message: `Fehler beim Aktualisieren der Plattformrolle: ${error.message}`
+      });
     } else {
+      pushToast({
+        type: 'success',
+        title: 'Gespeichert',
+        message: 'Plattformrolle wurde aktualisiert.'
+      });
       fetchProfiles();
     }
   };
@@ -124,31 +137,59 @@ const Admin: React.FC<Props> = ({ apps, currentUserId, header }) => {
       );
 
     if (error) {
-      alert(`Fehler beim Aktualisieren der BusFlow-Rolle: ${error.message}`);
+      pushToast({
+        type: 'error',
+        title: 'Aktualisierung fehlgeschlagen',
+        message: `Fehler beim Aktualisieren der BusFlow-Rolle: ${error.message}`
+      });
     } else {
+      pushToast({
+        type: 'success',
+        title: 'Gespeichert',
+        message: 'BusFlow-Rolle wurde aktualisiert.'
+      });
       fetchProfiles();
     }
   };
 
   // Note: Deleting a user from 'profiles' does not delete them from 'auth.users' without a trigger/function.
   // For now, we will just delete the profile which effectively hides them from the app logic (if specific checks exist).
-  const handleDeleteProfile = async (userId: string) => {
-    if (!confirm('Diesen Benutzer wirklich entfernen? Das Auth-Konto bleibt bestehen, aber der Zugriff wird entzogen.')) return;
-
+  const handleDeleteProfile = async () => {
+    if (!userIdToDelete) return;
     const { error } = await supabase
       .from('profiles')
       .delete()
-      .eq('id', userId);
+      .eq('id', userIdToDelete);
 
     if (error) {
-      alert(`Fehler beim Entfernen: ${error.message}`);
+      pushToast({
+        type: 'error',
+        title: 'Entfernen fehlgeschlagen',
+        message: `Fehler beim Entfernen: ${error.message}`
+      });
     } else {
+      pushToast({
+        type: 'success',
+        title: 'Entfernt',
+        message: 'Benutzerzugriff wurde entzogen.'
+      });
       fetchProfiles();
     }
+    setUserIdToDelete(null);
   };
 
   return (
     <div className="min-h-screen flex flex-col">
+      <ConfirmDialog
+        isOpen={!!userIdToDelete}
+        title="Benutzer entfernen"
+        message="Diesen Benutzer wirklich entfernen? Das Auth-Konto bleibt bestehen, aber der Zugriff wird entzogen."
+        confirmText="Entfernen"
+        cancelText="Abbrechen"
+        type="danger"
+        onConfirm={handleDeleteProfile}
+        onCancel={() => setUserIdToDelete(null)}
+      />
       <AppHeader
         title={header.title}
         user={header.user}
@@ -222,7 +263,7 @@ const Admin: React.FC<Props> = ({ apps, currentUserId, header }) => {
 
                   <div className="md:col-span-1 flex justify-end">
                     <button
-                      onClick={() => handleDeleteProfile(profile.id)}
+                      onClick={() => setUserIdToDelete(profile.id)}
                       disabled={currentUserId === profile.id}
                       className={`px-3 py-2 rounded-md text-sm font-semibold transition-colors ${currentUserId === profile.id
                           ? 'text-slate-300 cursor-not-allowed'
