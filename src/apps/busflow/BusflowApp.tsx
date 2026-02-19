@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, List, ArrowLeft, Printer, Settings as SettingsIcon, Leaf, Search, History, Calendar } from 'lucide-react';
+import { Plus, ArrowLeft, Printer, Settings as SettingsIcon, Leaf, Search, History, Calendar } from 'lucide-react';
 import RouteEditor from './components/RouteEditor';
 import RouteList from './components/RouteList';
 import PrintPreview from './components/PrintPreview';
@@ -37,6 +37,13 @@ interface Props {
   onGoHome: () => void;
   onAdmin: () => void;
 }
+
+const getErrorCode = (error: unknown): string | undefined =>
+  error && typeof error === 'object' && 'code' in error
+    ? String((error as { code?: unknown }).code ?? '')
+    : undefined;
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : '';
 
 const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, onAdmin }) => {
   const { pushToast, clearToasts } = useToast();
@@ -227,9 +234,9 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
         title: 'Gespeichert',
         message: 'Routenänderungen wurden gespeichert.'
       });
-    } catch (e: any) {
-      console.error(e);
-      if (e?.code === 'ROUTE_CONFLICT') {
+    } catch (error) {
+      console.error(error);
+      if (getErrorCode(error) === 'ROUTE_CONFLICT') {
         const fetched = await BusFlowApi.getRoutes();
         setRoutes(fetched);
         const latestRoute = fetched.find(r => r.id === updatedRoute.id) || null;
@@ -243,7 +250,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
         setView('LIST');
         return;
       }
-      if (e?.code === 'ROUTE_NOT_FOUND') {
+      if (getErrorCode(error) === 'ROUTE_NOT_FOUND') {
         pushToast({
           type: 'error',
           title: 'Nicht gefunden',
@@ -418,11 +425,11 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
         title: 'Gespeichert',
         message: 'Kontakt wurde gespeichert.'
       });
-    } catch (e: any) {
+    } catch (error) {
       pushToast({
         type: 'error',
         title: 'Speichern fehlgeschlagen',
-        message: `Kontakt konnte nicht gespeichert werden.${e?.message ? ` ${e.message}` : ''}`
+        message: `Kontakt konnte nicht gespeichert werden.${getErrorMessage(error) ? ` ${getErrorMessage(error)}` : ''}`
       });
     }
   };
@@ -445,8 +452,8 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
         title: 'Gelöscht',
         message: 'Kontakt wurde entfernt.'
       });
-    } catch (e: any) {
-      if (e?.code === 'CONTACT_IN_USE') {
+    } catch (error) {
+      if (getErrorCode(error) === 'CONTACT_IN_USE') {
         pushToast({
           type: 'error',
           title: 'Löschen nicht möglich',
@@ -484,13 +491,13 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
         title: 'Gespeichert',
         message: 'Kontakt wurde aktualisiert.'
       });
-    } catch (e: any) {
+    } catch (error) {
       pushToast({
         type: 'error',
         title: 'Speichern fehlgeschlagen',
-        message: `Kontakt konnte nicht aktualisiert werden.${e?.message ? ` ${e.message}` : ''}`
+        message: `Kontakt konnte nicht aktualisiert werden.${getErrorMessage(error) ? ` ${getErrorMessage(error)}` : ''}`
       });
-      throw e;
+      throw error;
     }
   };
 
@@ -505,11 +512,11 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
     }
     try {
       return await BusFlowApi.importCustomersPreview(rows);
-    } catch (e: any) {
+    } catch (error) {
       pushToast({
         type: 'error',
         title: 'Import-Vorschau fehlgeschlagen',
-        message: `CSV konnte nicht geprüft werden.${e?.message ? ` ${e.message}` : ''}`
+        message: `CSV konnte nicht geprüft werden.${getErrorMessage(error) ? ` ${getErrorMessage(error)}` : ''}`
       });
       return { rows: [], conflicts: [], errors: rows.map(row => ({ rowNumber: row.rowNumber, reason: 'Vorschau fehlgeschlagen.' })) };
     }
@@ -547,11 +554,11 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
         message: `Firmen: +${result.insertedCompanies}, Kontakte: +${result.insertedContacts}, Updates: ${result.updatedContacts}.`
       });
       return result;
-    } catch (e: any) {
+    } catch (error) {
       pushToast({
         type: 'error',
         title: 'Import fehlgeschlagen',
-        message: `Kunden konnten nicht importiert werden.${e?.message ? ` ${e.message}` : ''}`
+        message: `Kunden konnten nicht importiert werden.${getErrorMessage(error) ? ` ${getErrorMessage(error)}` : ''}`
       });
       return {
         insertedCompanies: 0,
@@ -590,8 +597,9 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
       try {
         await BusFlowApi.deleteCustomerContact(item.id);
         deleted += 1;
-      } catch (e: any) {
-        if (e?.code === 'CONTACT_IN_USE') {
+      } catch (error) {
+        const errorCode = getErrorCode(error);
+        if (errorCode === 'CONTACT_IN_USE') {
           failed.push({
             id: item.id,
             name: item.name,
@@ -604,8 +612,8 @@ const BusflowApp: React.FC<Props> = ({ authUser, onProfile, onLogout, onGoHome, 
             id: item.id,
             name: item.name,
             companyName: item.companyName,
-            code: e?.code || 'UNKNOWN',
-            reason: e?.message || 'Unbekannter Fehler beim Löschen.'
+            code: errorCode || 'UNKNOWN',
+            reason: getErrorMessage(error) || 'Unbekannter Fehler beim Löschen.'
           });
         }
       }

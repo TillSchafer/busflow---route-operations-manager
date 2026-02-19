@@ -26,18 +26,21 @@ const MAX_TOASTS = 3;
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const timersRef = useRef<Record<string, number>>({});
+  const timersRef = useRef<Record<string, ReturnType<typeof window.setTimeout>>>({});
 
   const removeToast = useCallback((id: string) => {
-    if (timersRef.current[id]) {
-      window.clearTimeout(timersRef.current[id]);
+    const timer = timersRef.current[id];
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
       delete timersRef.current[id];
     }
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
   const clearToasts = useCallback(() => {
-    Object.values(timersRef.current).forEach(timer => window.clearTimeout(timer));
+    for (const toastId in timersRef.current) {
+      window.clearTimeout(timersRef.current[toastId]);
+    }
     timersRef.current = {};
     setToasts([]);
   }, []);

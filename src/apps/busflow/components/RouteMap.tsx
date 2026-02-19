@@ -1,6 +1,22 @@
 import React, { useEffect, useRef } from 'react';
 import { Stop } from '../types';
 
+type LatLng = [number, number];
+type MarkerLike = { bindPopup: (text: string) => void; remove: () => void };
+type LayerLike = { addTo: (map: MapLike) => LayerLike; remove: () => void };
+type MapLike = {
+  setView: (center: LatLng, zoom: number) => void;
+  fitBounds: (bounds: unknown, options?: { padding?: [number, number] }) => void;
+};
+type LeafletLike = {
+  map: (container: HTMLDivElement, options: { center: LatLng; zoom: number }) => MapLike;
+  tileLayer: (url: string, options: { attribution: string }) => LayerLike;
+  marker: (position: LatLng) => MarkerLike & LayerLike;
+  latLngBounds: (positions: LatLng[]) => unknown;
+  polyline: (positions: LatLng[], options: { color: string; weight: number }) => LayerLike;
+  geoJSON: (line: unknown, options: { style: { color: string; weight: number } }) => LayerLike;
+};
+
 interface Props {
   stops: Stop[];
   defaultCenter?: { lat: number; lon: number };
@@ -9,14 +25,14 @@ interface Props {
 
 const RouteMap: React.FC<Props> = ({ stops, defaultCenter, defaultZoom = 6 }) => {
   const mapRef = useRef<HTMLDivElement | null>(null);
-  const mapInstance = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
-  const routeRef = useRef<any>(null);
+  const mapInstance = useRef<MapLike | null>(null);
+  const markersRef = useRef<MarkerLike[]>([]);
+  const routeRef = useRef<LayerLike | null>(null);
   const routeRequest = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
-    const L = (window as any).L;
+    const L = (window as Window & { L?: LeafletLike }).L;
     if (!L) return;
 
     mapInstance.current = L.map(mapRef.current, {
@@ -30,7 +46,7 @@ const RouteMap: React.FC<Props> = ({ stops, defaultCenter, defaultZoom = 6 }) =>
   }, [defaultCenter?.lat, defaultCenter?.lon, defaultZoom]);
 
   useEffect(() => {
-    const L = (window as any).L;
+    const L = (window as Window & { L?: LeafletLike }).L;
     if (!L || !mapInstance.current) return;
 
     markersRef.current.forEach(marker => marker.remove());
@@ -53,12 +69,13 @@ const RouteMap: React.FC<Props> = ({ stops, defaultCenter, defaultZoom = 6 }) =>
     }
 
     validStops.forEach((stop, index) => {
-      const marker = L.marker([stop.lat, stop.lon]).addTo(mapInstance.current);
+      const marker = L.marker([stop.lat, stop.lon]);
+      marker.addTo(mapInstance.current);
       marker.bindPopup(`${index + 1}. ${stop.location}`);
       markersRef.current.push(marker);
     });
 
-    const bounds = L.latLngBounds(validStops.map(stop => [stop.lat, stop.lon]));
+    const bounds = L.latLngBounds(validStops.map(stop => [stop.lat, stop.lon] as LatLng));
 
     if (validStops.length === 1) {
       mapInstance.current.setView([validStops[0].lat, validStops[0].lon], 13);
@@ -79,7 +96,7 @@ const RouteMap: React.FC<Props> = ({ stops, defaultCenter, defaultZoom = 6 }) =>
         routeRef.current.remove();
       }
       routeRef.current = L.polyline(
-        validStops.map(stop => [stop.lat, stop.lon]),
+        validStops.map(stop => [stop.lat, stop.lon] as LatLng),
         { color: '#2563eb', weight: 4 }
       ).addTo(mapInstance.current);
     };

@@ -1,3 +1,9 @@
+-- LEGACY BASELINE ONLY (NON-AUTHORITATIVE)
+-- This file is kept for historical reference and local onboarding context.
+-- Operational source of truth is the ordered migration chain:
+-- `supabase_migration_*.sql` (migration-first governance).
+-- Do not apply this file directly to production environments.
+
 -- Enable UUID extension
 create extension if not exists "uuid-ossp";
 

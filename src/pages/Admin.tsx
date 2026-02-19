@@ -27,39 +27,23 @@ interface AdminUser extends Profile {
 }
 
 interface Props {
-  // We don't need passed props for users anymore, fetching inside.
   apps: AppCard[];
   currentUserId?: string;
   header: {
     title: string;
-    user: any;
+    user: { name: string; role: string; avatarUrl?: string } | null;
     onHome: () => void;
     onProfile: () => void;
     onAdmin: () => void;
     onLogout: () => void;
   };
-  // Keeping these for interface compatibility with App.tsx but they will be ignored/optional
-  users?: any;
-  newUserName?: any;
-  newUserPassword?: any;
-  newUserRole?: any;
-  onNewUserName?: any;
-  onNewUserPassword?: any;
-  onNewUserRole?: any;
-  onAddUser?: any;
-  onRemoveUser?: any;
-  onUpdateUser?: any;
 }
 
-const Admin: React.FC<Props> = ({ apps, currentUserId, header }) => {
+const Admin: React.FC<Props> = ({ apps: _apps, currentUserId, header }) => {
   const { pushToast } = useToast();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [userIdToDelete, setUserIdToDelete] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchProfiles();
-  }, []);
 
   const fetchProfiles = async () => {
     setLoading(true);
@@ -99,6 +83,10 @@ const Admin: React.FC<Props> = ({ apps, currentUserId, header }) => {
     setUsers(mergedUsers);
     setLoading(false);
   };
+
+  useEffect(() => {
+    fetchProfiles();
+  }, []);
 
   const handleUpdateGlobalRole = async (userId: string, newRole: 'ADMIN' | 'USER') => {
     if (currentUserId === userId) return;

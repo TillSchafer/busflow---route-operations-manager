@@ -12,7 +12,7 @@ const CustomerImportConflictDialog: React.FC<Props> = ({ isOpen, preview, onClos
   const [resolutions, setResolutions] = useState<Record<number, 'import' | 'skip'>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const conflicts = preview?.conflicts || [];
+  const conflicts = useMemo(() => preview?.conflicts || [], [preview]);
   const importCount = useMemo(
     () => conflicts.filter(conflict => (resolutions[conflict.rowNumber] || 'skip') === 'import').length,
     [conflicts, resolutions]
@@ -128,4 +128,3 @@ const CustomerImportConflictDialog: React.FC<Props> = ({ isOpen, preview, onClos
 };
 
 export default CustomerImportConflictDialog;
-

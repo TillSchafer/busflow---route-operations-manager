@@ -92,6 +92,26 @@ type DbRoute = {
     busflow_customer_contacts?: DbCustomerContact | DbCustomerContact[] | null;
 };
 
+type ErrorWithCode = Error & { code?: string; latestUpdatedAt?: string };
+type PostgrestLikeError = { code?: string };
+
+const getErrorMessage = (error: unknown, fallback: string): string =>
+    error instanceof Error && error.message ? error.message : fallback;
+
+const getPostgrestCode = (error: unknown): string | undefined => {
+    if (!error || typeof error !== 'object') return undefined;
+    return (error as PostgrestLikeError).code;
+};
+
+const createCodeError = (message: string, code: string, extra?: Partial<ErrorWithCode>): ErrorWithCode => {
+    const err = new Error(message) as ErrorWithCode;
+    err.code = code;
+    if (extra) {
+        if (extra.latestUpdatedAt) err.latestUpdatedAt = extra.latestUpdatedAt;
+    }
+    return err;
+};
+
 const mapStopFromDb = (stop: DbStop): Stop => ({
     id: stop.id,
     location: stop.location || '',
@@ -295,16 +315,11 @@ export const BusFlowApi = {
         if (error) throw error;
 
         if (data?.ok === false && data?.code === 'ROUTE_CONFLICT') {
-            const conflictError: any = new Error('ROUTE_CONFLICT');
-            conflictError.code = 'ROUTE_CONFLICT';
-            conflictError.latestUpdatedAt = data.updated_at;
-            throw conflictError;
+            throw createCodeError('ROUTE_CONFLICT', 'ROUTE_CONFLICT', { latestUpdatedAt: data.updated_at });
         }
 
         if (data?.ok === false && data?.code === 'ROUTE_NOT_FOUND') {
-            const notFoundError: any = new Error('ROUTE_NOT_FOUND');
-            notFoundError.code = 'ROUTE_NOT_FOUND';
-            throw notFoundError;
+            throw createCodeError('ROUTE_NOT_FOUND', 'ROUTE_NOT_FOUND');
         }
 
         return data;
@@ -689,30 +704,28 @@ export const BusFlowApi = {
 
         if (!error) return;
 
-        if ((error as any)?.code === '23503') {
-            const inUseError: any = new Error('CONTACT_IN_USE');
-            inUseError.code = 'CONTACT_IN_USE';
-            throw inUseError;
+        if (getPostgrestCode(error) === '23503') {
+            throw createCodeError('CONTACT_IN_USE', 'CONTACT_IN_USE');
         }
 
         throw error;
     },
 
     async updateCustomer(id: string, patch: Partial<Omit<Customer, 'id'>>) {
-        const updatePayload = mapCustomerInsert({
-            name: patch.name || '',
+        const updatePayload: Record<string, unknown> = {
             notes: patch.notes,
             phone: patch.phone,
             street: patch.street,
-            postalCode: patch.postalCode,
+            postal_code: patch.postalCode,
             city: patch.city,
             country: patch.country,
             email: patch.email,
-            contactPerson: patch.contactPerson,
-            metadata: patch.metadata
-        });
-
-        if (!patch.name) delete (updatePayload as any).name;
+            contact_person: patch.contactPerson,
+            metadata: patch.metadata || {}
+        };
+        if (typeof patch.name === 'string' && patch.name.trim()) {
+            updatePayload.name = patch.name.trim();
+        }
 
         const { data, error } = await supabase
             .from('busflow_customers')
@@ -889,8 +902,12 @@ export const BusFlowApi = {
                         metadata: row.metadata
                     });
                     updatedContacts += 1;
-                } catch (e: any) {
-                    errors.push({ rowNumber: row.rowNumber, name: row.companyName, reason: e?.message || 'Kontakt konnte nicht aktualisiert werden.' });
+                } catch (error) {
+                    errors.push({
+                        rowNumber: row.rowNumber,
+                        name: row.companyName,
+                        reason: getErrorMessage(error, 'Kontakt konnte nicht aktualisiert werden.')
+                    });
                     skipped += 1;
                 }
                 processed += 1;
@@ -914,8 +931,12 @@ export const BusFlowApi = {
                     metadata: row.metadata
                 });
                 insertedContacts += 1;
-            } catch (e: any) {
-                errors.push({ rowNumber: row.rowNumber, name: row.companyName, reason: e?.message || 'Kontakt konnte nicht erstellt werden.' });
+            } catch (error) {
+                errors.push({
+                    rowNumber: row.rowNumber,
+                    name: row.companyName,
+                    reason: getErrorMessage(error, 'Kontakt konnte nicht erstellt werden.')
+                });
                 skipped += 1;
             }
             processed += 1;
@@ -940,10 +961,8 @@ export const BusFlowApi = {
 
         if (!error) return;
 
-        if ((error as any)?.code === '23503') {
-            const inUseError: any = new Error('CUSTOMER_IN_USE');
-            inUseError.code = 'CUSTOMER_IN_USE';
-            throw inUseError;
+        if (getPostgrestCode(error) === '23503') {
+            throw createCodeError('CUSTOMER_IN_USE', 'CUSTOMER_IN_USE');
         }
 
         throw error;

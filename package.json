@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+    "check": "npm run typecheck && npm run lint && npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
@@ -19,8 +22,14 @@
     "recharts": "^3.6.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
     "@types/node": "^22.14.0",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
     "@vitejs/plugin-react": "^5.0.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "globals": "^16.5.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

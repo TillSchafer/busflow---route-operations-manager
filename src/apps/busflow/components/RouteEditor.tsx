@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Route, Stop, BusType, Worker, Customer, CustomerContact, MapDefaultView } from '../types';
-import { Save, Plus, Trash2, AlertCircle, Download } from 'lucide-react';
+import { Save, Plus, Trash2, AlertCircle } from 'lucide-react';
 import RouteMap from './RouteMap';
 import { BusFlowApi } from '../api';
 
@@ -16,6 +16,18 @@ interface Props {
   customers: Customer[];
   mapDefaultView?: MapDefaultView;
 }
+
+type NominatimResult = {
+  display_name: string;
+  lat: string;
+  lon: string;
+  address?: {
+    house_number?: string;
+  };
+};
+
+const isAbortError = (error: unknown): boolean =>
+  error instanceof DOMException ? error.name === 'AbortError' : false;
 
 const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, workers, customers, mapDefaultView }) => {
   const [formData, setFormData] = useState<Route>({ ...route });
@@ -171,9 +183,9 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
           `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&dedupe=1&countrycodes=de&limit=8&q=${encodeURIComponent(trimmed)}&accept-language=de`,
           { signal: controller.signal }
         );
-        const results = await response.json();
+        const results = (await response.json()) as NominatimResult[];
         const mapped = (results || [])
-          .map((item: any) => ({
+          .map(item => ({
             label: item.display_name,
             lat: Number(item.lat),
             lon: Number(item.lon),
@@ -184,12 +196,12 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
               return hasExactHouseNumber ? 1 : 0;
             })()
           }))
-          .sort((a: any, b: any) => b.score - a.score)
-          .map(({ label, lat, lon }: any) => ({ label, lat, lon }));
+          .sort((a, b) => b.score - a.score)
+          .map(({ label, lat, lon }) => ({ label, lat, lon }));
         setSuggestions(prev => ({ ...prev, [stopId]: mapped }));
         setActiveStopId(stopId);
       } catch (error) {
-        if ((error as any)?.name === 'AbortError') return;
+        if (isAbortError(error)) return;
       }
     }, 250);
   };
@@ -206,37 +218,6 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
       onSave({ ...formData, stops: updatedStops });
     }
   };
-
-  const exportToCSV = () => {
-    const routeToExport = { ...formData, stops: updatedStops };
-    const headers = ['Ort', 'Ankunft', 'Abfahrt', 'Personen', 'Notizen'];
-    const rows = routeToExport.stops.map(s => [
-      `"${s.location}"`,
-      s.arrivalTime,
-      s.departureTime,
-      s.currentTotal,
-      `"${s.notes || ''}"`
-    ]);
-
-    const csvContent = [
-      [`"Route: ${routeToExport.name}"`, `"Datum: ${routeToExport.date}"`, `"Fahrer: ${routeToExport.driverName}"`, `"Bus: ${routeToExport.busNumber}"`],
-      [],
-      headers,
-      ...rows
-    ].map(e => e.join(",")).join("\n");
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `${routeToExport.name.replace(/\s+/g, '_') || 'route'}_${routeToExport.date}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-
 
   return (
     <>
@@ -262,7 +243,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={formData.status}
-              onChange={e => setFormData({ ...formData, status: e.target.value as any })}
+              onChange={e => setFormData({ ...formData, status: e.target.value as Route['status'] })}
               className="p-2 pr-8 border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white border text-sm font-medium text-slate-700"
             >
               <option value="Entwurf">Entwurf</option>
