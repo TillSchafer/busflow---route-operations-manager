@@ -2,3 +2,9 @@ project_id = "jgydzxdiwpldgrqkfbfk"
 
 [functions.invite-account-user]
 verify_jwt = true
+
+[functions.platform-provision-account]
+verify_jwt = true
+
+[functions.platform-send-password-reset]
+verify_jwt = true

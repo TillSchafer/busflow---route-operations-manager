@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom';
 import { Bus, Leaf } from 'lucide-react';
 import { supabase } from './shared/lib/supabase';
 import Home from './pages/Home';
-import Admin from './pages/Admin';
+import PlatformAdmin from './pages/PlatformAdmin';
+import TeamAdmin from './pages/TeamAdmin';
 import Profile from './pages/Profile';
+import AcceptInvite from './pages/AcceptInvite';
 import BusflowApp from './apps/busflow/BusflowApp';
 import { AuthProvider, useAuth } from './shared/auth/AuthContext';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -15,9 +17,72 @@ import { useToast } from './shared/components/ToastProvider';
 import { ProgressProvider } from './shared/components/ProgressProvider';
 import ProgressViewport from './shared/components/ProgressViewport';
 
+const LoginScreen: React.FC<{
+  email: string;
+  password: string;
+  loginError: string;
+  isLoggingIn: boolean;
+  onEmailChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
+  onSubmit: (e: React.FormEvent) => Promise<void>;
+}> = ({ email, password, loginError, isLoggingIn, onEmailChange, onPasswordChange, onSubmit }) => (
+  <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+    <div className="bg-white border border-slate-200 rounded-2xl shadow-xl px-8 py-8 w-full max-w-md">
+      <h2 className="text-2xl font-bold text-slate-900 mb-2">Anmeldung</h2>
+      <p className="text-sm text-slate-500 mb-6">
+        Bitte melden Sie sich an, um fortzufahren.
+        <br />
+        <span className="font-medium text-slate-700">Zugang nur per Einladung.</span>
+      </p>
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-1">E-Mail</label>
+          <input
+            type="email"
+            value={email}
+            onChange={e => onEmailChange(e.target.value)}
+            className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
+            placeholder="name@firma.de"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-1">Passwort</label>
+          <input
+            type="password"
+            value={password}
+            onChange={e => onPasswordChange(e.target.value)}
+            className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
+            placeholder="••••••••"
+            required
+            minLength={6}
+          />
+        </div>
+        {loginError && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{loginError}</p>}
+
+        <button
+          type="submit"
+          disabled={isLoggingIn}
+          className="w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors disabled:opacity-50"
+        >
+          {isLoggingIn ? 'Verarbeite...' : 'Anmelden'}
+        </button>
+      </form>
+
+      <div className="mt-4 text-sm text-slate-600">
+        Noch kein Passwort gesetzt?{' '}
+        <Link to="/auth/accept-invite" className="font-semibold text-blue-700 hover:text-blue-600">
+          Einladungslink öffnen und Passwort festlegen
+        </Link>
+        .
+      </div>
+    </div>
+  </div>
+);
+
 const InnerApp: React.FC = () => {
   const navigate = useNavigate();
-  const { user, activeAccountId, loading, logout } = useAuth();
+  const { user, activeAccount, activeAccountId, canManageTenantUsers, loading, logout } = useAuth();
   const { pushToast } = useToast();
 
   const [email, setEmail] = useState('');
@@ -49,6 +114,9 @@ const InnerApp: React.FC = () => {
     navigate('/');
   };
 
+  const adminPath = user?.isPlatformAdmin ? '/platform-admin' : '/team-admin';
+  const goAdmin = () => navigate(adminPath);
+
   if (loading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
@@ -64,50 +132,23 @@ const InnerApp: React.FC = () => {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-xl px-8 py-8 w-full max-w-md">
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">Anmeldung</h2>
-          <p className="text-sm text-slate-500 mb-6">
-            Bitte melden Sie sich an, um fortzufahren.
-            <br />
-            <span className="font-medium text-slate-700">Zugang nur per Einladung.</span>
-          </p>
-          <form onSubmit={handleAuth} className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">E-Mail</label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
-                placeholder="name@firma.de"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Passwort</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
-                placeholder="••••••••"
-                required
-                minLength={6}
-              />
-            </div>
-            {loginError && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{loginError}</p>}
-
-            <button
-              type="submit"
-              disabled={isLoggingIn}
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors disabled:opacity-50"
-            >
-              {isLoggingIn ? 'Verarbeite...' : 'Anmelden'}
-            </button>
-          </form>
-        </div>
-      </div>
+      <Routes>
+        <Route path="/auth/accept-invite" element={<AcceptInvite />} />
+        <Route
+          path="*"
+          element={
+            <LoginScreen
+              email={email}
+              password={password}
+              loginError={loginError}
+              isLoggingIn={isLoggingIn}
+              onEmailChange={setEmail}
+              onPasswordChange={setPassword}
+              onSubmit={handleAuth}
+            />
+          }
+        />
+      </Routes>
     );
   }
 
@@ -132,7 +173,7 @@ const InnerApp: React.FC = () => {
               apps={apps}
               auth={user}
               onProfile={() => navigate('/profile')}
-              onAdmin={() => navigate('/admin')}
+              onAdmin={goAdmin}
               onLogout={handleLogout}
               onHome={() => navigate('/')}
             />
@@ -147,25 +188,21 @@ const InnerApp: React.FC = () => {
               onProfile={() => navigate('/profile')}
               onLogout={handleLogout}
               onGoHome={() => navigate('/')}
-              onAdmin={() => navigate('/admin')}
+              onAdmin={goAdmin}
             />
           }
         />
         <Route
-          path="/admin"
+          path="/platform-admin"
           element={
-            user.role === 'ADMIN' ? (
-              <Admin
-                apps={apps}
-                currentUserId={user.id}
-                activeAccountId={activeAccountId}
-                isPlatformAdmin={user.isPlatformAdmin}
+            user.isPlatformAdmin ? (
+              <PlatformAdmin
                 header={{
-                  title: 'Adminbereich',
+                  title: 'Platform Admin',
                   user: user,
                   onHome: () => navigate('/'),
                   onProfile: () => navigate('/profile'),
-                  onAdmin: () => navigate('/admin'),
+                  onAdmin: goAdmin,
                   onLogout: handleLogout
                 }}
               />
@@ -173,6 +210,41 @@ const InnerApp: React.FC = () => {
               <Navigate to="/" replace />
             )
           }
+        />
+        <Route
+          path="/team-admin"
+          element={
+            !user.isPlatformAdmin && canManageTenantUsers ? (
+              <TeamAdmin
+                currentUserId={user.id}
+                activeAccountId={activeAccountId}
+                header={{
+                  title: 'Team Admin',
+                  user: user,
+                  onHome: () => navigate('/'),
+                  onProfile: () => navigate('/profile'),
+                  onAdmin: goAdmin,
+                  onLogout: handleLogout
+                }}
+              />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            user.isPlatformAdmin
+              ? <Navigate to="/platform-admin" replace />
+              : (!user.isPlatformAdmin && canManageTenantUsers && activeAccount?.role === 'ADMIN')
+                ? <Navigate to="/team-admin" replace />
+                : <Navigate to="/" replace />
+          }
+        />
+        <Route
+          path="/auth/accept-invite"
+          element={<AcceptInvite />}
         />
         <Route
           path="/profile"
@@ -192,7 +264,7 @@ const InnerApp: React.FC = () => {
               onGoHome={() => navigate('/')}
               onLogout={handleLogout}
               onProfile={() => navigate('/profile')}
-              onAdmin={() => navigate('/admin')}
+              onAdmin={goAdmin}
             />
           }
         />

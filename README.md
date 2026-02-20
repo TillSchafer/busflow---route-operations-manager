@@ -27,6 +27,24 @@ BusFlow is a React + Vite app with Supabase auth, database, RLS, and realtime sy
 5. Build production bundle:
    `npm run build`
 
+## Invite Onboarding (Password Setup)
+- User onboarding is invite-only.
+- Admin creates invitation via `invite-account-user` edge function.
+- Invite email must redirect to frontend route: `/auth/accept-invite`.
+- On that page, the invited user sets a password, then `claim_my_invitation()` activates membership.
+
+### Required Edge Function Secret
+Set these in Supabase Function secrets (not as `VITE_` client env):
+- `APP_INVITE_REDIRECT_URL=https://<your-domain>/auth/accept-invite`
+- `APP_PASSWORD_RESET_REDIRECT_URL=https://<your-domain>/auth/accept-invite`
+
+### Full Setup Guide
+- See `SUPABASE_EDGE_FUNCTION_SETUP.md` for the complete step-by-step setup:
+  - creating functions
+  - configuring `supabase/config.toml`
+  - setting secrets
+  - deploying and smoke testing
+
 ## Supabase SQL Governance
 - Source of truth is **migrations only**: `supabase_migration_*.sql`
 - `supabase_schema.sql` is legacy reference and is **not** operational

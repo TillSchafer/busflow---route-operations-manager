@@ -1,0 +1,319 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Leaf } from 'lucide-react';
+import AppHeader from '../shared/components/AppHeader';
+import ConfirmDialog from '../shared/components/ConfirmDialog';
+import { useToast } from '../shared/components/ToastProvider';
+import { TeamAdminApi } from '../shared/api/admin/teamAdmin.api';
+import { InvitationItem, InvitationRole, MembershipItem, MembershipRole } from '../shared/api/admin/types';
+
+interface Props {
+  currentUserId?: string;
+  activeAccountId?: string | null;
+  header: {
+    title: string;
+    user: { name: string; role: string; avatarUrl?: string } | null;
+    onHome: () => void;
+    onProfile: () => void;
+    onAdmin: () => void;
+    onLogout: () => void;
+  };
+}
+
+const formatDateTime = (value?: string) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('de-DE');
+};
+
+const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) => {
+  const { pushToast } = useToast();
+
+  const [loading, setLoading] = useState(true);
+  const [memberships, setMemberships] = useState<MembershipItem[]>([]);
+  const [invitations, setInvitations] = useState<InvitationItem[]>([]);
+  const [accountStatus, setAccountStatus] = useState<string>('ACTIVE');
+
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<InvitationRole>('VIEWER');
+  const [isInviting, setIsInviting] = useState(false);
+
+  const [membershipToSuspend, setMembershipToSuspend] = useState<MembershipItem | null>(null);
+  const [invitationToRevoke, setInvitationToRevoke] = useState<InvitationItem | null>(null);
+
+  const accountIsWritable = accountStatus === 'ACTIVE';
+
+  const activeMembers = useMemo(
+    () => memberships.filter(item => item.status === 'ACTIVE'),
+    [memberships]
+  );
+
+  const loadData = useCallback(async () => {
+    if (!activeAccountId) {
+      setMemberships([]);
+      setInvitations([]);
+      setAccountStatus('ACTIVE');
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await TeamAdminApi.getTeamAdminData(activeAccountId);
+      setMemberships(data.memberships);
+      setInvitations(data.invitations);
+      setAccountStatus(data.account?.status || 'ACTIVE');
+    } catch (error) {
+      pushToast({
+        type: 'error',
+        title: 'Laden fehlgeschlagen',
+        message: error instanceof Error ? error.message : 'Teamdaten konnten nicht geladen werden.'
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [activeAccountId, pushToast]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleInviteEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeAccountId || !accountIsWritable) return;
+
+    setIsInviting(true);
+    try {
+      await TeamAdminApi.inviteTeamMember({ accountId: activeAccountId, email: inviteEmail.trim(), role: inviteRole });
+      setInviteEmail('');
+      setInviteRole('VIEWER');
+      pushToast({ type: 'success', title: 'Einladung gesendet', message: 'Mitarbeiter wurde eingeladen.' });
+      await loadData();
+    } catch (error) {
+      pushToast({
+        type: 'error',
+        title: 'Einladung fehlgeschlagen',
+        message: error instanceof Error ? error.message : 'Einladung konnte nicht gesendet werden.'
+      });
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
+  const handleUpdateMembershipRole = async (membershipId: string, nextRole: MembershipRole) => {
+    if (!activeAccountId || !accountIsWritable) return;
+    try {
+      await TeamAdminApi.updateMembershipRole(activeAccountId, membershipId, nextRole);
+      pushToast({ type: 'success', title: 'Gespeichert', message: 'Rolle wurde aktualisiert.' });
+      await loadData();
+    } catch (error) {
+      pushToast({ type: 'error', title: 'Aktualisierung fehlgeschlagen', message: error instanceof Error ? error.message : 'Rolle konnte nicht aktualisiert werden.' });
+    }
+  };
+
+  const handleSuspendMembership = async () => {
+    if (!activeAccountId || !membershipToSuspend || !accountIsWritable) return;
+
+    try {
+      await TeamAdminApi.suspendMembership(activeAccountId, membershipToSuspend.id);
+      pushToast({ type: 'success', title: 'Zugriff entzogen', message: 'Mitglied wurde deaktiviert.' });
+      await loadData();
+    } catch (error) {
+      pushToast({ type: 'error', title: 'Aktion fehlgeschlagen', message: error instanceof Error ? error.message : 'Aktion konnte nicht ausgeführt werden.' });
+    }
+
+    setMembershipToSuspend(null);
+  };
+
+  const handleRevokeInvitation = async () => {
+    if (!activeAccountId || !invitationToRevoke || !accountIsWritable) return;
+
+    try {
+      await TeamAdminApi.revokeInvitation(activeAccountId, invitationToRevoke.id);
+      pushToast({ type: 'success', title: 'Einladung widerrufen', message: 'Die Einladung wurde widerrufen.' });
+      await loadData();
+    } catch (error) {
+      pushToast({ type: 'error', title: 'Aktion fehlgeschlagen', message: error instanceof Error ? error.message : 'Aktion konnte nicht ausgeführt werden.' });
+    }
+
+    setInvitationToRevoke(null);
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <ConfirmDialog
+        isOpen={!!membershipToSuspend}
+        title="Mitglied deaktivieren"
+        message={`Möchten Sie den Zugriff für ${membershipToSuspend?.profiles && !Array.isArray(membershipToSuspend.profiles)
+          ? (membershipToSuspend.profiles.full_name || membershipToSuspend.profiles.email)
+          : 'dieses Mitglied'} wirklich entziehen?`}
+        confirmText="Deaktivieren"
+        cancelText="Abbrechen"
+        type="danger"
+        onConfirm={handleSuspendMembership}
+        onCancel={() => setMembershipToSuspend(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={!!invitationToRevoke}
+        title="Einladung widerrufen"
+        message={`Soll die Einladung an ${invitationToRevoke?.email || 'diese E-Mail-Adresse'} widerrufen werden?`}
+        confirmText="Widerrufen"
+        cancelText="Abbrechen"
+        type="danger"
+        onConfirm={handleRevokeInvitation}
+        onCancel={() => setInvitationToRevoke(null)}
+      />
+
+      <AppHeader
+        title={header.title}
+        user={header.user}
+        onHome={header.onHome}
+        onProfile={header.onProfile}
+        onAdmin={header.onAdmin}
+        onLogout={header.onLogout}
+      />
+
+      <main className="flex-1 p-4 md:p-8 no-print max-w-7xl mx-auto w-full space-y-6">
+        {loading ? (
+          <div className="bg-white border border-slate-200 rounded-2xl p-10 shadow-sm flex items-center justify-center">
+            <Leaf className="w-6 h-6 animate-spin text-slate-400" />
+          </div>
+        ) : (
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
+            <h2 className="text-xl font-bold text-slate-800">Teamverwaltung</h2>
+
+            {!activeAccountId ? (
+              <div className="text-sm text-slate-600 border border-slate-200 rounded-lg p-4">
+                Kein aktiver Firmen-Account zugewiesen. Bitte Plattform-Admin kontaktieren.
+              </div>
+            ) : (
+              <>
+                {!accountIsWritable && (
+                  <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    Dieser Account ist aktuell auf <strong>{accountStatus}</strong> gesetzt. Teamänderungen sind gesperrt.
+                  </div>
+                )}
+
+                <form onSubmit={handleInviteEmployee} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Mitarbeiter einladen (E-Mail)</label>
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      className="w-full border-slate-300 rounded-lg p-2 text-sm"
+                      placeholder="mitarbeiter@firma.de"
+                      required
+                      disabled={!accountIsWritable}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Startrolle</label>
+                    <select
+                      value={inviteRole}
+                      onChange={e => setInviteRole(e.target.value as InvitationRole)}
+                      className="w-full border-slate-300 rounded-lg p-2 text-sm"
+                      disabled={!accountIsWritable}
+                    >
+                      <option value="VIEWER">Nur Lesen (Standard)</option>
+                      <option value="DISPATCH">Disposition</option>
+                      <option value="ADMIN">Admin</option>
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isInviting || !accountIsWritable}
+                    className="px-4 py-2 rounded-lg bg-[#2663EB] text-white font-semibold disabled:opacity-60"
+                  >
+                    {isInviting ? 'Sende...' : 'Einladen'}
+                  </button>
+                </form>
+
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold text-slate-700">Mitglieder ({activeMembers.length})</h3>
+                  {memberships.map(item => {
+                    const profile = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
+                    const isCurrentUser = item.user_id === currentUserId;
+
+                    return (
+                      <div key={item.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 border border-slate-200 rounded-lg p-3 items-center">
+                        <div>
+                          <p className="font-semibold text-slate-900 text-sm">{profile?.full_name || profile?.email || 'Unbekannt'}</p>
+                          <p className="text-xs text-slate-500">{profile?.email || item.user_id}</p>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 mb-1">Rolle</label>
+                          <select
+                            value={item.role}
+                            onChange={e => handleUpdateMembershipRole(item.id, e.target.value as MembershipRole)}
+                            className="w-full border-slate-300 rounded-lg p-2 text-sm"
+                            disabled={item.status !== 'ACTIVE' || isCurrentUser || !accountIsWritable}
+                          >
+                            <option value="VIEWER">Nur Lesen</option>
+                            <option value="DISPATCH">Disposition</option>
+                            <option value="ADMIN">Admin</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 mb-1">Status</label>
+                          <p className="text-sm text-slate-700">{item.status}</p>
+                        </div>
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => setMembershipToSuspend(item)}
+                            disabled={isCurrentUser || item.status !== 'ACTIVE' || !accountIsWritable}
+                            className="px-3 py-2 rounded-md text-sm font-semibold text-red-600 hover:bg-red-50 disabled:text-slate-300 disabled:hover:bg-transparent"
+                          >
+                            Zugriff entziehen
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {memberships.length === 0 && (
+                    <p className="text-sm text-slate-500">Noch keine Teammitglieder vorhanden.</p>
+                  )}
+                </div>
+
+                <div className="space-y-3 border-t border-slate-100 pt-4">
+                  <h3 className="text-sm font-bold text-slate-700">Offene Einladungen</h3>
+                  {invitations
+                    .filter(inv => inv.status === 'PENDING')
+                    .map(inv => (
+                      <div key={inv.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 border border-slate-200 rounded-lg p-3 items-center">
+                        <div className="md:col-span-2">
+                          <p className="font-semibold text-slate-900 text-sm">{inv.email}</p>
+                          <p className="text-xs text-slate-500">Rolle: {inv.role}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">Läuft ab</p>
+                          <p className="text-sm text-slate-700">{formatDateTime(inv.expires_at)}</p>
+                        </div>
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => setInvitationToRevoke(inv)}
+                            disabled={!accountIsWritable}
+                            className="px-3 py-2 rounded-md text-sm font-semibold text-red-600 hover:bg-red-50 disabled:text-slate-300 disabled:hover:bg-transparent"
+                          >
+                            Widerrufen
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                  {invitations.filter(inv => inv.status === 'PENDING').length === 0 && (
+                    <p className="text-sm text-slate-500">Keine offenen Einladungen.</p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
+
+export default TeamAdmin;

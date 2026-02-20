@@ -26,6 +26,7 @@ interface AuthContextType {
   user: User | null;
   activeAccountId: string | null;
   activeAccount: AccountSummary | null;
+  canManageTenantUsers: boolean;
   loading: boolean;
   login: () => Promise<void>;
   logout: () => Promise<void>;
@@ -119,16 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const isPlatformAdmin = (profile.global_role as GlobalRole) === 'ADMIN';
-      let membership = await fetchActiveMembership(profile.id, isPlatformAdmin);
-
-      if (!membership && !isPlatformAdmin) {
-        const { data: claimResult, error: claimError } = await supabase.rpc('claim_my_invitation', {
-          p_account_id: null
-        });
-        if (!claimError && claimResult?.ok) {
-          membership = await fetchActiveMembership(profile.id, isPlatformAdmin);
-        }
-      }
+      const membership = await fetchActiveMembership(profile.id, isPlatformAdmin);
 
       const effectiveRole: Role = isPlatformAdmin ? 'ADMIN' : membership?.role || 'VIEWER';
 
@@ -209,8 +201,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActiveAccountId(null);
   };
 
+  const canManageTenantUsers = !!(user?.isPlatformAdmin || activeAccount?.role === 'ADMIN');
+
   return (
-    <AuthContext.Provider value={{ user, activeAccountId, activeAccount, loading, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, activeAccountId, activeAccount, canManageTenantUsers, loading, login, logout, isAuthenticated: !!user }}>
       {!loading && children}
     </AuthContext.Provider>
   );

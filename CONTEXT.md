@@ -9,6 +9,7 @@ It supports route management, stop planning, customer linking, settings data, an
 - Auth: Supabase Auth (email/password)
 - Data: Supabase Postgres tables with RLS
 - Live refresh: Supabase Realtime subscriptions (`busflow_routes`, `busflow_stops`, settings tables)
+- Invite onboarding: edge-function invite email -> `/auth/accept-invite` -> password set -> `claim_my_invitation()`
 
 ## Engineering Policy
 - SQL is migration-first (`supabase_migration_*.sql` is operational truth)
@@ -36,6 +37,12 @@ It supports route management, stop planning, customer linking, settings data, an
 - Effective frontend role:
   - global `ADMIN` => `ADMIN`
   - else `app_permissions.role` => `DISPATCH`/`VIEWER`
+
+## Invite Acceptance Flow
+- `invite-account-user` requires `APP_INVITE_REDIRECT_URL` and sends invite links to `/auth/accept-invite`.
+- `platform-send-password-reset` requires `APP_PASSWORD_RESET_REDIRECT_URL` for reset-link delivery.
+- `handle_new_user()` creates `INVITED` membership and keeps invitation `PENDING`.
+- `claim_my_invitation()` is called after password setup and marks invitation `ACCEPTED` + membership `ACTIVE`.
 
 ## Canonical Save Flow
 - Frontend calls `BusFlowApi.saveRouteWithStops(route, expectedUpdatedAt)`

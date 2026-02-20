@@ -7,12 +7,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-type InviteRole = 'ADMIN' | 'DISPATCH' | 'VIEWER';
-
-type InviteRequest = {
-  accountId?: string;
-  email?: string;
-  role?: InviteRole;
+type ProvisionRequest = {
+  accountName?: string;
+  accountSlug?: string;
+  adminEmail?: string;
 };
 
 const json = (status: number, payload: Record<string, unknown>) =>
@@ -26,6 +24,13 @@ const json = (status: number, payload: Record<string, unknown>) =>
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -39,13 +44,13 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  const inviteRedirect = Deno.env.get('APP_INVITE_REDIRECT_URL')?.trim();
 
   if (!supabaseUrl || !serviceRoleKey || !anonKey) {
     return json(500, { ok: false, code: 'MISSING_SUPABASE_ENV' });
   }
 
-  const redirectTo = Deno.env.get('APP_INVITE_REDIRECT_URL')?.trim();
-  if (!redirectTo) {
+  if (!inviteRedirect) {
     return json(500, {
       ok: false,
       code: 'MISSING_INVITE_REDIRECT_URL',
@@ -54,7 +59,7 @@ serve(async (req) => {
   }
 
   try {
-    const parsed = new URL(redirectTo);
+    const parsed = new URL(inviteRedirect);
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
       return json(500, { ok: false, code: 'INVALID_INVITE_REDIRECT_URL' });
     }
@@ -85,109 +90,79 @@ serve(async (req) => {
     return json(401, { ok: false, code: 'UNAUTHORIZED' });
   }
 
-  let body: InviteRequest;
-  try {
-    body = await req.json();
-  } catch {
-    return json(400, { ok: false, code: 'INVALID_JSON' });
-  }
-
-  const accountId = body.accountId?.trim();
-  const email = body.email ? normalizeEmail(body.email) : '';
-  const role: InviteRole = body.role ?? 'VIEWER';
-
-  if (!accountId || !email) {
-    return json(400, { ok: false, code: 'INVALID_INPUT', message: 'accountId und email sind erforderlich.' });
-  }
-  if (!isValidEmail(email) || email.length > 254) {
-    return json(400, { ok: false, code: 'INVALID_EMAIL' });
-  }
-
-  if (!['ADMIN', 'DISPATCH', 'VIEWER'].includes(role)) {
-    return json(400, { ok: false, code: 'INVALID_ROLE' });
-  }
-
   const { data: callerProfile, error: callerProfileError } = await adminClient
     .from('profiles')
     .select('global_role')
     .eq('id', caller.id)
     .single();
 
-  if (callerProfileError) {
-    return json(403, { ok: false, code: 'PROFILE_NOT_FOUND' });
+  if (callerProfileError || callerProfile?.global_role !== 'ADMIN') {
+    return json(403, { ok: false, code: 'FORBIDDEN' });
   }
 
-  const isPlatformAdmin = callerProfile.global_role === 'ADMIN';
-  if (!isPlatformAdmin) {
-    const { data: membership, error: membershipError } = await adminClient
-      .from('account_memberships')
-      .select('id')
-      .eq('account_id', accountId)
-      .eq('user_id', caller.id)
-      .eq('status', 'ACTIVE')
-      .eq('role', 'ADMIN')
-      .maybeSingle();
+  let body: ProvisionRequest;
+  try {
+    body = await req.json();
+  } catch {
+    return json(400, { ok: false, code: 'INVALID_JSON' });
+  }
 
-    if (membershipError || !membership) {
-      return json(403, { ok: false, code: 'FORBIDDEN' });
-    }
+  const accountName = body.accountName?.trim() || '';
+  const accountSlug = slugify(body.accountSlug?.trim() || accountName);
+  const adminEmail = body.adminEmail ? normalizeEmail(body.adminEmail) : '';
+
+  if (!accountName || !accountSlug || !adminEmail) {
+    return json(400, { ok: false, code: 'INVALID_INPUT', message: 'accountName, accountSlug, adminEmail are required.' });
+  }
+  if (!isValidEmail(adminEmail) || adminEmail.length > 254) {
+    return json(400, { ok: false, code: 'INVALID_EMAIL' });
   }
 
   const { data: account, error: accountError } = await adminClient
     .from('platform_accounts')
-    .select('id, name')
-    .eq('id', accountId)
-    .maybeSingle();
+    .insert({
+      name: accountName,
+      slug: accountSlug,
+      status: 'ACTIVE',
+      created_by: caller.id,
+    })
+    .select('id, name, slug')
+    .single();
 
   if (accountError || !account) {
-    return json(404, { ok: false, code: 'ACCOUNT_NOT_FOUND' });
-  }
-
-  const { data: existingProfile } = await adminClient
-    .from('profiles')
-    .select('id')
-    .ilike('email', email)
-    .maybeSingle();
-
-  if (existingProfile?.id) {
-    const { data: existingMembership } = await adminClient
-      .from('account_memberships')
-      .select('id, account_id')
-      .eq('user_id', existingProfile.id)
-      .eq('status', 'ACTIVE')
-      .maybeSingle();
-
-    if (existingMembership?.id && existingMembership.account_id === accountId) {
-      return json(409, { ok: false, code: 'USER_ALREADY_ACTIVE_IN_ACCOUNT' });
+    if (accountError?.code === '23505') {
+      return json(409, { ok: false, code: 'ACCOUNT_SLUG_EXISTS' });
     }
-
-    if (existingMembership?.id && existingMembership.account_id !== accountId) {
-      return json(409, { ok: false, code: 'USER_ALREADY_ACTIVE_IN_ANOTHER_ACCOUNT' });
-    }
+    return json(500, { ok: false, code: 'ACCOUNT_CREATE_FAILED', message: accountError?.message });
   }
 
   const { data: pendingInvitation } = await adminClient
     .from('account_invitations')
     .select('id')
-    .eq('account_id', accountId)
+    .eq('account_id', account.id)
     .eq('status', 'PENDING')
-    .ilike('email', email)
+    .ilike('email', adminEmail)
     .maybeSingle();
 
   if (pendingInvitation?.id) {
-    return json(409, { ok: false, code: 'INVITE_ALREADY_PENDING' });
+    return json(409, {
+      ok: false,
+      code: 'INVITE_ALREADY_PENDING',
+      accountId: account.id,
+      accountName: account.name,
+    });
   }
 
   const { data: invitation, error: invitationError } = await adminClient
     .from('account_invitations')
     .insert({
-      account_id: accountId,
-      email,
-      role,
+      account_id: account.id,
+      email: adminEmail,
+      role: 'ADMIN',
       status: 'PENDING',
       invited_by: caller.id,
       meta: {
-        source: 'invite-account-user',
+        source: 'platform-provision-account',
       },
     })
     .select('id')
@@ -197,26 +172,45 @@ serve(async (req) => {
     return json(500, { ok: false, code: 'INVITE_CREATE_FAILED', message: invitationError?.message });
   }
 
-  const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
+  const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(adminEmail, {
     data: {
-      invited_account_id: accountId,
-      invited_role: role,
+      invited_account_id: account.id,
+      invited_role: 'ADMIN',
     },
-    redirectTo,
+    redirectTo: inviteRedirect,
   });
+
+  await adminClient
+    .from('admin_access_audit')
+    .insert({
+      admin_user_id: caller.id,
+      target_account_id: account.id,
+      action: 'ACCOUNT_PROVISIONED',
+      resource: 'platform_accounts',
+      resource_id: account.id,
+      meta: {
+        account_name: account.name,
+        admin_email: adminEmail,
+        invitation_id: invitation.id,
+        invite_email_error: inviteError?.message || null,
+      },
+    });
 
   if (inviteError) {
     return json(202, {
       ok: true,
-      code: 'INVITATION_CREATED_EMAIL_FAILED',
+      code: 'ACCOUNT_CREATED_EMAIL_FAILED',
       message: inviteError.message,
+      accountId: account.id,
+      accountName: account.name,
       invitationId: invitation.id,
     });
   }
 
   return json(200, {
     ok: true,
-    invitationId: invitation.id,
+    accountId: account.id,
     accountName: account.name,
+    invitationId: invitation.id,
   });
 });

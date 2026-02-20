@@ -38,6 +38,9 @@
 ## 6) Pilot Operations
 - [ ] Invite-only pilot onboarding.
 - [ ] Manual role assignment in Admin.
+- [ ] `APP_INVITE_REDIRECT_URL` set to `https://<domain>/auth/accept-invite` in function secrets.
+- [ ] `APP_PASSWORD_RESET_REDIRECT_URL` set to `https://<domain>/auth/accept-invite` in function secrets.
+- [ ] Invite acceptance tested end-to-end (open link -> set password -> account activated).
 - [ ] Monitor save/import/delete errors daily.
 - [ ] Define forward-fix rollback procedure for failed migrations.
 
