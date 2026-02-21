@@ -75,3 +75,29 @@ export interface DeleteAccountResult {
   code?: string;
   message?: string;
 }
+
+export interface SupportPasswordResetResult {
+  ok: boolean;
+  code?: string;
+  message?: string;
+  auditError?: string | null;
+}
+
+export interface OwnerOverviewCompany extends PlatformAccount {
+  members: MembershipItem[];
+}
+
+export interface OwnerCompanyOverviewResult {
+  ok: boolean;
+  companies?: OwnerOverviewCompany[];
+  code?: string;
+  message?: string;
+}
+
+export interface OwnerUpdateAccountResult {
+  ok: boolean;
+  account?: PlatformAccount;
+  auditError?: string | null;
+  code?: string;
+  message?: string;
+}

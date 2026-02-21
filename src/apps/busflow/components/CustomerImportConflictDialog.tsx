@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { CustomerImportPreview } from '../types';
+import AppSelect, { AppSelectOption } from '../../../shared/components/form/AppSelect';
 
 interface Props {
   isOpen: boolean;
@@ -7,6 +8,11 @@ interface Props {
   onClose: () => void;
   onConfirm: (resolutions: Record<number, 'import' | 'skip'>) => Promise<void>;
 }
+
+const resolutionOptions: Array<AppSelectOption<'import' | 'skip'>> = [
+  { value: 'skip', label: 'Überspringen' },
+  { value: 'import', label: 'Importieren' },
+];
 
 const CustomerImportConflictDialog: React.FC<Props> = ({ isOpen, preview, onClose, onConfirm }) => {
   const [resolutions, setResolutions] = useState<Record<number, 'import' | 'skip'>>({});
@@ -89,15 +95,13 @@ const CustomerImportConflictDialog: React.FC<Props> = ({ isOpen, preview, onClos
                     <div className="text-xs text-slate-500">{conflict.incomingContact.email || '-'}</div>
                   </td>
                   <td className="px-3 py-2">
-                    <select
+                    <AppSelect<'import' | 'skip'>
                       value={resolutions[conflict.rowNumber] || 'skip'}
-                      onChange={e => setResolutions(prev => ({ ...prev, [conflict.rowNumber]: e.target.value as 'import' | 'skip' }))}
+                      onChange={nextValue => setResolutions(prev => ({ ...prev, [conflict.rowNumber]: nextValue }))}
                       disabled={isSubmitting}
-                      className="border border-slate-300 rounded-md px-2 py-1"
-                    >
-                      <option value="skip">Überspringen</option>
-                      <option value="import">Importieren</option>
-                    </select>
+                      options={resolutionOptions}
+                      ariaLabel="Import-Aktion waehlen"
+                    />
                   </td>
                 </tr>
               ))}

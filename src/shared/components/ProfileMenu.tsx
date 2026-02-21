@@ -6,6 +6,7 @@ interface User {
   name: string;
   role: Role;
   avatarUrl?: string;
+  isPlatformOwner?: boolean;
 }
 
 interface Props {
@@ -13,10 +14,11 @@ interface Props {
   variant?: 'home' | 'header';
   onProfile: () => void;
   onAdmin?: () => void;
+  onOwnerArea?: () => void;
   onLogout: () => void;
 }
 
-const ProfileMenu: React.FC<Props> = ({ user, variant = 'header', onProfile, onAdmin, onLogout }) => {
+const ProfileMenu: React.FC<Props> = ({ user, variant = 'header', onProfile, onAdmin, onOwnerArea, onLogout }) => {
   const [open, setOpen] = useState(false);
   const isAdmin = user.role === 'ADMIN';
   const initials = user.name
@@ -80,6 +82,18 @@ const ProfileMenu: React.FC<Props> = ({ user, variant = 'header', onProfile, onA
               className={itemClass}
             >
               Adminbereich
+            </button>
+          )}
+          {user.isPlatformOwner && onOwnerArea && (
+            <button
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => {
+                onOwnerArea();
+                setOpen(false);
+              }}
+              className={itemClass}
+            >
+              Owner Bereich
             </button>
           )}
           <button

@@ -1,21 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Leaf } from 'lucide-react';
+import { Leaf, Plus } from 'lucide-react';
 import AppHeader from '../shared/components/AppHeader';
 import ConfirmDialog from '../shared/components/ConfirmDialog';
 import { useToast } from '../shared/components/ToastProvider';
 import { TeamAdminApi } from '../shared/api/admin/teamAdmin.api';
 import { InvitationItem, InvitationRole, MembershipItem, MembershipRole } from '../shared/api/admin/types';
 import { isFunctionAuthError } from '../shared/lib/supabaseFunctions';
+import AppSelect, { AppSelectOption } from '../shared/components/form/AppSelect';
 
 interface Props {
   currentUserId?: string;
   activeAccountId?: string | null;
   header: {
     title: string;
-    user: { name: string; role: string; avatarUrl?: string } | null;
+    user: { name: string; role: 'ADMIN' | 'DISPATCH' | 'VIEWER'; avatarUrl?: string; isPlatformOwner?: boolean } | null;
     onHome: () => void;
     onProfile: () => void;
     onAdmin: () => void;
+    onOwner?: () => void;
     onLogout: () => void;
   };
 }
@@ -34,6 +36,18 @@ const toActionErrorMessage = (error: unknown, fallback: string) => {
   return error instanceof Error ? error.message : fallback;
 };
 
+const invitationRoleOptions: Array<AppSelectOption<InvitationRole>> = [
+  { value: 'VIEWER', label: 'Nur Lesen (Standard)' },
+  { value: 'DISPATCH', label: 'Disposition' },
+  { value: 'ADMIN', label: 'Admin' },
+];
+
+const membershipRoleOptions: Array<AppSelectOption<MembershipRole>> = [
+  { value: 'VIEWER', label: 'Nur Lesen' },
+  { value: 'DISPATCH', label: 'Disposition' },
+  { value: 'ADMIN', label: 'Admin' },
+];
+
 const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) => {
   const { pushToast } = useToast();
 
@@ -45,6 +59,7 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<InvitationRole>('VIEWER');
   const [isInviting, setIsInviting] = useState(false);
+  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
 
   const [membershipToDelete, setMembershipToDelete] = useState<MembershipItem | null>(null);
   const [invitationToRevoke, setInvitationToRevoke] = useState<InvitationItem | null>(null);
@@ -91,8 +106,7 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
     loadData();
   }, [loadData]);
 
-  const handleInviteEmployee = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleInviteEmployee = async () => {
     if (!activeAccountId || !accountIsWritable) return;
 
     setIsInviting(true);
@@ -100,6 +114,7 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
       await TeamAdminApi.inviteTeamMember({ accountId: activeAccountId, email: inviteEmail.trim(), role: inviteRole });
       setInviteEmail('');
       setInviteRole('VIEWER');
+      setIsInviteDialogOpen(false);
       pushToast({ type: 'success', title: 'Einladung gesendet', message: 'Mitarbeiter wurde eingeladen.' });
       await loadData();
     } catch (error) {
@@ -136,9 +151,8 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
       pushToast({ type: 'error', title: 'Aktion fehlgeschlagen', message: toActionErrorMessage(error, 'Aktion konnte nicht ausgeführt werden.') });
     } finally {
       setIsDeletingUser(false);
+      setMembershipToDelete(null);
     }
-
-    setMembershipToDelete(null);
   };
 
   const handleRevokeInvitation = async () => {
@@ -167,9 +181,7 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
         cancelText="Abbrechen"
         type="danger"
         onConfirm={handleDeleteUserHard}
-        onCancel={() => {
-          setMembershipToDelete(null);
-        }}
+        onCancel={() => setMembershipToDelete(null)}
       />
 
       <ConfirmDialog
@@ -189,8 +201,66 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
         onHome={header.onHome}
         onProfile={header.onProfile}
         onAdmin={header.onAdmin}
+        onOwner={header.onOwner}
         onLogout={header.onLogout}
       />
+
+      {isInviteDialogOpen && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="relative z-[2001] bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden">
+            <form
+              className="p-6 space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleInviteEmployee();
+              }}
+            >
+              <h3 className="text-lg font-bold text-slate-900">User einladen</h3>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">E-Mail</label>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  className="w-full border-slate-300 rounded-lg p-2 text-sm"
+                  placeholder="mitarbeiter@firma.de"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Startrolle</label>
+                <AppSelect<InvitationRole>
+                  value={inviteRole}
+                  onChange={setInviteRole}
+                  options={invitationRoleOptions}
+                  disabled={isInviting}
+                  ariaLabel="Startrolle waehlen"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsInviteDialogOpen(false)}
+                  className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100"
+                  disabled={isInviting}
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="submit"
+                  disabled={isInviting || !inviteEmail.trim()}
+                  className="px-4 py-2 rounded-lg bg-[#2663EB] text-white font-semibold disabled:opacity-60"
+                >
+                  {isInviting ? 'Sende...' : 'Einladen'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <main className="flex-1 p-4 md:p-8 no-print max-w-7xl mx-auto w-full space-y-6">
         {loading ? (
@@ -199,7 +269,23 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
           </div>
         ) : (
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
-            <h2 className="text-xl font-bold text-slate-800">Teamverwaltung</h2>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">Adminbereich</h2>
+                <p className="text-sm text-slate-600">
+                  Verwalten Sie Benutzer, Rollen und Einladungen für Ihren Firmen-Account.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsInviteDialogOpen(true)}
+                disabled={!activeAccountId || !accountIsWritable}
+                className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:hover:bg-transparent"
+                title="User einladen"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            </div>
 
             {!activeAccountId ? (
               <div className="text-sm text-slate-600 border border-slate-200 rounded-lg p-4">
@@ -212,41 +298,6 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
                     Dieser Account ist aktuell auf <strong>{accountStatus}</strong> gesetzt. Teamänderungen sind gesperrt.
                   </div>
                 )}
-
-                <form onSubmit={handleInviteEmployee} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">Mitarbeiter einladen (E-Mail)</label>
-                    <input
-                      type="email"
-                      value={inviteEmail}
-                      onChange={e => setInviteEmail(e.target.value)}
-                      className="w-full border-slate-300 rounded-lg p-2 text-sm"
-                      placeholder="mitarbeiter@firma.de"
-                      required
-                      disabled={!accountIsWritable}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">Startrolle</label>
-                    <select
-                      value={inviteRole}
-                      onChange={e => setInviteRole(e.target.value as InvitationRole)}
-                      className="w-full border-slate-300 rounded-lg p-2 text-sm"
-                      disabled={!accountIsWritable}
-                    >
-                      <option value="VIEWER">Nur Lesen (Standard)</option>
-                      <option value="DISPATCH">Disposition</option>
-                      <option value="ADMIN">Admin</option>
-                    </select>
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isInviting || !accountIsWritable}
-                    className="px-4 py-2 rounded-lg bg-[#2663EB] text-white font-semibold disabled:opacity-60"
-                  >
-                    {isInviting ? 'Sende...' : 'Einladen'}
-                  </button>
-                </form>
 
                 <div className="space-y-3">
                   <h3 className="text-sm font-bold text-slate-700">Mitglieder ({activeMembers.length})</h3>
@@ -263,16 +314,13 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
                         </div>
                         <div>
                           <label className="block text-xs font-semibold text-slate-500 mb-1">Rolle</label>
-                          <select
+                          <AppSelect<MembershipRole>
                             value={item.role}
-                            onChange={e => handleUpdateMembershipRole(item.id, e.target.value as MembershipRole)}
-                            className="w-full border-slate-300 rounded-lg p-2 text-sm"
+                            onChange={nextRole => handleUpdateMembershipRole(item.id, nextRole)}
+                            options={membershipRoleOptions}
                             disabled={item.status !== 'ACTIVE' || isCurrentUser || !accountIsWritable}
-                          >
-                            <option value="VIEWER">Nur Lesen</option>
-                            <option value="DISPATCH">Disposition</option>
-                            <option value="ADMIN">Admin</option>
-                          </select>
+                            ariaLabel="Mitgliederrolle waehlen"
+                          />
                         </div>
                         <div>
                           <label className="block text-xs font-semibold text-slate-500 mb-1">Status</label>

@@ -5,6 +5,7 @@ interface User {
   name: string;
   role: 'ADMIN' | 'DISPATCH' | 'VIEWER';
   avatarUrl?: string;
+  isPlatformOwner?: boolean;
 }
 
 interface Props {
@@ -13,12 +14,13 @@ interface Props {
   onHome: () => void;
   onProfile: () => void;
   onAdmin: () => void;
+  onOwner?: () => void;
   onLogout: () => void;
   actions?: React.ReactNode;
   searchBar?: React.ReactNode;
 }
 
-const AppHeader: React.FC<Props> = ({ title, user, onHome, onProfile, onAdmin, onLogout, actions, searchBar }) => {
+const AppHeader: React.FC<Props> = ({ title, user, onHome, onProfile, onAdmin, onOwner, onLogout, actions, searchBar }) => {
   return (
     <nav className="bg-slate-900 text-white p-4 sticky top-0 z-50 no-print flex items-center justify-between shadow-lg">
       <div className="flex items-center space-x-3 w-1/4">
@@ -42,6 +44,7 @@ const AppHeader: React.FC<Props> = ({ title, user, onHome, onProfile, onAdmin, o
             variant="header"
             onProfile={onProfile}
             onAdmin={onAdmin}
+            onOwnerArea={onOwner}
             onLogout={onLogout}
           />
         )}

@@ -18,5 +18,14 @@ verify_jwt = true
 [functions.admin-delete-user-v3]
 verify_jwt = false
 
+[functions.admin-update-user-v1]
+verify_jwt = false
+
+[functions.owner-update-account-v1]
+verify_jwt = false
+
+[functions.owner-company-overview-v1]
+verify_jwt = false
+
 [functions.platform-delete-account]
 verify_jwt = false

@@ -19,6 +19,8 @@ BusFlow is a React + Vite app with Supabase auth, database, RLS, and realtime sy
 2. Create `.env.local` with:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
+   - `VITE_PLATFORM_OWNER_EMAIL` (email that should see owner-only settings)
+   - `VITE_PASSWORD_RESET_REDIRECT_URL` (optional, fallback is `<origin>/auth/accept-invite`)
    - See `.env.example` for environment separation guidance.
 3. Start dev server:
    `npm run dev`
@@ -37,6 +39,7 @@ BusFlow is a React + Vite app with Supabase auth, database, RLS, and realtime sy
 Set these in Supabase Function secrets (not as `VITE_` client env):
 - `APP_INVITE_REDIRECT_URL=https://<your-domain>/auth/accept-invite`
 - `APP_PASSWORD_RESET_REDIRECT_URL=https://<your-domain>/auth/accept-invite`
+- `PLATFORM_OWNER_EMAIL=till-schaefer@outlook.com`
 
 ### Full Setup Guide
 - See `SUPABASE_EDGE_FUNCTION_SETUP.md` for the complete step-by-step setup:
@@ -46,6 +49,11 @@ Set these in Supabase Function secrets (not as `VITE_` client env):
   - deploying and smoke testing
 - Runtime/governance baseline: `SUPABASE_MANIFEST.md`
 - JWT incident debugging: `SUPABASE_JWT_FORENSIC_CHECKLIST.md`
+
+## Admin Areas
+- `Adminbereich` (`/adminbereich`) is visible for admins and is the place for team invite/role/delete actions.
+- `Owner Bereich` (`/owner-bereich`) is visible only for the configured owner email (`VITE_PLATFORM_OWNER_EMAIL`).
+- Legacy paths (`/owner-settings`, `/company-settings`, `/platform-admin`, `/team-admin`, `/admin`) are redirected to the correct new area.
 
 ## Supabase SQL Governance
 - Source of truth is **migrations only**: `supabase_migration_*.sql`

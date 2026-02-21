@@ -1,20 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Leaf } from 'lucide-react';
+import { ChevronDown, ChevronRight, Leaf } from 'lucide-react';
 import AppHeader from '../shared/components/AppHeader';
 import ConfirmDialog from '../shared/components/ConfirmDialog';
 import { useToast } from '../shared/components/ToastProvider';
 import { PlatformAdminApi } from '../shared/api/admin/platformAdmin.api';
-import { SupportAdminApi } from '../shared/api/admin/support.api';
 import { MembershipItem, PlatformAccount, PlatformAccountStatus } from '../shared/api/admin/types';
 import { isFunctionAuthError } from '../shared/lib/supabaseFunctions';
 
 interface Props {
   header: {
     title: string;
-    user: { name: string; role: string; avatarUrl?: string } | null;
+    user: { name: string; role: 'ADMIN' | 'DISPATCH' | 'VIEWER'; avatarUrl?: string; isPlatformOwner?: boolean } | null;
     onHome: () => void;
     onProfile: () => void;
     onAdmin: () => void;
+    onOwner?: () => void;
     onLogout: () => void;
   };
 }
@@ -67,17 +67,21 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
 
   const [loading, setLoading] = useState(true);
   const [accounts, setAccounts] = useState<PlatformAccount[]>([]);
+  const [accountMembersByAccountId, setAccountMembersByAccountId] = useState<Record<string, MembershipItem[]>>({});
+  const [expandedAccountIds, setExpandedAccountIds] = useState<Record<string, boolean>>({});
 
   const [newAccountName, setNewAccountName] = useState('');
   const [newAccountSlug, setNewAccountSlug] = useState('');
   const [newAccountAdminEmail, setNewAccountAdminEmail] = useState('');
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
 
-  const [supportEmail, setSupportEmail] = useState('');
-  const [supportAccountId, setSupportAccountId] = useState('');
-  const [isSendingReset, setIsSendingReset] = useState(false);
-
   const [accountToChangeStatus, setAccountToChangeStatus] = useState<{ account: PlatformAccount; status: PlatformAccountStatus } | null>(null);
+
+  const [accountToEdit, setAccountToEdit] = useState<PlatformAccount | null>(null);
+  const [editAccountName, setEditAccountName] = useState('');
+  const [editAccountSlug, setEditAccountSlug] = useState('');
+  const [editAccountReason, setEditAccountReason] = useState('');
+  const [isSavingAccountEdit, setIsSavingAccountEdit] = useState(false);
 
   const [accountToDelete, setAccountToDelete] = useState<PlatformAccount | null>(null);
   const [accountDeleteSlugInput, setAccountDeleteSlugInput] = useState('');
@@ -97,78 +101,37 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
   const [isRunningDeleteDryRun, setIsRunningDeleteDryRun] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
-  const [userDeleteAccountId, setUserDeleteAccountId] = useState('');
-  const [userDeleteMembers, setUserDeleteMembers] = useState<MembershipItem[]>([]);
-  const [selectedUserToDeleteId, setSelectedUserToDeleteId] = useState('');
-  const [userDeleteReason, setUserDeleteReason] = useState('');
-  const [isLoadingUserDeleteMembers, setIsLoadingUserDeleteMembers] = useState(false);
-  const [isDeletingUser, setIsDeletingUser] = useState(false);
-  const [userDeleteTarget, setUserDeleteTarget] = useState<MembershipItem | null>(null);
-
   const sortedAccounts = useMemo(() => accounts, [accounts]);
-  const selectedUserDeleteMembership = useMemo(
-    () => userDeleteMembers.find(item => item.user_id === selectedUserToDeleteId) || null,
-    [selectedUserToDeleteId, userDeleteMembers]
-  );
 
-  const loadAccounts = useCallback(async () => {
+  const loadOwnerOverview = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await PlatformAdminApi.getAccounts();
-      setAccounts(data);
-
-      if (!supportAccountId && data.length > 0) {
-        setSupportAccountId(data[0].id);
-      }
-      if (!userDeleteAccountId && data.length > 0) {
-        setUserDeleteAccountId(data[0].id);
-      }
+      const data = await PlatformAdminApi.getOwnerOverview();
+      setAccounts(data.accounts);
+      setAccountMembersByAccountId(data.membersByAccountId);
+      setExpandedAccountIds(prev => {
+        const next = { ...prev };
+        for (const account of data.accounts) {
+          if (typeof next[account.id] === 'undefined') {
+            next[account.id] = false;
+          }
+        }
+        return next;
+      });
     } catch (error) {
       pushToast({
         type: 'error',
         title: 'Laden fehlgeschlagen',
-        message: toActionErrorMessage(error, 'Accounts konnten nicht geladen werden.')
+        message: toActionErrorMessage(error, 'Owner-Übersicht konnte nicht geladen werden.')
       });
     } finally {
       setLoading(false);
     }
-  }, [pushToast, supportAccountId, userDeleteAccountId]);
-
-  const loadUserDeleteMembers = useCallback(async () => {
-    if (!userDeleteAccountId) {
-      setUserDeleteMembers([]);
-      setSelectedUserToDeleteId('');
-      return;
-    }
-
-    setIsLoadingUserDeleteMembers(true);
-    try {
-      const members = await PlatformAdminApi.getAccountMembers(userDeleteAccountId);
-      const filtered = members.filter(item => item.status === 'ACTIVE' || item.status === 'INVITED');
-      setUserDeleteMembers(filtered);
-      if (!filtered.find(item => item.user_id === selectedUserToDeleteId)) {
-        setSelectedUserToDeleteId(filtered[0]?.user_id || '');
-      }
-    } catch (error) {
-      pushToast({
-        type: 'error',
-        title: 'Teamdaten konnten nicht geladen werden',
-        message: toActionErrorMessage(error, 'Unbekannter Fehler.')
-      });
-      setUserDeleteMembers([]);
-      setSelectedUserToDeleteId('');
-    } finally {
-      setIsLoadingUserDeleteMembers(false);
-    }
-  }, [pushToast, selectedUserToDeleteId, userDeleteAccountId]);
+  }, [pushToast]);
 
   useEffect(() => {
-    loadAccounts();
-  }, [loadAccounts]);
-
-  useEffect(() => {
-    loadUserDeleteMembers();
-  }, [loadUserDeleteMembers]);
+    loadOwnerOverview();
+  }, [loadOwnerOverview]);
 
   const handleCreateAccountAndInviteAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,60 +154,77 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
 
       pushToast({
         type: 'success',
-        title: 'Account erstellt',
+        title: 'Firma erstellt',
         message: `Der Account "${result.accountName || accountName}" wurde erstellt und der erste Admin eingeladen.`
       });
 
-      await loadAccounts();
+      await loadOwnerOverview();
     } catch (error) {
       pushToast({
         type: 'error',
         title: 'Erstellung fehlgeschlagen',
-        message: toActionErrorMessage(error, 'Account konnte nicht erstellt werden.')
+        message: toActionErrorMessage(error, 'Firma konnte nicht erstellt werden.')
       });
     } finally {
       setIsCreatingAccount(false);
     }
   };
 
-  const handleSendPasswordReset = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!supportAccountId || !supportEmail.trim()) return;
+  const openEditAccountDialog = (account: PlatformAccount) => {
+    setAccountToEdit(account);
+    setEditAccountName(account.name || '');
+    setEditAccountSlug(account.slug || '');
+    setEditAccountReason('');
+  };
 
-    setIsSendingReset(true);
-    try {
-      await SupportAdminApi.sendPasswordReset({
-        accountId: supportAccountId,
-        email: supportEmail.trim().toLowerCase()
+  const handleSaveAccountEdit = async () => {
+    if (!accountToEdit) return;
+    const nextName = editAccountName.trim();
+    const nextSlug = slugify(editAccountSlug.trim());
+    if (!nextName || !nextSlug) {
+      pushToast({
+        type: 'error',
+        title: 'Ungültige Eingabe',
+        message: 'Name und Slug sind erforderlich.'
       });
+      return;
+    }
 
-      setSupportEmail('');
+    setIsSavingAccountEdit(true);
+    try {
+      await PlatformAdminApi.updateAccount(accountToEdit.id, {
+        name: nextName,
+        slug: nextSlug,
+        reason: editAccountReason.trim() || undefined,
+      });
       pushToast({
         type: 'success',
-        title: 'Support-Aktion ausgeführt',
-        message: 'Wenn ein passender Nutzer existiert, wurde ein Reset-Link versendet.'
+        title: 'Firma aktualisiert',
+        message: `Firma "${nextName}" wurde aktualisiert.`
       });
+      setAccountToEdit(null);
+      await loadOwnerOverview();
     } catch (error) {
       pushToast({
         type: 'error',
-        title: 'Reset fehlgeschlagen',
-        message: toActionErrorMessage(error, 'Reset-Link konnte nicht gesendet werden.')
+        title: 'Aktualisierung fehlgeschlagen',
+        message: toActionErrorMessage(error, 'Firma konnte nicht aktualisiert werden.')
       });
     } finally {
-      setIsSendingReset(false);
+      setIsSavingAccountEdit(false);
     }
   };
 
   const handleAccountStatusChange = async () => {
     if (!accountToChangeStatus) return;
     try {
-      await PlatformAdminApi.updateAccountStatus(accountToChangeStatus.account.id, accountToChangeStatus.status);
+      await PlatformAdminApi.updateAccount(accountToChangeStatus.account.id, { status: accountToChangeStatus.status });
       pushToast({
         type: 'success',
-        title: 'Account aktualisiert',
+        title: 'Status aktualisiert',
         message: `Status für ${accountToChangeStatus.account.name} ist jetzt ${accountToChangeStatus.status}.`
       });
-      await loadAccounts();
+      await loadOwnerOverview();
     } catch (error) {
       pushToast({
         type: 'error',
@@ -296,8 +276,7 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
       setAccountDeleteSlugInput('');
       setAccountDeleteReason('');
       setAccountDeleteDryRun(null);
-      await loadAccounts();
-      await loadUserDeleteMembers();
+      await loadOwnerOverview();
     } catch (error) {
       pushToast({
         type: 'error',
@@ -309,37 +288,8 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
     }
   };
 
-  const openDeleteUserDialog = () => {
-    if (!selectedUserDeleteMembership) {
-      pushToast({ type: 'error', title: 'Auswahl fehlt', message: 'Bitte zuerst einen User auswählen.' });
-      return;
-    }
-    setUserDeleteTarget(selectedUserDeleteMembership);
-  };
-
-  const handleDeleteUserHard = async () => {
-    if (!userDeleteTarget || !userDeleteAccountId) return;
-
-    setIsDeletingUser(true);
-    try {
-      await PlatformAdminApi.deleteUserHard(userDeleteTarget.user_id, userDeleteAccountId, userDeleteReason.trim() || undefined);
-      pushToast({
-        type: 'success',
-        title: 'User gelöscht',
-        message: `${memberDisplayName(userDeleteTarget)} wurde vollständig gelöscht.`
-      });
-      setUserDeleteTarget(null);
-      setUserDeleteReason('');
-      await loadUserDeleteMembers();
-    } catch (error) {
-      pushToast({
-        type: 'error',
-        title: 'Löschen fehlgeschlagen',
-        message: toActionErrorMessage(error, 'User konnte nicht gelöscht werden.')
-      });
-    } finally {
-      setIsDeletingUser(false);
-    }
+  const toggleAccountExpanded = (accountId: string) => {
+    setExpandedAccountIds(prev => ({ ...prev, [accountId]: !prev[accountId] }));
   };
 
   return (
@@ -357,18 +307,66 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
         onCancel={() => setAccountToChangeStatus(null)}
       />
 
-      <ConfirmDialog
-        isOpen={!!userDeleteTarget}
-        title="User vollständig löschen"
-        message={userDeleteTarget
-          ? `Soll "${memberDisplayName(userDeleteTarget)}" wirklich vollständig gelöscht werden? Diese Aktion ist irreversibel.`
-          : ''}
-        confirmText={isDeletingUser ? 'Lösche...' : 'User löschen'}
-        cancelText="Abbrechen"
-        type="danger"
-        onConfirm={handleDeleteUserHard}
-        onCancel={() => setUserDeleteTarget(null)}
-      />
+      {accountToEdit && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="relative z-[2001] bg-white rounded-xl shadow-2xl max-w-xl w-full overflow-hidden">
+            <div className="p-6 space-y-4">
+              <h3 className="text-lg font-bold text-slate-900">Firma bearbeiten</h3>
+              <p className="text-sm text-slate-600">Account-ID: {accountToEdit.id}</p>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Firmenname</label>
+                <input
+                  type="text"
+                  value={editAccountName}
+                  onChange={e => setEditAccountName(e.target.value)}
+                  className="w-full border-slate-300 rounded-lg p-2 text-sm"
+                  placeholder="Firmenname"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Slug</label>
+                <input
+                  type="text"
+                  value={editAccountSlug}
+                  onChange={e => setEditAccountSlug(slugify(e.target.value))}
+                  className="w-full border-slate-300 rounded-lg p-2 text-sm"
+                  placeholder="firmen-slug"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Grund (optional)</label>
+                <input
+                  type="text"
+                  value={editAccountReason}
+                  onChange={e => setEditAccountReason(e.target.value)}
+                  className="w-full border-slate-300 rounded-lg p-2 text-sm"
+                  placeholder="z. B. Stammdaten-Korrektur"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setAccountToEdit(null)}
+                  className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100"
+                  disabled={isSavingAccountEdit}
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={handleSaveAccountEdit}
+                  disabled={isSavingAccountEdit || !editAccountName.trim() || !editAccountSlug.trim()}
+                  className="px-4 py-2 rounded-lg text-white font-bold bg-slate-900 hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {isSavingAccountEdit ? 'Speichere...' : 'Speichern'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {accountToDelete && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -452,6 +450,7 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
         onHome={header.onHome}
         onProfile={header.onProfile}
         onAdmin={header.onAdmin}
+        onOwner={header.onOwner}
         onLogout={header.onLogout}
       />
 
@@ -514,148 +513,92 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
               </form>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
-              <h2 className="text-xl font-bold text-slate-800">Support: Passwort-Reset-Link senden</h2>
-              <form onSubmit={handleSendPasswordReset} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">E-Mail</label>
-                  <input
-                    type="email"
-                    value={supportEmail}
-                    onChange={e => setSupportEmail(e.target.value)}
-                    className="w-full border-slate-300 rounded-lg p-2 text-sm"
-                    placeholder="user@firma.de"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Firma/Account</label>
-                  <select
-                    value={supportAccountId}
-                    onChange={e => setSupportAccountId(e.target.value)}
-                    className="w-full border-slate-300 rounded-lg p-2 text-sm"
-                    required
-                  >
-                    <option value="" disabled>Account wählen</option>
-                    {sortedAccounts.map(account => (
-                      <option key={account.id} value={account.id}>{account.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  type="submit"
-                  disabled={isSendingReset || !supportAccountId}
-                  className="px-4 py-2 rounded-lg bg-[#2663EB] text-white font-semibold disabled:opacity-60"
-                >
-                  {isSendingReset ? 'Sende...' : 'Reset-Link senden'}
-                </button>
-              </form>
-              <p className="text-xs text-slate-500">
-                Aus Sicherheitsgründen wird immer eine neutrale Erfolgsantwort angezeigt, um User-Enumeration zu verhindern.
-              </p>
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
-              <h2 className="text-xl font-bold text-slate-800">Platform: User vollständig löschen</h2>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Firma/Account</label>
-                  <select
-                    value={userDeleteAccountId}
-                    onChange={e => setUserDeleteAccountId(e.target.value)}
-                    className="w-full border-slate-300 rounded-lg p-2 text-sm"
-                  >
-                    {sortedAccounts.map(account => (
-                      <option key={account.id} value={account.id}>{account.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">User</label>
-                  <select
-                    value={selectedUserToDeleteId}
-                    onChange={e => setSelectedUserToDeleteId(e.target.value)}
-                    className="w-full border-slate-300 rounded-lg p-2 text-sm"
-                    disabled={isLoadingUserDeleteMembers || userDeleteMembers.length === 0}
-                  >
-                    {userDeleteMembers.length === 0 ? (
-                      <option value="">Keine User im Account</option>
-                    ) : (
-                      userDeleteMembers.map(item => (
-                        <option key={item.id} value={item.user_id}>
-                          {memberDisplayName(item)} ({item.role}, {item.status})
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Grund (optional)</label>
-                  <input
-                    type="text"
-                    value={userDeleteReason}
-                    onChange={e => setUserDeleteReason(e.target.value)}
-                    className="w-full border-slate-300 rounded-lg p-2 text-sm"
-                    placeholder="z. B. Nutzerkonto bereinigen"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={openDeleteUserDialog}
-                  disabled={!selectedUserToDeleteId || isLoadingUserDeleteMembers}
-                  className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold disabled:opacity-60"
-                >
-                  User löschen
-                </button>
-              </div>
-            </div>
-
             <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-              <h2 className="text-xl font-bold text-slate-800">Firmenverwaltung</h2>
-              <div className="space-y-2">
+              <h2 className="text-xl font-bold text-slate-800">Owner Bereich: Firmen und User</h2>
+              <div className="space-y-3">
                 {sortedAccounts.map(account => {
                   const status = account.status || 'ACTIVE';
+                  const members = accountMembersByAccountId[account.id] || [];
+                  const isExpanded = !!expandedAccountIds[account.id];
+
                   return (
-                    <div key={account.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 border border-slate-200 rounded-lg p-3 items-center">
-                      <div className="md:col-span-5">
-                        <p className="font-semibold text-slate-800">{account.name}</p>
-                        <p className="text-xs text-slate-500">Slug: {account.slug}</p>
-                        <p className="text-xs text-slate-500">Erstellt: {formatDateTime(account.created_at)}</p>
+                    <div key={account.id} className="border border-slate-200 rounded-lg p-3 space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                        <button
+                          onClick={() => toggleAccountExpanded(account.id)}
+                          className="md:col-span-4 text-left"
+                        >
+                          <p className="font-semibold text-slate-800 flex items-center gap-2">
+                            {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                            {account.name}
+                          </p>
+                          <p className="text-xs text-slate-500">Slug: {account.slug}</p>
+                          <p className="text-xs text-slate-500">Erstellt: {formatDateTime(account.created_at)}</p>
+                        </button>
+
+                        <div className="md:col-span-2">
+                          <span className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${statusBadgeClass(status)}`}>
+                            {status}
+                          </span>
+                        </div>
+
+                        <div className="md:col-span-1 text-xs text-slate-500">
+                          {members.length} User
+                        </div>
+
+                        <div className="md:col-span-5 flex flex-wrap gap-2 justify-start md:justify-end">
+                          <button
+                            onClick={() => openEditAccountDialog(account)}
+                            className="px-3 py-1.5 text-xs rounded border border-slate-300 text-slate-700 hover:bg-slate-100"
+                          >
+                            Bearbeiten
+                          </button>
+                          <button
+                            onClick={() => setAccountToChangeStatus({ account, status: 'ACTIVE' })}
+                            className="px-3 py-1.5 text-xs rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                            disabled={status === 'ACTIVE'}
+                          >
+                            Aktivieren
+                          </button>
+                          <button
+                            onClick={() => setAccountToChangeStatus({ account, status: 'SUSPENDED' })}
+                            className="px-3 py-1.5 text-xs rounded border border-amber-300 text-amber-700 hover:bg-amber-50"
+                            disabled={status === 'SUSPENDED'}
+                          >
+                            Pausieren
+                          </button>
+                          <button
+                            onClick={() => setAccountToChangeStatus({ account, status: 'ARCHIVED' })}
+                            className="px-3 py-1.5 text-xs rounded border border-slate-300 text-slate-700 hover:bg-slate-100"
+                            disabled={status === 'ARCHIVED'}
+                          >
+                            Archivieren
+                          </button>
+                          <button
+                            onClick={() => openDeleteAccountDialog(account)}
+                            className="px-3 py-1.5 text-xs rounded border border-red-300 text-red-700 hover:bg-red-50"
+                          >
+                            Firma löschen
+                          </button>
+                        </div>
                       </div>
-                      <div className="md:col-span-2">
-                        <span className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${statusBadgeClass(status)}`}>
-                          {status}
-                        </span>
-                      </div>
-                      <div className="md:col-span-5 flex flex-wrap gap-2 justify-start md:justify-end">
-                        <button
-                          onClick={() => setAccountToChangeStatus({ account, status: 'ACTIVE' })}
-                          className="px-3 py-1.5 text-xs rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                          disabled={status === 'ACTIVE'}
-                        >
-                          Aktivieren
-                        </button>
-                        <button
-                          onClick={() => setAccountToChangeStatus({ account, status: 'SUSPENDED' })}
-                          className="px-3 py-1.5 text-xs rounded border border-amber-300 text-amber-700 hover:bg-amber-50"
-                          disabled={status === 'SUSPENDED'}
-                        >
-                          Sperren
-                        </button>
-                        <button
-                          onClick={() => setAccountToChangeStatus({ account, status: 'ARCHIVED' })}
-                          className="px-3 py-1.5 text-xs rounded border border-slate-300 text-slate-700 hover:bg-slate-100"
-                          disabled={status === 'ARCHIVED'}
-                        >
-                          Archivieren
-                        </button>
-                        <button
-                          onClick={() => openDeleteAccountDialog(account)}
-                          className="px-3 py-1.5 text-xs rounded border border-red-300 text-red-700 hover:bg-red-50"
-                        >
-                          Firma löschen
-                        </button>
-                      </div>
+
+                      {isExpanded && (
+                        <div className="space-y-2 border-t border-slate-100 pt-3">
+                          {members.length === 0 ? (
+                            <p className="text-sm text-slate-500">Keine User gefunden.</p>
+                          ) : (
+                            members.map(member => (
+                              <div key={member.id} className="grid grid-cols-1 md:grid-cols-4 gap-2 text-sm border border-slate-100 rounded-md p-2">
+                                <p className="font-medium text-slate-800">{memberDisplayName(member)}</p>
+                                <p className="text-slate-600">{memberDisplayEmail(member)}</p>
+                                <p className="text-slate-600">Rolle: {member.role}</p>
+                                <p className="text-slate-600">Status: {member.status}</p>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

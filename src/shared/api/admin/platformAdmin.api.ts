@@ -1,42 +1,38 @@
-import { supabase } from '../../lib/supabase';
 import { invokeAuthedFunction } from '../../lib/supabaseFunctions';
 import {
   DeleteAccountDryRunResult,
   DeleteAccountResult,
-  DeleteUserResult,
   MembershipItem,
+  OwnerCompanyOverviewResult,
+  OwnerOverviewCompany,
+  OwnerUpdateAccountResult,
   PlatformAccount,
   PlatformAccountStatus
 } from './types';
 
+type OwnerOverviewData = {
+  accounts: PlatformAccount[];
+  membersByAccountId: Record<string, MembershipItem[]>;
+};
+
 export const PlatformAdminApi = {
-  async getAccounts() {
-    const { data, error } = await supabase
-      .from('platform_accounts')
-      .select('id, name, slug, status, created_at, updated_at, archived_at, archived_by')
-      .order('created_at', { ascending: false });
+  async getOwnerOverview(): Promise<OwnerOverviewData> {
+    const data = await invokeAuthedFunction<Record<string, never>, OwnerCompanyOverviewResult>(
+      'owner-company-overview-v1',
+      {}
+    );
 
-    if (error) throw error;
-    return (data || []) as PlatformAccount[];
-  },
+    if (!data?.ok) {
+      throw new Error(data?.message || data?.code || 'Owner-Übersicht konnte nicht geladen werden.');
+    }
 
-  async getAccountMembers(accountId: string): Promise<MembershipItem[]> {
-    const { data, error } = await supabase
-      .from('account_memberships')
-      .select(`
-        id,
-        account_id,
-        user_id,
-        role,
-        status,
-        created_at,
-        profiles(id, email, full_name)
-      `)
-      .eq('account_id', accountId)
-      .order('created_at', { ascending: false });
+    const companies = (data.companies || []) as OwnerOverviewCompany[];
+    const accounts = companies.map(({ members: _members, ...account }) => account as PlatformAccount);
+    const membersByAccountId = Object.fromEntries(
+      companies.map(company => [company.id, company.members || []])
+    );
 
-    if (error) throw error;
-    return (data || []) as MembershipItem[];
+    return { accounts, membersByAccountId };
   },
 
   async provisionAccount(payload: { accountName: string; accountSlug: string; adminEmail: string }) {
@@ -44,6 +40,7 @@ export const PlatformAdminApi = {
       { accountName: string; accountSlug: string; adminEmail: string },
       { ok: boolean; message?: string; code?: string; accountName?: string }
     >('platform-provision-account', payload);
+
     if (!data?.ok) {
       throw new Error(data?.message || data?.code || 'Firma konnte nicht angelegt werden.');
     }
@@ -51,20 +48,20 @@ export const PlatformAdminApi = {
     return data;
   },
 
-  async updateAccountStatus(accountId: string, status: PlatformAccountStatus) {
-    const payload: Record<string, unknown> = { status };
-    if (status === 'ARCHIVED') {
-      payload.archived_at = new Date().toISOString();
-    } else {
-      payload.archived_at = null;
+  async updateAccount(
+    accountId: string,
+    payload: { status?: PlatformAccountStatus; name?: string; slug?: string; reason?: string }
+  ): Promise<OwnerUpdateAccountResult> {
+    const data = await invokeAuthedFunction<
+      { accountId: string; status?: PlatformAccountStatus; name?: string; slug?: string; reason?: string },
+      OwnerUpdateAccountResult
+    >('owner-update-account-v1', { accountId, ...payload });
+
+    if (!data?.ok) {
+      throw new Error(data?.message || data?.code || 'Account konnte nicht aktualisiert werden.');
     }
 
-    const { error } = await supabase
-      .from('platform_accounts')
-      .update(payload)
-      .eq('id', accountId);
-
-    if (error) throw error;
+    return data as OwnerUpdateAccountResult;
   },
 
   async deleteAccountDryRun(accountId: string): Promise<DeleteAccountDryRunResult> {
@@ -72,6 +69,7 @@ export const PlatformAdminApi = {
       { accountId: string; dryRun: boolean },
       DeleteAccountDryRunResult
     >('platform-delete-account', { accountId, dryRun: true });
+
     if (!data?.ok) {
       throw new Error(data?.message || data?.code || 'Dry-Run für Firmenlöschung fehlgeschlagen.');
     }
@@ -84,22 +82,11 @@ export const PlatformAdminApi = {
       { accountId: string; dryRun: boolean; confirmSlug: string; reason?: string },
       DeleteAccountResult
     >('platform-delete-account', { accountId, dryRun: false, confirmSlug, reason });
+
     if (!data?.ok) {
       throw new Error(data?.message || data?.code || 'Firma konnte nicht gelöscht werden.');
     }
 
     return data as DeleteAccountResult;
   },
-
-  async deleteUserHard(userId: string, accountId?: string, reason?: string): Promise<DeleteUserResult> {
-    const data = await invokeAuthedFunction<
-      { userId: string; accountId?: string; reason?: string },
-      DeleteUserResult
-    >('admin-delete-user-v3', { userId, accountId, reason });
-    if (!data?.ok) {
-      throw new Error(data?.message || data?.code || 'User konnte nicht gelöscht werden.');
-    }
-
-    return data as DeleteUserResult;
-  }
 };

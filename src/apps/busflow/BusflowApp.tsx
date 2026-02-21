@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { Plus, ArrowLeft, Printer, Settings as SettingsIcon, Leaf, Search, History, Calendar } from 'lucide-react';
 import RouteEditor from './components/RouteEditor';
 import RouteList from './components/RouteList';
@@ -9,7 +9,6 @@ import AppHeader from '../../shared/components/AppHeader';
 import ConfirmDialog from '../../shared/components/ConfirmDialog';
 import {
   BusType,
-  Customer,
   CustomerBulkDeleteResult,
   CustomerImportPreview,
   CustomerImportRow,
@@ -21,13 +20,16 @@ import {
   Worker
 } from './types';
 import { BusFlowApi } from './api';
-import { supabase } from '../../shared/lib/supabase';
 import { useToast } from '../../shared/components/ToastProvider';
+import { useBusflowData } from './hooks/useBusflowData';
+import { useRealtimeSync } from './hooks/useRealtimeSync';
+import { useRouteFiltering } from './hooks/useRouteFiltering';
 
 interface User {
   name: string;
   role: 'ADMIN' | 'DISPATCH' | 'VIEWER';
   avatarUrl?: string;
+  isPlatformOwner?: boolean;
 }
 
 interface Props {
@@ -37,6 +39,7 @@ interface Props {
   onLogout: () => void;
   onGoHome: () => void;
   onAdmin: () => void;
+  onOwner?: () => void;
 }
 
 const getErrorCode = (error: unknown): string | undefined =>
@@ -46,132 +49,36 @@ const getErrorCode = (error: unknown): string | undefined =>
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : '';
 
-const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onLogout, onGoHome, onAdmin }) => {
+const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onLogout, onGoHome, onAdmin, onOwner }) => {
   const { pushToast, clearToasts } = useToast();
-  const defaultMapViewFallback: MapDefaultView = { address: 'Deutschland', lat: 51.1657, lon: 10.4515, zoom: 6 };
-  const [routes, setRoutes] = useState<Route[]>([]);
-  const [currentRoute, setCurrentRoute] = useState<Route | null>(null);
+
   const [view, setView] = useState<'LIST' | 'EDITOR' | 'PRINT' | 'SETTINGS'>('LIST');
-  const [busTypes, setBusTypes] = useState<BusType[]>([]);
-  const [workers, setWorkers] = useState<Worker[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [currentRoute, setCurrentRoute] = useState<Route | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [routeIdToDelete, setRouteIdToDelete] = useState<string | null>(null);
   const [editConflictMessage, setEditConflictMessage] = useState<string | null>(null);
   const [isNewRouteDraft, setIsNewRouteDraft] = useState(false);
-  const [mapDefaultView, setMapDefaultView] = useState<MapDefaultView>(defaultMapViewFallback);
+
   const canManageRoutes = authUser?.role === 'ADMIN' || authUser?.role === 'DISPATCH';
   const canManageSettings = canManageRoutes;
-  const routesRefreshTimeout = useRef<number | null>(null);
-  const settingsRefreshTimeout = useRef<number | null>(null);
-  // Load Initial Data
-  useEffect(() => {
-    BusFlowApi.setActiveAccountId(activeAccountId);
-  }, [activeAccountId]);
 
-  useEffect(() => {
-    if (!activeAccountId) {
-      setRoutes([]);
-      setBusTypes([]);
-      setWorkers([]);
-      setCustomers([]);
-      setLoading(false);
-      return;
-    }
+  const {
+    routes, busTypes, workers, customers, loading, mapDefaultView,
+    setRoutes, setCustomers, setMapDefaultView,
+    refreshRoutes, refreshSettingsData,
+  } = useBusflowData(activeAccountId);
 
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const [fetchedRoutes, fetchedBusTypes, fetchedWorkers, fetchedCustomers] = await Promise.all([
-          BusFlowApi.getRoutes(),
-          BusFlowApi.getBusTypes(),
-          BusFlowApi.getWorkers(),
-          BusFlowApi.getCustomersForSuggestions()
-        ]);
-        const fetchedMapDefault = await BusFlowApi.getMapDefaultView();
-        setRoutes(fetchedRoutes);
-        setBusTypes(fetchedBusTypes);
-        setWorkers(fetchedWorkers);
-        setCustomers(fetchedCustomers);
-        if (fetchedMapDefault) setMapDefaultView(fetchedMapDefault);
-      } catch (error) {
-        console.error('Fehler beim Laden der Daten:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
-  }, [activeAccountId]);
+  useRealtimeSync({ activeAccountId, refreshRoutes, refreshSettingsData });
 
-  const refreshRoutes = async () => {
-    const fetched = await BusFlowApi.getRoutes();
-    setRoutes(fetched);
-  };
+  const { filteredRoutes, activeSection, otherSection, isSearching } = useRouteFiltering(routes, busTypes, searchQuery);
 
-  const refreshSettingsData = async () => {
-    const [fetchedBusTypes, fetchedWorkers, fetchedCustomers] = await Promise.all([
-      BusFlowApi.getBusTypes(),
-      BusFlowApi.getWorkers(),
-      BusFlowApi.getCustomersForSuggestions()
-    ]);
-    const fetchedMapDefault = await BusFlowApi.getMapDefaultView();
-    setBusTypes(fetchedBusTypes);
-    setWorkers(fetchedWorkers);
-    setCustomers(fetchedCustomers);
-    if (fetchedMapDefault) setMapDefaultView(fetchedMapDefault);
-  };
-
-  useEffect(() => {
-    if (!activeAccountId) return;
-
-    const scheduleRoutesRefresh = () => {
-      if (routesRefreshTimeout.current) {
-        window.clearTimeout(routesRefreshTimeout.current);
-      }
-      routesRefreshTimeout.current = window.setTimeout(() => {
-        refreshRoutes().catch(err => console.error('Realtime route refresh failed:', err));
-      }, 200);
-    };
-
-    const scheduleSettingsRefresh = () => {
-      if (settingsRefreshTimeout.current) {
-        window.clearTimeout(settingsRefreshTimeout.current);
-      }
-      settingsRefreshTimeout.current = window.setTimeout(() => {
-        refreshSettingsData().catch(err => console.error('Realtime settings refresh failed:', err));
-      }, 200);
-    };
-
-    const accountFilter = `account_id=eq.${activeAccountId}`;
-    const channel = supabase
-      .channel(`busflow-live-sync-${activeAccountId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_routes', filter: accountFilter }, scheduleRoutesRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_stops', filter: accountFilter }, scheduleRoutesRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_bus_types', filter: accountFilter }, scheduleSettingsRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_workers', filter: accountFilter }, scheduleSettingsRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_customers', filter: accountFilter }, scheduleSettingsRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_customer_contacts', filter: accountFilter }, scheduleSettingsRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_app_settings', filter: accountFilter }, scheduleSettingsRefresh)
-      .subscribe();
-
-    return () => {
-      if (routesRefreshTimeout.current) window.clearTimeout(routesRefreshTimeout.current);
-      if (settingsRefreshTimeout.current) window.clearTimeout(settingsRefreshTimeout.current);
-      supabase.removeChannel(channel);
-    };
-  }, [activeAccountId]);
+  // --- Route handlers ---
 
   const handleCreateNew = async () => {
     if (!canManageRoutes) {
-      pushToast({
-        type: 'error',
-        title: 'Keine Berechtigung',
-        message: 'Sie haben nur Leserechte.'
-      });
+      pushToast({ type: 'error', title: 'Keine Berechtigung', message: 'Sie haben nur Leserechte.' });
       return;
     }
-
     const newRouteDraft: Route = {
       id: `draft-${Date.now()}`,
       name: '',
@@ -187,9 +94,8 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       status: 'Entwurf',
       operationalNotes: '',
       busTypeId: undefined,
-      workerId: undefined
+      workerId: undefined,
     };
-
     setEditConflictMessage(null);
     setIsNewRouteDraft(true);
     setCurrentRoute(newRouteDraft);
@@ -198,11 +104,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
 
   const handleEditRoute = (route: Route) => {
     if (!canManageRoutes) {
-      pushToast({
-        type: 'error',
-        title: 'Keine Berechtigung',
-        message: 'Sie haben nur Leserechte.'
-      });
+      pushToast({ type: 'error', title: 'Keine Berechtigung', message: 'Sie haben nur Leserechte.' });
       return;
     }
     setEditConflictMessage(null);
@@ -212,7 +114,6 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
   };
 
   const handlePrintRoute = (route: Route) => {
-    // if (route.status !== 'Aktiv' && route.status !== 'Geplant') return;
     clearToasts();
     setCurrentRoute(route);
     setView('PRINT');
@@ -221,14 +122,9 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
 
   const handleSaveRoute = async (updatedRoute: Route) => {
     if (!canManageRoutes) {
-      pushToast({
-        type: 'error',
-        title: 'Keine Berechtigung',
-        message: 'Sie haben nur Leserechte.'
-      });
+      pushToast({ type: 'error', title: 'Keine Berechtigung', message: 'Sie haben nur Leserechte.' });
       return;
     }
-
     try {
       setEditConflictMessage(null);
       if (isNewRouteDraft) {
@@ -241,15 +137,10 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       } else {
         await BusFlowApi.saveRouteWithStops(updatedRoute, updatedRoute.updatedAt);
       }
-
       await refreshRoutes();
       setIsNewRouteDraft(false);
       setView('LIST');
-      pushToast({
-        type: 'success',
-        title: 'Gespeichert',
-        message: 'Routenänderungen wurden gespeichert.'
-      });
+      pushToast({ type: 'success', title: 'Gespeichert', message: 'Routenänderungen wurden gespeichert.' });
     } catch (error) {
       console.error(error);
       if (getErrorCode(error) === 'ROUTE_CONFLICT') {
@@ -266,71 +157,32 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
         setView('LIST');
         return;
       }
-      if (getErrorCode(error) === 'ROUTE_NOT_FOUND') {
-        pushToast({
-          type: 'error',
-          title: 'Nicht gefunden',
-          message: 'Diese Route wurde bereits gelöscht.'
-        });
-        await refreshRoutes();
-        setView('LIST');
+      const errorToasts: Record<string, { title: string; message: string }> = {
+        ROUTE_NOT_FOUND: { title: 'Nicht gefunden', message: 'Diese Route wurde bereits gelöscht.' },
+        CUSTOMER_REQUIRED: { title: 'Kunde erforderlich', message: 'Bitte wählen Sie einen Kunden aus der Liste aus.' },
+        CUSTOMER_CONTACT_MISMATCH: { title: 'Kontakt passt nicht', message: 'Der ausgewählte Kontakt gehört nicht zum gewählten Kunden.' },
+        CONTACT_NOT_FOUND: { title: 'Kontakt nicht gefunden', message: 'Bitte wählen Sie die Kontaktperson erneut aus.' },
+        WORKER_NOT_FOUND: { title: 'Fahrer ungültig', message: 'Der ausgewählte Fahrer gehört nicht zu Ihrem Account.' },
+        WORKER_ACCOUNT_MISMATCH: { title: 'Fahrer ungültig', message: 'Der ausgewählte Fahrer gehört nicht zu Ihrem Account.' },
+        BUS_TYPE_NOT_FOUND: { title: 'Bustyp ungültig', message: 'Der ausgewählte Bustyp gehört nicht zu Ihrem Account.' },
+        BUS_TYPE_ACCOUNT_MISMATCH: { title: 'Bustyp ungültig', message: 'Der ausgewählte Bustyp gehört nicht zu Ihrem Account.' },
+      };
+      const code = getErrorCode(error);
+      if (code && errorToasts[code]) {
+        pushToast({ type: 'error', ...errorToasts[code] });
+        if (code === 'ROUTE_NOT_FOUND') {
+          await refreshRoutes();
+          setView('LIST');
+        }
         return;
       }
-      if (getErrorCode(error) === 'CUSTOMER_REQUIRED') {
-        pushToast({
-          type: 'error',
-          title: 'Kunde erforderlich',
-          message: 'Bitte wählen Sie einen Kunden aus der Liste aus.'
-        });
-        return;
-      }
-      if (getErrorCode(error) === 'CUSTOMER_CONTACT_MISMATCH') {
-        pushToast({
-          type: 'error',
-          title: 'Kontakt passt nicht',
-          message: 'Der ausgewählte Kontakt gehört nicht zum gewählten Kunden.'
-        });
-        return;
-      }
-      if (getErrorCode(error) === 'CONTACT_NOT_FOUND') {
-        pushToast({
-          type: 'error',
-          title: 'Kontakt nicht gefunden',
-          message: 'Bitte wählen Sie die Kontaktperson erneut aus.'
-        });
-        return;
-      }
-      if (getErrorCode(error) === 'WORKER_NOT_FOUND' || getErrorCode(error) === 'WORKER_ACCOUNT_MISMATCH') {
-        pushToast({
-          type: 'error',
-          title: 'Fahrer ungültig',
-          message: 'Der ausgewählte Fahrer gehört nicht zu Ihrem Account.'
-        });
-        return;
-      }
-      if (getErrorCode(error) === 'BUS_TYPE_NOT_FOUND' || getErrorCode(error) === 'BUS_TYPE_ACCOUNT_MISMATCH') {
-        pushToast({
-          type: 'error',
-          title: 'Bustyp ungültig',
-          message: 'Der ausgewählte Bustyp gehört nicht zu Ihrem Account.'
-        });
-        return;
-      }
-      pushToast({
-        type: 'error',
-        title: 'Speichern fehlgeschlagen',
-        message: 'Bitte versuchen Sie es erneut.'
-      });
+      pushToast({ type: 'error', title: 'Speichern fehlgeschlagen', message: 'Bitte versuchen Sie es erneut.' });
     }
   };
 
   const handleDeleteRoute = (id: string) => {
     if (!canManageRoutes) {
-      pushToast({
-        type: 'error',
-        title: 'Keine Berechtigung',
-        message: 'Sie haben nur Leserechte.'
-      });
+      pushToast({ type: 'error', title: 'Keine Berechtigung', message: 'Sie haben nur Leserechte.' });
       return;
     }
     setRouteIdToDelete(id);
@@ -342,186 +194,92 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       await BusFlowApi.deleteRoute(routeIdToDelete);
       setRoutes(prev => prev.filter(r => r.id !== routeIdToDelete));
       setRouteIdToDelete(null);
-      pushToast({
-        type: 'success',
-        title: 'Gelöscht',
-        message: 'Die Route wurde gelöscht.'
-      });
+      pushToast({ type: 'success', title: 'Gelöscht', message: 'Die Route wurde gelöscht.' });
     } catch (e) {
       console.error(e);
-      pushToast({
-        type: 'error',
-        title: 'Löschen fehlgeschlagen',
-        message: 'Die Route konnte nicht gelöscht werden.'
-      });
+      pushToast({ type: 'error', title: 'Löschen fehlgeschlagen', message: 'Die Route konnte nicht gelöscht werden.' });
     }
   };
 
-  const handleAddBusType = async (busType: BusType) => {
+  // --- Settings handlers ---
+
+  const requireSettings = (): boolean => {
     if (!canManageSettings) {
-      pushToast({
-        type: 'error',
-        title: 'Keine Berechtigung',
-        message: 'Sie haben keine Berechtigung für Einstellungen.'
-      });
-      return;
+      pushToast({ type: 'error', title: 'Keine Berechtigung', message: 'Sie haben keine Berechtigung für Einstellungen.' });
+      return false;
     }
+    return true;
+  };
+
+  const handleAddBusType = async (busType: BusType) => {
+    if (!requireSettings()) return;
     try {
       await BusFlowApi.createBusType(busType);
-      const fetched = await BusFlowApi.getBusTypes();
-      setBusTypes(fetched);
-      pushToast({
-        type: 'success',
-        title: 'Gespeichert',
-        message: 'Bustyp wurde gespeichert.'
-      });
-    } catch (e) {
-      pushToast({
-        type: 'error',
-        title: 'Speichern fehlgeschlagen',
-        message: 'Bustyp konnte nicht gespeichert werden.'
-      });
+      await refreshSettingsData();
+      pushToast({ type: 'success', title: 'Gespeichert', message: 'Bustyp wurde gespeichert.' });
+    } catch {
+      pushToast({ type: 'error', title: 'Speichern fehlgeschlagen', message: 'Bustyp konnte nicht gespeichert werden.' });
     }
   };
 
   const handleRemoveBusType = async (id: string) => {
-    if (!canManageSettings) {
-      pushToast({
-        type: 'error',
-        title: 'Keine Berechtigung',
-        message: 'Sie haben keine Berechtigung für Einstellungen.'
-      });
-      return;
-    }
+    if (!requireSettings()) return;
     try {
       await BusFlowApi.deleteBusType(id);
-      setBusTypes(prev => prev.filter(b => b.id !== id));
-      pushToast({
-        type: 'success',
-        title: 'Gelöscht',
-        message: 'Bustyp wurde entfernt.'
-      });
-    } catch (e) {
-      pushToast({
-        type: 'error',
-        title: 'Löschen fehlgeschlagen',
-        message: 'Bustyp konnte nicht gelöscht werden.'
-      });
+      await refreshSettingsData();
+      pushToast({ type: 'success', title: 'Gelöscht', message: 'Bustyp wurde entfernt.' });
+    } catch {
+      pushToast({ type: 'error', title: 'Löschen fehlgeschlagen', message: 'Bustyp konnte nicht gelöscht werden.' });
     }
   };
 
   const handleAddWorker = async (worker: Worker) => {
-    if (!canManageSettings) {
-      pushToast({
-        type: 'error',
-        title: 'Keine Berechtigung',
-        message: 'Sie haben keine Berechtigung für Einstellungen.'
-      });
-      return;
-    }
+    if (!requireSettings()) return;
     try {
       await BusFlowApi.createWorker({ name: worker.name, role: worker.role });
-      const fetched = await BusFlowApi.getWorkers();
-      setWorkers(fetched);
-      pushToast({
-        type: 'success',
-        title: 'Gespeichert',
-        message: 'Mitarbeiter wurde gespeichert.'
-      });
-    } catch (e) {
-      pushToast({
-        type: 'error',
-        title: 'Speichern fehlgeschlagen',
-        message: 'Mitarbeiter konnte nicht gespeichert werden.'
-      });
+      await refreshSettingsData();
+      pushToast({ type: 'success', title: 'Gespeichert', message: 'Mitarbeiter wurde gespeichert.' });
+    } catch {
+      pushToast({ type: 'error', title: 'Speichern fehlgeschlagen', message: 'Mitarbeiter konnte nicht gespeichert werden.' });
     }
   };
 
   const handleRemoveWorker = async (id: string) => {
-    if (!canManageSettings) {
-      pushToast({
-        type: 'error',
-        title: 'Keine Berechtigung',
-        message: 'Sie haben keine Berechtigung für Einstellungen.'
-      });
-      return;
-    }
+    if (!requireSettings()) return;
     try {
       await BusFlowApi.deleteWorker(id);
-      setWorkers(prev => prev.filter(w => w.id !== id));
-      pushToast({
-        type: 'success',
-        title: 'Gelöscht',
-        message: 'Mitarbeiter wurde entfernt.'
-      });
-    } catch (e) {
-      pushToast({
-        type: 'error',
-        title: 'Löschen fehlgeschlagen',
-        message: 'Mitarbeiter konnte nicht gelöscht werden.'
-      });
+      await refreshSettingsData();
+      pushToast({ type: 'success', title: 'Gelöscht', message: 'Mitarbeiter wurde entfernt.' });
+    } catch {
+      pushToast({ type: 'error', title: 'Löschen fehlgeschlagen', message: 'Mitarbeiter konnte nicht gelöscht werden.' });
     }
   };
 
   const handleAddCustomerContact = async (contact: CustomerContactFormPayload) => {
-    if (!canManageSettings) {
-      pushToast({
-        type: 'error',
-        title: 'Keine Berechtigung',
-        message: 'Sie haben keine Berechtigung für Einstellungen.'
-      });
-      return;
-    }
+    if (!requireSettings()) return;
     try {
       await BusFlowApi.createCustomerContactWithCompany(contact);
       const fetched = await BusFlowApi.getCustomersForSuggestions();
       setCustomers(fetched);
-      pushToast({
-        type: 'success',
-        title: 'Gespeichert',
-        message: 'Kontakt wurde gespeichert.'
-      });
+      pushToast({ type: 'success', title: 'Gespeichert', message: 'Kontakt wurde gespeichert.' });
     } catch (error) {
-      pushToast({
-        type: 'error',
-        title: 'Speichern fehlgeschlagen',
-        message: `Kontakt konnte nicht gespeichert werden.${getErrorMessage(error) ? ` ${getErrorMessage(error)}` : ''}`
-      });
+      pushToast({ type: 'error', title: 'Speichern fehlgeschlagen', message: `Kontakt konnte nicht gespeichert werden.${getErrorMessage(error) ? ` ${getErrorMessage(error)}` : ''}` });
     }
   };
 
   const handleRemoveCustomerContact = async (contactId: string) => {
-    if (!canManageSettings) {
-      pushToast({
-        type: 'error',
-        title: 'Keine Berechtigung',
-        message: 'Sie haben keine Berechtigung für Einstellungen.'
-      });
-      return;
-    }
+    if (!requireSettings()) return;
     try {
       await BusFlowApi.deleteCustomerContact(contactId);
       const fetched = await BusFlowApi.getCustomersForSuggestions();
       setCustomers(fetched);
-      pushToast({
-        type: 'success',
-        title: 'Gelöscht',
-        message: 'Kontakt wurde entfernt.'
-      });
+      pushToast({ type: 'success', title: 'Gelöscht', message: 'Kontakt wurde entfernt.' });
     } catch (error) {
       if (getErrorCode(error) === 'CONTACT_IN_USE') {
-        pushToast({
-          type: 'error',
-          title: 'Löschen nicht möglich',
-          message: 'Kontakt kann nicht gelöscht werden, da noch Routen zugeordnet sind.'
-        });
+        pushToast({ type: 'error', title: 'Löschen nicht möglich', message: 'Kontakt kann nicht gelöscht werden, da noch Routen zugeordnet sind.' });
         return;
       }
-      pushToast({
-        type: 'error',
-        title: 'Löschen fehlgeschlagen',
-        message: 'Kontakt konnte nicht gelöscht werden.'
-      });
+      pushToast({ type: 'error', title: 'Löschen fehlgeschlagen', message: 'Kontakt konnte nicht gelöscht werden.' });
     }
   };
 
@@ -530,50 +288,27 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
   };
 
   const handleUpdateCustomerContact = async (id: string, patch: CustomerContactFormPayload) => {
-    if (!canManageSettings) {
-      pushToast({
-        type: 'error',
-        title: 'Keine Berechtigung',
-        message: 'Sie haben keine Berechtigung für Einstellungen.'
-      });
-      return;
-    }
+    if (!requireSettings()) return;
     try {
       await BusFlowApi.updateCustomerContact(id, patch);
       const fetched = await BusFlowApi.getCustomersForSuggestions();
       setCustomers(fetched);
-      pushToast({
-        type: 'success',
-        title: 'Gespeichert',
-        message: 'Kontakt wurde aktualisiert.'
-      });
+      pushToast({ type: 'success', title: 'Gespeichert', message: 'Kontakt wurde aktualisiert.' });
     } catch (error) {
-      pushToast({
-        type: 'error',
-        title: 'Speichern fehlgeschlagen',
-        message: `Kontakt konnte nicht aktualisiert werden.${getErrorMessage(error) ? ` ${getErrorMessage(error)}` : ''}`
-      });
+      pushToast({ type: 'error', title: 'Speichern fehlgeschlagen', message: `Kontakt konnte nicht aktualisiert werden.${getErrorMessage(error) ? ` ${getErrorMessage(error)}` : ''}` });
       throw error;
     }
   };
 
   const handlePreviewCustomerImport = async (rows: CustomerImportRow[]): Promise<CustomerImportPreview> => {
     if (!canManageSettings) {
-      pushToast({
-        type: 'error',
-        title: 'Keine Berechtigung',
-        message: 'Sie haben keine Berechtigung für Einstellungen.'
-      });
+      pushToast({ type: 'error', title: 'Keine Berechtigung', message: 'Sie haben keine Berechtigung für Einstellungen.' });
       return { rows: [], conflicts: [], errors: rows.map(row => ({ rowNumber: row.rowNumber, reason: 'Keine Berechtigung' })) };
     }
     try {
       return await BusFlowApi.importCustomersPreview(rows);
     } catch (error) {
-      pushToast({
-        type: 'error',
-        title: 'Import-Vorschau fehlgeschlagen',
-        message: `CSV konnte nicht geprüft werden.${getErrorMessage(error) ? ` ${getErrorMessage(error)}` : ''}`
-      });
+      pushToast({ type: 'error', title: 'Import-Vorschau fehlgeschlagen', message: `CSV konnte nicht geprüft werden.${getErrorMessage(error) ? ` ${getErrorMessage(error)}` : ''}` });
       return { rows: [], conflicts: [], errors: rows.map(row => ({ rowNumber: row.rowNumber, reason: 'Vorschau fehlgeschlagen.' })) };
     }
   };
@@ -584,46 +319,18 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
     onProgress?: (progress: { current: number; total: number }) => void
   ): Promise<CustomerImportResult> => {
     if (!canManageSettings) {
-      pushToast({
-        type: 'error',
-        title: 'Keine Berechtigung',
-        message: 'Sie haben keine Berechtigung für Einstellungen.'
-      });
-      return {
-        insertedCompanies: 0,
-        insertedContacts: 0,
-        updatedContacts: 0,
-        skipped: preview.rows.length,
-        conflicts: preview.conflicts.length,
-        errors: preview.rows.map(row => ({ rowNumber: row.rowNumber, reason: 'Keine Berechtigung' }))
-      };
+      pushToast({ type: 'error', title: 'Keine Berechtigung', message: 'Sie haben keine Berechtigung für Einstellungen.' });
+      return { insertedCompanies: 0, insertedContacts: 0, updatedContacts: 0, skipped: preview.rows.length, conflicts: preview.conflicts.length, errors: preview.rows.map(row => ({ rowNumber: row.rowNumber, reason: 'Keine Berechtigung' })) };
     }
-
     try {
       const result = await BusFlowApi.commitCustomerImport(preview, resolutions, onProgress);
       const fetched = await BusFlowApi.getCustomersForSuggestions();
       setCustomers(fetched);
-
-      pushToast({
-        type: 'success',
-        title: 'Import abgeschlossen',
-        message: `Firmen: +${result.insertedCompanies}, Kontakte: +${result.insertedContacts}, Updates: ${result.updatedContacts}.`
-      });
+      pushToast({ type: 'success', title: 'Import abgeschlossen', message: `Firmen: +${result.insertedCompanies}, Kontakte: +${result.insertedContacts}, Updates: ${result.updatedContacts}.` });
       return result;
     } catch (error) {
-      pushToast({
-        type: 'error',
-        title: 'Import fehlgeschlagen',
-        message: `Kunden konnten nicht importiert werden.${getErrorMessage(error) ? ` ${getErrorMessage(error)}` : ''}`
-      });
-      return {
-        insertedCompanies: 0,
-        insertedContacts: 0,
-        updatedContacts: 0,
-        skipped: preview.rows.length,
-        conflicts: preview.conflicts.length,
-        errors: preview.rows.map(row => ({ rowNumber: row.rowNumber, reason: 'Import fehlgeschlagen.' }))
-      };
+      pushToast({ type: 'error', title: 'Import fehlgeschlagen', message: `Kunden konnten nicht importiert werden.${getErrorMessage(error) ? ` ${getErrorMessage(error)}` : ''}` });
+      return { insertedCompanies: 0, insertedContacts: 0, updatedContacts: 0, skipped: preview.rows.length, conflicts: preview.conflicts.length, errors: preview.rows.map(row => ({ rowNumber: row.rowNumber, reason: 'Import fehlgeschlagen.' })) };
     }
   };
 
@@ -632,134 +339,49 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
     onProgress?: (progress: { current: number; total: number }) => void
   ): Promise<CustomerBulkDeleteResult> => {
     if (!canManageSettings) {
-      pushToast({
-        type: 'error',
-        title: 'Keine Berechtigung',
-        message: 'Sie haben keine Berechtigung für Einstellungen.'
-      });
-      return {
-        requested: items.length,
-        deleted: 0,
-        failed: items.map(i => ({ id: i.id, name: i.name, companyName: i.companyName, reason: 'Keine Berechtigung' }))
-      };
+      pushToast({ type: 'error', title: 'Keine Berechtigung', message: 'Sie haben keine Berechtigung für Einstellungen.' });
+      return { requested: items.length, deleted: 0, failed: items.map(i => ({ id: i.id, name: i.name, companyName: i.companyName, reason: 'Keine Berechtigung' })) };
     }
-
     const failed: CustomerBulkDeleteResult['failed'] = [];
     let deleted = 0;
     let processed = 0;
     onProgress?.({ current: 0, total: items.length });
-
     for (const item of items) {
       try {
         await BusFlowApi.deleteCustomerContact(item.id);
         deleted += 1;
       } catch (error) {
         const errorCode = getErrorCode(error);
-        if (errorCode === 'CONTACT_IN_USE') {
-          failed.push({
-            id: item.id,
-            name: item.name,
-            companyName: item.companyName,
-            code: 'CONTACT_IN_USE',
-            reason: 'Kontakt ist noch in Routen verknüpft.'
-          });
-        } else {
-          failed.push({
-            id: item.id,
-            name: item.name,
-            companyName: item.companyName,
-            code: errorCode || 'UNKNOWN',
-            reason: getErrorMessage(error) || 'Unbekannter Fehler beim Löschen.'
-          });
-        }
+        failed.push({ id: item.id, name: item.name, companyName: item.companyName, code: errorCode || 'UNKNOWN', reason: errorCode === 'CONTACT_IN_USE' ? 'Kontakt ist noch in Routen verknüpft.' : getErrorMessage(error) || 'Unbekannter Fehler beim Löschen.' });
       }
       processed += 1;
       onProgress?.({ current: processed, total: items.length });
     }
-
     const fetched = await BusFlowApi.getCustomersForSuggestions();
     setCustomers(fetched);
-
     if (deleted > 0 && failed.length === 0) {
-      pushToast({
-        type: 'success',
-        title: 'Gelöscht',
-        message: `${deleted} Kontakt(e) wurden gelöscht.`
-      });
+      pushToast({ type: 'success', title: 'Gelöscht', message: `${deleted} Kontakt(e) wurden gelöscht.` });
     } else if (deleted > 0 && failed.length > 0) {
-      pushToast({
-        type: 'info',
-        title: 'Teilweise gelöscht',
-        message: `${deleted} gelöscht, ${failed.length} fehlgeschlagen.`
-      });
+      pushToast({ type: 'info', title: 'Teilweise gelöscht', message: `${deleted} gelöscht, ${failed.length} fehlgeschlagen.` });
     } else {
-      pushToast({
-        type: 'error',
-        title: 'Löschen fehlgeschlagen',
-        message: 'Kein ausgewählter Kontakt konnte gelöscht werden.'
-      });
+      pushToast({ type: 'error', title: 'Löschen fehlgeschlagen', message: 'Kein ausgewählter Kontakt konnte gelöscht werden.' });
     }
-
-    return {
-      requested: items.length,
-      deleted,
-      failed
-    };
+    return { requested: items.length, deleted, failed };
   };
 
-  const handleSaveMapDefaultView = async (view: MapDefaultView) => {
-    if (!canManageSettings) {
-      pushToast({
-        type: 'error',
-        title: 'Keine Berechtigung',
-        message: 'Sie haben keine Berechtigung für Einstellungen.'
-      });
-      return;
-    }
+  const handleSaveMapDefaultView = async (mapView: MapDefaultView) => {
+    if (!requireSettings()) return;
     try {
-      await BusFlowApi.upsertMapDefaultView(view);
-      setMapDefaultView(view);
-      pushToast({
-        type: 'success',
-        title: 'Gespeichert',
-        message: 'Karten-Standard wurde gespeichert.'
-      });
-    } catch (e) {
-      pushToast({
-        type: 'error',
-        title: 'Speichern fehlgeschlagen',
-        message: 'Karten-Standard konnte nicht gespeichert werden.'
-      });
+      await BusFlowApi.upsertMapDefaultView(mapView);
+      setMapDefaultView(mapView);
+      pushToast({ type: 'success', title: 'Gespeichert', message: 'Karten-Standard wurde gespeichert.' });
+    } catch {
+      pushToast({ type: 'error', title: 'Speichern fehlgeschlagen', message: 'Karten-Standard konnte nicht gespeichert werden.' });
     }
   };
 
-  // Filter & Split Logic
-  const filteredRoutes = routes.filter(route => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
+  // --- Render ---
 
-    // Helper to find bus type name
-    const busTypeName = busTypes.find(b => b.id === route.busTypeId)?.name || '';
-
-    return (
-      route.name.toLowerCase().includes(q) ||
-      (route.driverName || '').toLowerCase().includes(q) ||
-      (route.customerName || '').toLowerCase().includes(q) ||
-      (route.busNumber || '').toLowerCase().includes(q) ||
-      (route.status || '').toLowerCase().includes(q) ||
-      (route.date || '').includes(q) ||
-      busTypeName.toLowerCase().includes(q)
-    );
-  });
-
-  // Split Logic: Aktiv vs Others
-  // We sort both by date descending (newest first)
-  const activeSection = filteredRoutes.filter(r => r.status === 'Aktiv').sort((a, b) => b.date.localeCompare(a.date));
-  const otherSection = filteredRoutes.filter(r => r.status !== 'Aktiv').sort((a, b) => b.date.localeCompare(a.date));
-
-  const isSearching = searchQuery.length > 0;
-
-  // Shared Search Input Component
   const SearchInput = (
     <div className="relative w-full max-w-md">
       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -817,45 +439,32 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
         onHome={onGoHome}
         onProfile={onProfile}
         onAdmin={onAdmin}
+        onOwner={onOwner}
         onLogout={onLogout}
         searchBar={view === 'LIST' ? SearchInput : undefined}
         actions={view === 'LIST' && canManageSettings ? (
-          <>
-            <button
-              onClick={() => setView('SETTINGS')}
-              className={`flex items-center space-x-1 px-3 py-1.5 rounded-md transition-colors ${view === 'SETTINGS' ? 'bg-slate-800' : 'hover:bg-slate-800'}`}
-            >
-              <SettingsIcon className="w-4 h-4" />
-              <span>Einstellungen</span>
-            </button>
-
-          </>
+          <button
+            onClick={() => setView('SETTINGS')}
+            className="flex items-center space-x-1 px-3 py-1.5 rounded-md transition-colors hover:bg-slate-800"
+          >
+            <SettingsIcon className="w-4 h-4" />
+            <span>Einstellungen</span>
+          </button>
         ) : undefined}
       />
 
       <main className="flex-1 p-4 md:p-8 no-print max-w-7xl mx-auto w-full">
         {view === 'LIST' && (
           <div className="space-y-12">
-
-            {/* SEARCH RESULTS VIEW */}
             {isSearching ? (
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
                   <Search className="w-5 h-5 text-blue-600" />
                   <h2 className="text-xl font-bold text-slate-800">Suchergebnisse</h2>
-                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">
-                    {filteredRoutes.length}
-                  </span>
+                  <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">{filteredRoutes.length}</span>
                 </div>
                 {filteredRoutes.length > 0 ? (
-                  <RouteList
-                    routes={filteredRoutes}
-                    busTypes={busTypes}
-                    onEdit={handleEditRoute}
-                    onPrint={handlePrintRoute}
-                    onDelete={handleDeleteRoute}
-                    canManageRoutes={canManageRoutes}
-                  />
+                  <RouteList routes={filteredRoutes} busTypes={busTypes} onEdit={handleEditRoute} onPrint={handlePrintRoute} onDelete={handleDeleteRoute} canManageRoutes={canManageRoutes} />
                 ) : (
                   <div className="text-center py-10 bg-slate-50 rounded-lg border border-dashed border-slate-300">
                     <p className="text-slate-500">Keine Routen gefunden für "{searchQuery}".</p>
@@ -863,17 +472,13 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
                 )}
               </div>
             ) : (
-              /* SPLIT VIEW (Default) */
               <>
-                {/* Active Section */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                     <div className="flex items-center space-x-2">
                       <Calendar className="w-5 h-5 text-emerald-600" />
                       <h2 className="text-xl font-bold text-slate-800">Aktive Routen</h2>
-                      <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-0.5 rounded-full">
-                        {activeSection.length}
-                      </span>
+                      <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-0.5 rounded-full">{activeSection.length}</span>
                     </div>
                     <button
                       disabled={!canManageRoutes}
@@ -884,16 +489,8 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
                       <span>Route erstellen</span>
                     </button>
                   </div>
-
                   {activeSection.length > 0 ? (
-                    <RouteList
-                      routes={activeSection}
-                      busTypes={busTypes}
-                      onEdit={handleEditRoute}
-                      onPrint={handlePrintRoute}
-                      onDelete={handleDeleteRoute}
-                      canManageRoutes={canManageRoutes}
-                    />
+                    <RouteList routes={activeSection} busTypes={busTypes} onEdit={handleEditRoute} onPrint={handlePrintRoute} onDelete={handleDeleteRoute} canManageRoutes={canManageRoutes} />
                   ) : (
                     <div className="text-center py-10 bg-slate-50 rounded-lg border border-dashed border-slate-300">
                       <p className="text-slate-500">Keine aktiven Routen.</p>
@@ -901,25 +498,14 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
                   )}
                 </div>
 
-                {/* Others Section */}
                 <div className="space-y-4 opacity-75 hover:opacity-100 transition-opacity">
                   <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
                     <History className="w-5 h-5 text-slate-500" />
                     <h2 className="text-xl font-bold text-slate-700">Andere (Geplant, Entwurf, Archiv)</h2>
-                    <span className="bg-slate-100 text-slate-600 text-xs font-semibold px-2 py-0.5 rounded-full">
-                      {otherSection.length}
-                    </span>
+                    <span className="bg-slate-100 text-slate-600 text-xs font-semibold px-2 py-0.5 rounded-full">{otherSection.length}</span>
                   </div>
-
                   {otherSection.length > 0 ? (
-                    <RouteList
-                      routes={otherSection}
-                      busTypes={busTypes}
-                      onEdit={handleEditRoute}
-                      onPrint={handlePrintRoute}
-                      onDelete={handleDeleteRoute}
-                      canManageRoutes={canManageRoutes}
-                    />
+                    <RouteList routes={otherSection} busTypes={busTypes} onEdit={handleEditRoute} onPrint={handlePrintRoute} onDelete={handleDeleteRoute} canManageRoutes={canManageRoutes} />
                   ) : (
                     <div className="text-center py-6">
                       <p className="text-slate-400 text-sm">Keine weiteren Routen.</p>
@@ -928,15 +514,12 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
                 </div>
               </>
             )}
-
           </div>
         )}
+
         {view === 'EDITOR' && currentRoute && (
           <div className="space-y-6">
-            <button
-              onClick={() => setView('LIST')}
-              className="flex items-center space-x-2 text-slate-500 hover:text-slate-800 transition-colors"
-            >
+            <button onClick={() => setView('LIST')} className="flex items-center space-x-2 text-slate-500 hover:text-slate-800 transition-colors">
               <ArrowLeft className="w-4 h-4" />
               <span>Zur Übersicht</span>
             </button>
@@ -957,12 +540,10 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
             />
           </div>
         )}
+
         {view === 'SETTINGS' && (
           <div className="space-y-6">
-            <button
-              onClick={() => setView('LIST')}
-              className="flex items-center space-x-2 text-slate-500 hover:text-slate-800 transition-colors"
-            >
+            <button onClick={() => setView('LIST')} className="flex items-center space-x-2 text-slate-500 hover:text-slate-800 transition-colors">
               <ArrowLeft className="w-4 h-4" />
               <span>Zur Übersicht</span>
             </button>
@@ -986,15 +567,13 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
             />
           </div>
         )}
+
         {view === 'PRINT' && currentRoute && (
           <div className="flex flex-col items-center space-y-4">
             <div className="bg-white p-8 border rounded-lg shadow-sm w-full max-w-4xl opacity-50 select-none">
               <p className="text-center italic">Die Druckvorschau wird erstellt. Falls sie nicht automatisch geöffnet wurde, klicken Sie unten.</p>
             </div>
-            <button
-              onClick={() => window.print()}
-              className="bg-slate-900 text-white px-6 py-2 rounded-lg flex items-center space-x-2"
-            >
+            <button onClick={() => window.print()} className="bg-slate-900 text-white px-6 py-2 rounded-lg flex items-center space-x-2">
               <Printer className="w-5 h-5" />
               <span>Druckdialog öffnen</span>
             </button>

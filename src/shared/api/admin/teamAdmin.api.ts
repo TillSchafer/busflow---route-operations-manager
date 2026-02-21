@@ -1,6 +1,13 @@
 import { supabase } from '../../lib/supabase';
 import { invokeAuthedFunction } from '../../lib/supabaseFunctions';
-import { DeleteUserResult, InvitationItem, InvitationRole, MembershipItem, MembershipRole, PlatformAccount } from './types';
+import {
+  DeleteUserResult,
+  InvitationItem,
+  InvitationRole,
+  MembershipItem,
+  MembershipRole,
+  PlatformAccount
+} from './types';
 
 const invokeInvite = async (payload: { accountId: string; email: string; role: InvitationRole }) => {
   const data = await invokeAuthedFunction<
@@ -98,5 +105,6 @@ export const TeamAdminApi = {
     }
 
     return data as DeleteUserResult;
-  }
+  },
+
 };

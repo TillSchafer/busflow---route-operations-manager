@@ -13,6 +13,7 @@ interface User {
   name: string;
   role: 'ADMIN' | 'DISPATCH' | 'VIEWER';
   avatarUrl?: string;
+  isPlatformOwner?: boolean;
 }
 
 interface Props {
@@ -20,11 +21,12 @@ interface Props {
   auth: User | null;
   onProfile: () => void;
   onAdmin: () => void;
+  onOwner?: () => void;
   onLogout: () => void;
   onHome: () => void;
 }
 
-const Home: React.FC<Props> = ({ apps, auth, onProfile, onAdmin, onLogout, onHome }) => {
+const Home: React.FC<Props> = ({ apps, auth, onProfile, onAdmin, onOwner, onLogout, onHome }) => {
   return (
     <div className="min-h-screen flex flex-col">
       <AppHeader
@@ -33,6 +35,7 @@ const Home: React.FC<Props> = ({ apps, auth, onProfile, onAdmin, onLogout, onHom
         onHome={onHome}
         onProfile={onProfile}
         onAdmin={onAdmin}
+        onOwner={onOwner}
         onLogout={onLogout}
       />
       <main className="flex-1 p-4 md:p-8 no-print max-w-7xl mx-auto w-full flex flex-col items-center justify-center">

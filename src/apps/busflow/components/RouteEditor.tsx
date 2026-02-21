@@ -1,11 +1,13 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Route, Stop, BusType, Worker, Customer, CustomerContact, MapDefaultView } from '../types';
-import { Save, Plus, Trash2, AlertCircle } from 'lucide-react';
+import { Save, Plus, Trash2, AlertCircle, ChevronDown } from 'lucide-react';
 import RouteMap from './RouteMap';
 import { BusFlowApi } from '../api';
 
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import AppSelect, { AppSelectOption } from '../../../shared/components/form/AppSelect';
+import { DROPDOWN_ITEM, DROPDOWN_MENU, DROPDOWN_TRIGGER } from '../../../shared/components/form/dropdownStyles';
 
 interface Props {
   route: Route;
@@ -28,6 +30,17 @@ type NominatimResult = {
 
 const isAbortError = (error: unknown): boolean =>
   error instanceof DOMException ? error.name === 'AbortError' : false;
+
+const routeStatusOptions: Array<AppSelectOption<Route['status']>> = [
+  { value: 'Entwurf', label: 'Entwurf' },
+  { value: 'Geplant', label: 'Geplant' },
+  { value: 'Aktiv', label: 'Aktiv' },
+  { value: 'Archiviert', label: 'Archiviert' },
+];
+
+const dropdownTriggerButtonClass = `${DROPDOWN_TRIGGER} text-left flex items-center justify-between`;
+const dropdownMenuClass = `${DROPDOWN_MENU} overflow-hidden`;
+const dropdownMenuScrollableClass = `${DROPDOWN_MENU} overflow-hidden max-h-60`;
 
 const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, workers, customers, mapDefaultView }) => {
   const [formData, setFormData] = useState<Route>({ ...route });
@@ -246,16 +259,13 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
             <p className="text-sm text-slate-500">Zeitplan, Halte und Fahrgastkapazität konfigurieren.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <AppSelect<Route['status']>
               value={formData.status}
-              onChange={e => setFormData({ ...formData, status: e.target.value as Route['status'] })}
-              className="p-2 pr-8 border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white border text-sm font-medium text-slate-700"
-            >
-              <option value="Entwurf">Entwurf</option>
-              <option value="Geplant">Geplant</option>
-              <option value="Aktiv">Aktiv</option>
-              <option value="Archiviert">Archiviert</option>
-            </select>
+              onChange={nextStatus => setFormData({ ...formData, status: nextStatus })}
+              options={routeStatusOptions}
+              className="min-w-[11rem] font-medium"
+              ariaLabel="Routenstatus waehlen"
+            />
             <button
               onClick={handleCancelWrapper}
               className="px-4 py-2 text-slate-600 hover:text-slate-800 font-medium transition-colors"
@@ -319,7 +329,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                   placeholder="z. B. Stadtwerke GmbH"
                 />
                 {isCustomerDropdownOpen && filteredCustomers.length > 0 && (
-                  <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+                  <div className={dropdownMenuClass}>
                     {filteredCustomers.map(customer => (
                       <button
                         key={customer.id}
@@ -335,7 +345,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                           });
                           setIsCustomerDropdownOpen(false);
                         }}
-                        className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                        className={DROPDOWN_ITEM}
                       >
                         {customer.name}
                       </button>
@@ -355,15 +365,15 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                   onClick={() => setIsCustomerContactDropdownOpen(prev => !prev)}
                   onBlur={() => window.setTimeout(() => setIsCustomerContactDropdownOpen(false), 150)}
                   disabled={!formData.customerId}
-                  className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all text-left flex items-center justify-between disabled:bg-slate-100 disabled:text-slate-400"
+                  className={dropdownTriggerButtonClass}
                 >
                   <span className={formData.customerContactId ? 'text-slate-800' : 'text-slate-400'}>
                     {formData.customerContactName || 'Kontakt auswählen'}
                   </span>
-                  <span className="text-slate-400 text-xs">▼</span>
+                  <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isCustomerContactDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {isCustomerContactDropdownOpen && formData.customerId && (
-                  <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden max-h-60 overflow-y-auto">
+                  <div className={dropdownMenuScrollableClass}>
                     <button
                       type="button"
                       onMouseDown={e => e.preventDefault()}
@@ -371,7 +381,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                         setFormData({ ...formData, customerContactId: undefined, customerContactName: undefined });
                         setIsCustomerContactDropdownOpen(false);
                       }}
-                      className="w-full text-left px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+                      className={`${DROPDOWN_ITEM} text-slate-600`}
                     >
                       Kein Kontakt
                     </button>
@@ -388,7 +398,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                           });
                           setIsCustomerContactDropdownOpen(false);
                         }}
-                        className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                        className={DROPDOWN_ITEM}
                       >
                         {contact.fullName || 'Kontakt'}
                         {(contact.email || contact.phone) && (
@@ -397,7 +407,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                       </button>
                     ))}
                     {customerContacts.length === 0 && (
-                      <div className="px-3 py-2 text-sm text-slate-500">Keine Kontakte vorhanden</div>
+                      <div className={`${DROPDOWN_ITEM} text-slate-500 cursor-default`}>Keine Kontakte vorhanden</div>
                     )}
                   </div>
                 )}
@@ -419,15 +429,15 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                   type="button"
                   onClick={() => setIsBusTypeDropdownOpen(prev => !prev)}
                   onBlur={() => window.setTimeout(() => setIsBusTypeDropdownOpen(false), 150)}
-                  className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all text-left flex items-center justify-between"
+                  className={dropdownTriggerButtonClass}
                 >
                   <span className={selectedBusType ? 'text-slate-800' : 'text-slate-400'}>
                     {selectedBusType ? `${selectedBusType.name} (${selectedBusType.capacity})` : 'Bustyp auswählen'}
                   </span>
-                  <span className="text-slate-400 text-xs">▼</span>
+                  <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isBusTypeDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {isBusTypeDropdownOpen && (
-                  <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+                  <div className={dropdownMenuClass}>
                     <button
                       type="button"
                       onMouseDown={e => e.preventDefault()}
@@ -435,7 +445,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                         setFormData({ ...formData, busTypeId: undefined });
                         setIsBusTypeDropdownOpen(false);
                       }}
-                      className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                      className={DROPDOWN_ITEM}
                     >
                       Bustyp auswählen
                     </button>
@@ -448,7 +458,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                           setFormData({ ...formData, busTypeId: busType.id });
                           setIsBusTypeDropdownOpen(false);
                         }}
-                        className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                        className={DROPDOWN_ITEM}
                       >
                         {busType.name} ({busType.capacity})
                       </button>
@@ -464,15 +474,15 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                   type="button"
                   onClick={() => setIsWorkerDropdownOpen(prev => !prev)}
                   onBlur={() => window.setTimeout(() => setIsWorkerDropdownOpen(false), 150)}
-                  className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all text-left flex items-center justify-between"
+                  className={dropdownTriggerButtonClass}
                 >
                   <span className={selectedWorker ? 'text-slate-800' : 'text-slate-400'}>
                     {selectedWorker ? `${selectedWorker.name}${selectedWorker.role ? ` (${selectedWorker.role})` : ''}` : 'Fahrer auswählen'}
                   </span>
-                  <span className="text-slate-400 text-xs">▼</span>
+                  <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isWorkerDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {isWorkerDropdownOpen && (
-                  <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+                  <div className={dropdownMenuClass}>
                     <button
                       type="button"
                       onMouseDown={e => e.preventDefault()}
@@ -484,7 +494,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                         });
                         setIsWorkerDropdownOpen(false);
                       }}
-                      className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                      className={DROPDOWN_ITEM}
                     >
                       Fahrer auswählen
                     </button>
@@ -501,7 +511,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                           });
                           setIsWorkerDropdownOpen(false);
                         }}
-                        className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                        className={DROPDOWN_ITEM}
                       >
                         {worker.name}{worker.role ? ` (${worker.role})` : ''}
                       </button>
@@ -657,7 +667,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                           className="w-full border-transparent bg-transparent focus:ring-0 p-1 text-slate-800 font-medium placeholder:text-slate-300"
                         />
                         {activeStopId === stop.id && suggestions[stop.id]?.length ? (
-                          <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg">
+                          <div className={DROPDOWN_MENU}>
                             {suggestions[stop.id].map((option, idx) => (
                               <button
                                 key={`${stop.id}-${idx}`}
@@ -672,7 +682,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                                   setSuggestions(prev => ({ ...prev, [stop.id]: [] }));
                                   setActiveStopId(null);
                                 }}
-                                className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50"
+                                className={DROPDOWN_ITEM}
                               >
                                 {option.label}
                               </button>

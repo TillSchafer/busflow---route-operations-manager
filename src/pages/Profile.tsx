@@ -5,6 +5,7 @@ interface Props {
   name: string;
   role: 'ADMIN' | 'DISPATCH' | 'VIEWER';
   avatarUrl?: string;
+  isPlatformOwner?: boolean;
   email: string;
   profileAvatarUrl: string;
   profileEmail: string;
@@ -17,12 +18,14 @@ interface Props {
   onLogout: () => void;
   onProfile: () => void;
   onAdmin: () => void;
+  onOwner?: () => void;
 }
 
 const Profile: React.FC<Props> = ({
   name,
   role,
   avatarUrl,
+  isPlatformOwner,
   email,
   profileAvatarUrl,
   profileEmail,
@@ -34,7 +37,8 @@ const Profile: React.FC<Props> = ({
   onGoHome,
   onLogout,
   onProfile,
-  onAdmin
+  onAdmin,
+  onOwner
 }) => {
   const initials = name
     .split(' ')
@@ -47,10 +51,11 @@ const Profile: React.FC<Props> = ({
     <div className="min-h-screen flex flex-col">
       <AppHeader
         title="Mein Profil"
-        user={{ name, role, avatarUrl }}
+        user={{ name, role, avatarUrl, isPlatformOwner }}
         onHome={onGoHome}
         onProfile={onProfile}
         onAdmin={onAdmin}
+        onOwner={onOwner}
         onLogout={onLogout}
       />
       <main className="flex-1 p-4 md:p-8 no-print max-w-7xl mx-auto w-full">

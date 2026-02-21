@@ -13,6 +13,7 @@ export interface User {
   avatarUrl?: string;
   allowedApps?: string[];
   isPlatformAdmin?: boolean;
+  isPlatformOwner?: boolean;
 }
 
 export interface AccountSummary {
@@ -34,6 +35,9 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const PLATFORM_OWNER_EMAIL =
+  (import.meta.env.VITE_PLATFORM_OWNER_EMAIL as string | undefined)?.trim().toLowerCase() ||
+  'till-schaefer@outlook.com';
 
 const toRole = (value: MembershipRole | undefined): Role => {
   if (value === 'ADMIN' || value === 'DISPATCH' || value === 'VIEWER') {
@@ -120,6 +124,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const isPlatformAdmin = (profile.global_role as GlobalRole) === 'ADMIN';
+      const isPlatformOwner =
+        isPlatformAdmin &&
+        !!profile.email &&
+        profile.email.trim().toLowerCase() === PLATFORM_OWNER_EMAIL;
       const membership = await fetchActiveMembership(profile.id, isPlatformAdmin);
 
       const effectiveRole: Role = isPlatformAdmin ? 'ADMIN' : membership?.role || 'VIEWER';
@@ -130,7 +138,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: effectiveRole,
         email: profile.email,
         avatarUrl: profile.avatar_url,
-        isPlatformAdmin
+        isPlatformAdmin,
+        isPlatformOwner
       });
     } catch (error) {
       console.error('Unexpected error fetching profile:', error);

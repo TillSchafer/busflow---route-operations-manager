@@ -1,11 +1,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders, json, extractBearerToken, normalizeEmail, isValidEmail } from '../_shared/utils.ts';
+import { requirePlatformOwner } from '../_shared/owner.ts';
 
 type ProvisionRequest = {
   accountName?: string;
@@ -13,17 +9,6 @@ type ProvisionRequest = {
   adminEmail?: string;
 };
 
-const json = (status: number, payload: Record<string, unknown>) =>
-  new Response(JSON.stringify(payload), {
-    status,
-    headers: {
-      ...corsHeaders,
-      'Content-Type': 'application/json',
-    },
-  });
-
-const normalizeEmail = (value: string) => value.trim().toLowerCase();
-const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 const slugify = (value: string) =>
   value
     .toLowerCase()
@@ -31,13 +16,6 @@ const slugify = (value: string) =>
     .replace(/[^a-z0-9\s-]/g, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-');
-const extractBearerToken = (authHeader: string | null) => {
-  if (!authHeader) return null;
-  const [scheme, token, ...rest] = authHeader.trim().split(' ');
-  if (scheme?.toLowerCase() !== 'bearer' || !token || rest.length > 0) return null;
-  const normalized = token.trim();
-  return normalized.length > 0 ? normalized : null;
-};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -91,14 +69,9 @@ serve(async (req) => {
     return json(401, { ok: false, code: 'UNAUTHORIZED' });
   }
 
-  const { data: callerProfile, error: callerProfileError } = await adminClient
-    .from('profiles')
-    .select('global_role')
-    .eq('id', caller.id)
-    .single();
-
-  if (callerProfileError || callerProfile?.global_role !== 'ADMIN') {
-    return json(403, { ok: false, code: 'FORBIDDEN' });
+  const ownerGuardResponse = await requirePlatformOwner(adminClient, caller.id);
+  if (ownerGuardResponse) {
+    return ownerGuardResponse;
   }
 
   let body: ProvisionRequest;

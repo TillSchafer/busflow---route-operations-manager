@@ -33,6 +33,7 @@ const AcceptInvite: React.FC = () => {
   const [errorText, setErrorText] = useState('');
 
   const searchParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const isRecoveryFlow = useMemo(() => searchParams.get('type') === 'recovery', [searchParams]);
 
   useEffect(() => {
     const init = async () => {
@@ -119,7 +120,9 @@ const AcceptInvite: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xl px-8 py-8 w-full max-w-md">
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">Einladung abschließen</h2>
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">
+          {isRecoveryFlow ? 'Passwort zurücksetzen' : 'Einladung abschließen'}
+        </h2>
 
         {state === 'loading' && (
           <p className="text-sm text-slate-600">Einladung wird geprüft...</p>
@@ -140,7 +143,9 @@ const AcceptInvite: React.FC = () => {
         {(state === 'needs_password' || state === 'saving') && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <p className="text-sm text-slate-600">
-              Legen Sie jetzt Ihr Passwort fest. Danach wird Ihr Zugang automatisch aktiviert.
+              {isRecoveryFlow
+                ? 'Legen Sie jetzt ein neues Passwort fest, um wieder Zugriff zu erhalten.'
+                : 'Legen Sie jetzt Ihr Passwort fest. Danach wird Ihr Zugang automatisch aktiviert.'}
             </p>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Neues Passwort</label>
@@ -181,7 +186,7 @@ const AcceptInvite: React.FC = () => {
         {state === 'success' && (
           <div className="space-y-3">
             <p className="text-sm text-emerald-700 bg-emerald-50 p-3 rounded-lg">
-              Passwort gesetzt. Ihr Zugang ist jetzt aktiv.
+              Passwort erfolgreich gesetzt.
             </p>
             <p className="text-sm text-slate-600">Sie werden weitergeleitet...</p>
           </div>

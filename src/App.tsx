@@ -21,11 +21,25 @@ const LoginScreen: React.FC<{
   email: string;
   password: string;
   loginError: string;
+  resetMessage: string;
   isLoggingIn: boolean;
+  isSendingReset: boolean;
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
   onSubmit: (e: React.FormEvent) => Promise<void>;
-}> = ({ email, password, loginError, isLoggingIn, onEmailChange, onPasswordChange, onSubmit }) => (
+  onForgotPassword: () => Promise<void>;
+}> = ({
+  email,
+  password,
+  loginError,
+  resetMessage,
+  isLoggingIn,
+  isSendingReset,
+  onEmailChange,
+  onPasswordChange,
+  onSubmit,
+  onForgotPassword
+}) => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
     <div className="bg-white border border-slate-200 rounded-2xl shadow-xl px-8 py-8 w-full max-w-md">
       <h2 className="text-2xl font-bold text-slate-900 mb-2">Anmeldung</h2>
@@ -59,6 +73,7 @@ const LoginScreen: React.FC<{
           />
         </div>
         {loginError && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{loginError}</p>}
+        {resetMessage && <p className="text-sm text-emerald-700 bg-emerald-50 p-2 rounded">{resetMessage}</p>}
 
         <button
           type="submit"
@@ -66,6 +81,15 @@ const LoginScreen: React.FC<{
           className="w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors disabled:opacity-50"
         >
           {isLoggingIn ? 'Verarbeite...' : 'Anmelden'}
+        </button>
+
+        <button
+          type="button"
+          disabled={isSendingReset}
+          onClick={onForgotPassword}
+          className="w-full text-sm font-semibold text-blue-700 hover:text-blue-600 disabled:opacity-50"
+        >
+          {isSendingReset ? 'Sende Reset-Link...' : 'Passwort vergessen?'}
         </button>
       </form>
 
@@ -82,13 +106,15 @@ const LoginScreen: React.FC<{
 
 const InnerApp: React.FC = () => {
   const navigate = useNavigate();
-  const { user, activeAccount, activeAccountId, canManageTenantUsers, loading, logout } = useAuth();
+  const { user, activeAccountId, canManageTenantUsers, loading, logout } = useAuth();
   const { pushToast } = useToast();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [resetMessage, setResetMessage] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isSendingReset, setIsSendingReset] = useState(false);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,13 +135,38 @@ const InnerApp: React.FC = () => {
     }
   };
 
+  const handleForgotPassword = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setLoginError('Bitte zuerst Ihre E-Mail-Adresse eingeben.');
+      return;
+    }
+
+    setIsSendingReset(true);
+    setResetMessage('');
+
+    try {
+      const redirectTo = (import.meta.env.VITE_PASSWORD_RESET_REDIRECT_URL as string | undefined)?.trim()
+        || `${window.location.origin}/auth/accept-invite`;
+
+      await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo });
+    } catch {
+      // Neutral response on purpose to avoid account enumeration.
+    } finally {
+      setIsSendingReset(false);
+      setResetMessage('Wenn ein passendes Konto existiert, wurde ein Reset-Link per E-Mail versendet.');
+    }
+  };
+
   const handleLogout = async () => {
     await logout();
     navigate('/');
   };
 
-  const adminPath = user?.isPlatformAdmin ? '/platform-admin' : '/team-admin';
+  const adminPath = canManageTenantUsers ? '/adminbereich' : '/';
+  const ownerPath = user?.isPlatformOwner ? '/owner-bereich' : adminPath;
   const goAdmin = () => navigate(adminPath);
+  const goOwner = () => navigate(ownerPath);
 
   if (loading) {
     return (
@@ -141,10 +192,16 @@ const InnerApp: React.FC = () => {
               email={email}
               password={password}
               loginError={loginError}
+              resetMessage={resetMessage}
               isLoggingIn={isLoggingIn}
-              onEmailChange={setEmail}
+              isSendingReset={isSendingReset}
+              onEmailChange={(value) => {
+                setEmail(value);
+                setResetMessage('');
+              }}
               onPasswordChange={setPassword}
               onSubmit={handleAuth}
+              onForgotPassword={handleForgotPassword}
             />
           }
         />
@@ -158,7 +215,6 @@ const InnerApp: React.FC = () => {
       title: 'BusFlow Routenplanung',
       description: 'Routen, Halte, Fahrgastzahlen und Druckansicht verwalten.',
       icon: Bus,
-      // For now, simpler access check
       onClick: () => navigate('/busflow')
     }
   ];
@@ -174,6 +230,7 @@ const InnerApp: React.FC = () => {
               auth={user}
               onProfile={() => navigate('/profile')}
               onAdmin={goAdmin}
+              onOwner={user.isPlatformOwner ? goOwner : undefined}
               onLogout={handleLogout}
               onHome={() => navigate('/')}
             />
@@ -189,41 +246,44 @@ const InnerApp: React.FC = () => {
               onLogout={handleLogout}
               onGoHome={() => navigate('/')}
               onAdmin={goAdmin}
+              onOwner={user.isPlatformOwner ? goOwner : undefined}
             />
           }
         />
         <Route
-          path="/platform-admin"
+          path="/owner-bereich"
           element={
-            user.isPlatformAdmin ? (
+            user.isPlatformOwner ? (
               <PlatformAdmin
                 header={{
-                  title: 'Platform Admin',
+                  title: 'Owner Bereich',
                   user: user,
                   onHome: () => navigate('/'),
                   onProfile: () => navigate('/profile'),
                   onAdmin: goAdmin,
+                  onOwner: goOwner,
                   onLogout: handleLogout
                 }}
               />
             ) : (
-              <Navigate to="/" replace />
+              <Navigate to={canManageTenantUsers ? '/adminbereich' : '/'} replace />
             )
           }
         />
         <Route
-          path="/team-admin"
+          path="/adminbereich"
           element={
-            !user.isPlatformAdmin && canManageTenantUsers ? (
+            canManageTenantUsers ? (
               <TeamAdmin
                 currentUserId={user.id}
                 activeAccountId={activeAccountId}
                 header={{
-                  title: 'Team Admin',
+                  title: 'Adminbereich',
                   user: user,
                   onHome: () => navigate('/'),
                   onProfile: () => navigate('/profile'),
                   onAdmin: goAdmin,
+                  onOwner: user.isPlatformOwner ? goOwner : undefined,
                   onLogout: handleLogout
                 }}
               />
@@ -232,16 +292,11 @@ const InnerApp: React.FC = () => {
             )
           }
         />
-        <Route
-          path="/admin"
-          element={
-            user.isPlatformAdmin
-              ? <Navigate to="/platform-admin" replace />
-              : (!user.isPlatformAdmin && canManageTenantUsers && activeAccount?.role === 'ADMIN')
-                ? <Navigate to="/team-admin" replace />
-                : <Navigate to="/" replace />
-          }
-        />
+        <Route path="/owner-settings" element={<Navigate to={user.isPlatformOwner ? '/owner-bereich' : '/adminbereich'} replace />} />
+        <Route path="/company-settings" element={<Navigate to={canManageTenantUsers ? '/adminbereich' : '/'} replace />} />
+        <Route path="/team-admin" element={<Navigate to={canManageTenantUsers ? '/adminbereich' : '/'} replace />} />
+        <Route path="/platform-admin" element={<Navigate to={user.isPlatformOwner ? '/owner-bereich' : '/adminbereich'} replace />} />
+        <Route path="/admin" element={<Navigate to={canManageTenantUsers ? '/adminbereich' : '/'} replace />} />
         <Route
           path="/auth/accept-invite"
           element={<AcceptInvite />}
@@ -253,6 +308,7 @@ const InnerApp: React.FC = () => {
               name={user.name}
               role={user.role}
               avatarUrl={user.avatarUrl}
+              isPlatformOwner={user.isPlatformOwner}
               email={user.email || ''}
               profileEmail={user.email || ''}
               profileAvatarUrl={user.avatarUrl || ''}
@@ -265,6 +321,7 @@ const InnerApp: React.FC = () => {
               onLogout={handleLogout}
               onProfile={() => navigate('/profile')}
               onAdmin={goAdmin}
+              onOwner={user.isPlatformOwner ? goOwner : undefined}
             />
           }
         />

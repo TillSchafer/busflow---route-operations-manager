@@ -1,11 +1,6 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders, json, extractBearerToken, isUuid } from '../_shared/utils.ts';
 
 type DeleteAccountRequest = {
   accountId?: string;
@@ -14,30 +9,10 @@ type DeleteAccountRequest = {
   reason?: string;
 };
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-const json = (status: number, payload: Record<string, unknown>) =>
-  new Response(JSON.stringify(payload), {
-    status,
-    headers: {
-      ...corsHeaders,
-      'Content-Type': 'application/json',
-    },
-  });
-
-const isUuid = (value?: string | null): value is string => !!value && UUID_REGEX.test(value);
-const extractBearerToken = (authHeader: string | null) => {
-  if (!authHeader) return null;
-  const [scheme, token, ...rest] = authHeader.trim().split(' ');
-  if (scheme?.toLowerCase() !== 'bearer' || !token || rest.length > 0) return null;
-  const normalized = token.trim();
-  return normalized.length > 0 ? normalized : null;
-};
-
 const getTableCount = async (adminClient: ReturnType<typeof createClient>, table: string, accountId: string) => {
   const { count, error } = await adminClient
     .from(table)
-    .select('id', { count: 'exact', head: true })
+    .select('*', { count: 'exact', head: true })
     .eq('account_id', accountId);
 
   if (error) throw error;
@@ -45,16 +20,40 @@ const getTableCount = async (adminClient: ReturnType<typeof createClient>, table
 };
 
 const cleanupUserReferences = async (adminClient: ReturnType<typeof createClient>, userId: string, userEmail?: string | null) => {
-  await adminClient.from('platform_accounts').update({ created_by: null }).eq('created_by', userId);
-  await adminClient.from('platform_accounts').update({ archived_by: null }).eq('archived_by', userId);
-  await adminClient.from('account_invitations').update({ invited_by: null }).eq('invited_by', userId);
+  const { error: createdByError } = await adminClient
+    .from('platform_accounts')
+    .update({ created_by: null })
+    .eq('created_by', userId);
+  if (createdByError) {
+    throw new Error(`cleanup platform_accounts.created_by failed: ${createdByError.message}`);
+  }
+
+  const { error: archivedByError } = await adminClient
+    .from('platform_accounts')
+    .update({ archived_by: null })
+    .eq('archived_by', userId);
+  if (archivedByError) {
+    throw new Error(`cleanup platform_accounts.archived_by failed: ${archivedByError.message}`);
+  }
+
+  const { error: invitedByError } = await adminClient
+    .from('account_invitations')
+    .update({ invited_by: null })
+    .eq('invited_by', userId);
+  if (invitedByError) {
+    throw new Error(`cleanup account_invitations.invited_by failed: ${invitedByError.message}`);
+  }
 
   if (userEmail) {
-    await adminClient
+    const { error: revokeInviteError } = await adminClient
       .from('account_invitations')
       .update({ status: 'REVOKED' })
       .eq('status', 'PENDING')
       .ilike('email', userEmail);
+
+    if (revokeInviteError) {
+      throw new Error(`cleanup pending invitations failed: ${revokeInviteError.message}`);
+    }
   }
 };
 
@@ -160,7 +159,12 @@ serve(async (req) => {
       return json(500, { ok: false, code: 'DELETE_FAILED', message: membershipsDataRes.error.message });
     }
 
-    const affectedUsers = new Set((membershipsDataRes.data || []).map(item => item.user_id));
+    const affectedUsers = new Set<string>();
+    for (const item of membershipsDataRes.data || []) {
+      if (isUuid(item.user_id)) {
+        affectedUsers.add(item.user_id);
+      }
+    }
     const dryRunPayload = {
       routes: routesCount,
       stops: stopsCount,
@@ -191,15 +195,28 @@ serve(async (req) => {
       return json(409, { ok: false, code: 'CONFIRM_SLUG_MISMATCH' });
     }
 
-    await adminClient.from('busflow_stops').delete().eq('account_id', accountId);
-    await adminClient.from('busflow_routes').delete().eq('account_id', accountId);
-    await adminClient.from('busflow_customer_contacts').delete().eq('account_id', accountId);
-    await adminClient.from('busflow_customers').delete().eq('account_id', accountId);
-    await adminClient.from('busflow_workers').delete().eq('account_id', accountId);
-    await adminClient.from('busflow_bus_types').delete().eq('account_id', accountId);
-    await adminClient.from('busflow_app_settings').delete().eq('account_id', accountId);
-    await adminClient.from('account_invitations').delete().eq('account_id', accountId);
-    await adminClient.from('account_memberships').delete().eq('account_id', accountId);
+    const accountScopedDeleteOrder = [
+      'busflow_stops',
+      'busflow_routes',
+      'busflow_customer_contacts',
+      'busflow_customers',
+      'busflow_workers',
+      'busflow_bus_types',
+      'busflow_app_settings',
+      'account_invitations',
+      'account_memberships',
+    ];
+
+    for (const table of accountScopedDeleteOrder) {
+      const { error: deleteError } = await adminClient.from(table).delete().eq('account_id', accountId);
+      if (deleteError) {
+        return json(500, {
+          ok: false,
+          code: 'DELETE_FAILED',
+          message: `Failed deleting ${table}: ${deleteError.message}`,
+        });
+      }
+    }
 
     const { error: accountDeleteError } = await adminClient
       .from('platform_accounts')
@@ -214,67 +231,88 @@ serve(async (req) => {
     let orphanUsersDeleted = 0;
 
     for (const userId of affectedUsers) {
-      const { count: remainingMemberships, error: remainingMembershipsError } = await adminClient
-        .from('account_memberships')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId);
+      try {
+        const { count: remainingMemberships, error: remainingMembershipsError } = await adminClient
+          .from('account_memberships')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId);
 
-      if (remainingMembershipsError) {
-        orphanDeleteErrors.push(`${userId}: ${remainingMembershipsError.message}`);
-        continue;
+        if (remainingMembershipsError) {
+          orphanDeleteErrors.push(`${userId}: ${remainingMembershipsError.message}`);
+          continue;
+        }
+
+        if ((remainingMemberships || 0) > 0) {
+          continue;
+        }
+
+        const { data: profile, error: profileError } = await adminClient
+          .from('profiles')
+          .select('id, email, global_role')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (profileError) {
+          throw new Error(`profile lookup failed: ${profileError.message}`);
+        }
+
+        if (!profile) {
+          continue;
+        }
+
+        if (profile.global_role === 'ADMIN') {
+          continue;
+        }
+
+        await cleanupUserReferences(adminClient, userId, profile.email || null);
+
+        const { error: appPermissionsDeleteError } = await adminClient
+          .from('app_permissions')
+          .delete()
+          .eq('user_id', userId);
+        if (appPermissionsDeleteError) {
+          throw new Error(`app_permissions cleanup failed: ${appPermissionsDeleteError.message}`);
+        }
+
+        const { error: deleteUserError } = await adminClient.auth.admin.deleteUser(userId);
+        if (deleteUserError) {
+          orphanDeleteErrors.push(`${userId}: ${deleteUserError.message}`);
+          continue;
+        }
+
+        orphanUsersDeleted += 1;
+      } catch (orphanError) {
+        orphanDeleteErrors.push(
+          `${userId}: ${orphanError instanceof Error ? orphanError.message : 'Unexpected orphan cleanup error.'}`
+        );
       }
-
-      if ((remainingMemberships || 0) > 0) {
-        continue;
-      }
-
-      const { data: profile } = await adminClient
-        .from('profiles')
-        .select('id, email, global_role')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (!profile) {
-        continue;
-      }
-
-      if (profile.global_role === 'ADMIN') {
-        continue;
-      }
-
-      await cleanupUserReferences(adminClient, userId, profile.email || null);
-      await adminClient.from('app_permissions').delete().eq('user_id', userId);
-
-      const { error: deleteUserError } = await adminClient.auth.admin.deleteUser(userId);
-      if (deleteUserError) {
-        orphanDeleteErrors.push(`${userId}: ${deleteUserError.message}`);
-        continue;
-      }
-
-      orphanUsersDeleted += 1;
     }
 
-    await adminClient
+    const { error: auditInsertError } = await adminClient
       .from('admin_access_audit')
       .insert({
         admin_user_id: caller.id,
-        target_account_id: accountId,
+        target_account_id: null,
         action: 'ACCOUNT_HARD_DELETED',
         resource: 'platform_accounts',
         resource_id: accountId,
         meta: {
           reason,
+          deleted_account_id: accountId,
           counts: dryRunPayload,
           orphan_users_deleted: orphanUsersDeleted,
           orphan_user_delete_errors: orphanDeleteErrors,
         },
       });
 
+    const auditError = auditInsertError?.message || null;
+
     return json(200, {
       ok: true,
       deletedAccountId: accountId,
       orphanUsersDeleted,
       orphanDeleteErrors,
+      auditError,
       counts: dryRunPayload,
     });
   } catch (error) {
