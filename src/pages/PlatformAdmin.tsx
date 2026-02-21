@@ -6,6 +6,7 @@ import { useToast } from '../shared/components/ToastProvider';
 import { PlatformAdminApi } from '../shared/api/admin/platformAdmin.api';
 import { SupportAdminApi } from '../shared/api/admin/support.api';
 import { MembershipItem, PlatformAccount, PlatformAccountStatus } from '../shared/api/admin/types';
+import { isFunctionAuthError } from '../shared/lib/supabaseFunctions';
 
 interface Props {
   header: {
@@ -52,6 +53,13 @@ const memberDisplayName = (membership: MembershipItem) => {
 const memberDisplayEmail = (membership: MembershipItem) => {
   const profile = profileFromMembership(membership);
   return profile?.email || membership.user_id;
+};
+
+const toActionErrorMessage = (error: unknown, fallback: string) => {
+  if (isFunctionAuthError(error)) {
+    return 'Sitzung ungültig/abgelaufen. Bitte neu anmelden.';
+  }
+  return error instanceof Error ? error.message : fallback;
 };
 
 const PlatformAdmin: React.FC<Props> = ({ header }) => {
@@ -119,7 +127,7 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
       pushToast({
         type: 'error',
         title: 'Laden fehlgeschlagen',
-        message: error instanceof Error ? error.message : 'Accounts konnten nicht geladen werden.'
+        message: toActionErrorMessage(error, 'Accounts konnten nicht geladen werden.')
       });
     } finally {
       setLoading(false);
@@ -145,7 +153,7 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
       pushToast({
         type: 'error',
         title: 'Teamdaten konnten nicht geladen werden',
-        message: error instanceof Error ? error.message : 'Unbekannter Fehler.'
+        message: toActionErrorMessage(error, 'Unbekannter Fehler.')
       });
       setUserDeleteMembers([]);
       setSelectedUserToDeleteId('');
@@ -192,7 +200,7 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
       pushToast({
         type: 'error',
         title: 'Erstellung fehlgeschlagen',
-        message: error instanceof Error ? error.message : 'Account konnte nicht erstellt werden.'
+        message: toActionErrorMessage(error, 'Account konnte nicht erstellt werden.')
       });
     } finally {
       setIsCreatingAccount(false);
@@ -220,7 +228,7 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
       pushToast({
         type: 'error',
         title: 'Reset fehlgeschlagen',
-        message: error instanceof Error ? error.message : 'Reset-Link konnte nicht gesendet werden.'
+        message: toActionErrorMessage(error, 'Reset-Link konnte nicht gesendet werden.')
       });
     } finally {
       setIsSendingReset(false);
@@ -241,7 +249,7 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
       pushToast({
         type: 'error',
         title: 'Statuswechsel fehlgeschlagen',
-        message: error instanceof Error ? error.message : 'Account-Status konnte nicht geändert werden.'
+        message: toActionErrorMessage(error, 'Account-Status konnte nicht geändert werden.')
       });
     } finally {
       setAccountToChangeStatus(null);
@@ -262,7 +270,7 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
       pushToast({
         type: 'error',
         title: 'Dry-Run fehlgeschlagen',
-        message: error instanceof Error ? error.message : 'Dry-Run konnte nicht geladen werden.'
+        message: toActionErrorMessage(error, 'Dry-Run konnte nicht geladen werden.')
       });
     } finally {
       setIsRunningDeleteDryRun(false);
@@ -294,7 +302,7 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
       pushToast({
         type: 'error',
         title: 'Löschen fehlgeschlagen',
-        message: error instanceof Error ? error.message : 'Firma konnte nicht gelöscht werden.'
+        message: toActionErrorMessage(error, 'Firma konnte nicht gelöscht werden.')
       });
     } finally {
       setIsDeletingAccount(false);
@@ -327,7 +335,7 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
       pushToast({
         type: 'error',
         title: 'Löschen fehlgeschlagen',
-        message: error instanceof Error ? error.message : 'User konnte nicht gelöscht werden.'
+        message: toActionErrorMessage(error, 'User konnte nicht gelöscht werden.')
       });
     } finally {
       setIsDeletingUser(false);

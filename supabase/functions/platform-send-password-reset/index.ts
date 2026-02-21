@@ -23,6 +23,13 @@ const json = (status: number, payload: Record<string, unknown>) =>
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const extractBearerToken = (authHeader: string | null) => {
+  if (!authHeader) return null;
+  const [scheme, token, ...rest] = authHeader.trim().split(' ');
+  if (scheme?.toLowerCase() !== 'bearer' || !token || rest.length > 0) return null;
+  const normalized = token.trim();
+  return normalized.length > 0 ? normalized : null;
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -59,24 +66,18 @@ serve(async (req) => {
     return json(500, { ok: false, code: 'INVALID_PASSWORD_RESET_REDIRECT_URL' });
   }
 
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader) {
+  const accessToken = extractBearerToken(req.headers.get('Authorization'));
+  if (!accessToken) {
     return json(401, { ok: false, code: 'UNAUTHORIZED' });
   }
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
-  const callerClient = createClient(supabaseUrl, anonKey, {
-    global: {
-      headers: {
-        Authorization: authHeader,
-      },
-    },
-  });
+  const callerClient = createClient(supabaseUrl, anonKey);
 
   const {
     data: { user: caller },
     error: callerError,
-  } = await callerClient.auth.getUser();
+  } = await callerClient.auth.getUser(accessToken);
 
   if (callerError || !caller) {
     return json(401, { ok: false, code: 'UNAUTHORIZED' });

@@ -5,6 +5,7 @@ import ConfirmDialog from '../shared/components/ConfirmDialog';
 import { useToast } from '../shared/components/ToastProvider';
 import { TeamAdminApi } from '../shared/api/admin/teamAdmin.api';
 import { InvitationItem, InvitationRole, MembershipItem, MembershipRole } from '../shared/api/admin/types';
+import { isFunctionAuthError } from '../shared/lib/supabaseFunctions';
 
 interface Props {
   currentUserId?: string;
@@ -24,6 +25,13 @@ const formatDateTime = (value?: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString('de-DE');
+};
+
+const toActionErrorMessage = (error: unknown, fallback: string) => {
+  if (isFunctionAuthError(error)) {
+    return 'Sitzung ungültig/abgelaufen. Bitte neu anmelden.';
+  }
+  return error instanceof Error ? error.message : fallback;
 };
 
 const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) => {
@@ -72,7 +80,7 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
       pushToast({
         type: 'error',
         title: 'Laden fehlgeschlagen',
-        message: error instanceof Error ? error.message : 'Teamdaten konnten nicht geladen werden.'
+        message: toActionErrorMessage(error, 'Teamdaten konnten nicht geladen werden.')
       });
     } finally {
       setLoading(false);
@@ -98,7 +106,7 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
       pushToast({
         type: 'error',
         title: 'Einladung fehlgeschlagen',
-        message: error instanceof Error ? error.message : 'Einladung konnte nicht gesendet werden.'
+        message: toActionErrorMessage(error, 'Einladung konnte nicht gesendet werden.')
       });
     } finally {
       setIsInviting(false);
@@ -112,7 +120,7 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
       pushToast({ type: 'success', title: 'Gespeichert', message: 'Rolle wurde aktualisiert.' });
       await loadData();
     } catch (error) {
-      pushToast({ type: 'error', title: 'Aktualisierung fehlgeschlagen', message: error instanceof Error ? error.message : 'Rolle konnte nicht aktualisiert werden.' });
+      pushToast({ type: 'error', title: 'Aktualisierung fehlgeschlagen', message: toActionErrorMessage(error, 'Rolle konnte nicht aktualisiert werden.') });
     }
   };
 
@@ -125,7 +133,7 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
       pushToast({ type: 'success', title: 'User gelöscht', message: 'Nutzer wurde vollständig gelöscht.' });
       await loadData();
     } catch (error) {
-      pushToast({ type: 'error', title: 'Aktion fehlgeschlagen', message: error instanceof Error ? error.message : 'Aktion konnte nicht ausgeführt werden.' });
+      pushToast({ type: 'error', title: 'Aktion fehlgeschlagen', message: toActionErrorMessage(error, 'Aktion konnte nicht ausgeführt werden.') });
     } finally {
       setIsDeletingUser(false);
     }
@@ -141,7 +149,7 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
       pushToast({ type: 'success', title: 'Einladung widerrufen', message: 'Die Einladung wurde widerrufen.' });
       await loadData();
     } catch (error) {
-      pushToast({ type: 'error', title: 'Aktion fehlgeschlagen', message: error instanceof Error ? error.message : 'Aktion konnte nicht ausgeführt werden.' });
+      pushToast({ type: 'error', title: 'Aktion fehlgeschlagen', message: toActionErrorMessage(error, 'Aktion konnte nicht ausgeführt werden.') });
     }
 
     setInvitationToRevoke(null);

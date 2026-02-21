@@ -1,12 +1,12 @@
 import { supabase } from '../../lib/supabase';
+import { invokeAuthedFunction } from '../../lib/supabaseFunctions';
 import { DeleteUserResult, InvitationItem, InvitationRole, MembershipItem, MembershipRole, PlatformAccount } from './types';
 
 const invokeInvite = async (payload: { accountId: string; email: string; role: InvitationRole }) => {
-  const { data, error } = await supabase.functions.invoke('invite-account-user', { body: payload });
-
-  if (error) {
-    throw new Error(error.message || 'Einladung konnte nicht erstellt werden.');
-  }
+  const data = await invokeAuthedFunction<
+    { accountId: string; email: string; role: InvitationRole },
+    { ok: boolean; message?: string; code?: string }
+  >('invite-account-user', payload);
   if (!data?.ok) {
     throw new Error(data?.message || data?.code || 'Einladung konnte nicht erstellt werden.');
   }
@@ -89,13 +89,10 @@ export const TeamAdminApi = {
   },
 
   async deleteUserHard(accountId: string, userId: string, reason?: string): Promise<DeleteUserResult> {
-    const { data, error } = await supabase.functions.invoke('admin-delete-user', {
-      body: { accountId, userId, reason }
-    });
-
-    if (error) {
-      throw new Error(error.message || 'User konnte nicht gelöscht werden.');
-    }
+    const data = await invokeAuthedFunction<
+      { accountId: string; userId: string; reason?: string },
+      DeleteUserResult
+    >('admin-delete-user-v3', { accountId, userId, reason });
     if (!data?.ok) {
       throw new Error(data?.message || data?.code || 'User konnte nicht gelöscht werden.');
     }

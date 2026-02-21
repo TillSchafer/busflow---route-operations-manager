@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../shared/lib/supabase';
+import { invokeAuthedFunction } from '../shared/lib/supabaseFunctions';
 import AppHeader from '../shared/components/AppHeader';
 import { Leaf } from 'lucide-react';
 import { useToast } from '../shared/components/ToastProvider';
@@ -98,13 +99,10 @@ const Admin: React.FC<Props> = ({ apps: _apps, currentUserId, activeAccountId, i
   );
 
   const invokeInvite = useCallback(async (payload: { accountId: string; email: string; role: InvitationRole }) => {
-    const { data, error } = await supabase.functions.invoke('invite-account-user', {
-      body: payload,
-    });
-
-    if (error) {
-      throw new Error(error.message || 'Einladung konnte nicht erstellt werden.');
-    }
+    const data = await invokeAuthedFunction<
+      { accountId: string; email: string; role: InvitationRole },
+      { ok: boolean; message?: string; code?: string }
+    >('invite-account-user', payload);
 
     if (!data?.ok) {
       throw new Error(data?.message || data?.code || 'Einladung konnte nicht erstellt werden.');

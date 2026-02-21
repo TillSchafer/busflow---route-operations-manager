@@ -26,6 +26,13 @@ const json = (status: number, payload: Record<string, unknown>) =>
   });
 
 const isUuid = (value?: string | null): value is string => !!value && UUID_REGEX.test(value);
+const extractBearerToken = (authHeader: string | null) => {
+  if (!authHeader) return null;
+  const [scheme, token, ...rest] = authHeader.trim().split(' ');
+  if (scheme?.toLowerCase() !== 'bearer' || !token || rest.length > 0) return null;
+  const normalized = token.trim();
+  return normalized.length > 0 ? normalized : null;
+};
 
 const getTableCount = async (adminClient: ReturnType<typeof createClient>, table: string, accountId: string) => {
   const { count, error } = await adminClient
@@ -68,24 +75,18 @@ serve(async (req) => {
     return json(500, { ok: false, code: 'MISSING_SUPABASE_ENV' });
   }
 
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader) {
+  const accessToken = extractBearerToken(req.headers.get('Authorization'));
+  if (!accessToken) {
     return json(401, { ok: false, code: 'UNAUTHORIZED' });
   }
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
-  const callerClient = createClient(supabaseUrl, anonKey, {
-    global: {
-      headers: {
-        Authorization: authHeader,
-      },
-    },
-  });
+  const callerClient = createClient(supabaseUrl, anonKey);
 
   const {
     data: { user: caller },
     error: callerError,
-  } = await callerClient.auth.getUser();
+  } = await callerClient.auth.getUser(accessToken);
 
   if (callerError || !caller) {
     return json(401, { ok: false, code: 'UNAUTHORIZED' });

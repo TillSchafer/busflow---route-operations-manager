@@ -5,6 +5,8 @@ Diese Anleitung richtet die produktiven Functions in BusFlow ein:
 - `platform-provision-account`
 - `platform-send-password-reset`
 - `admin-delete-user`
+- `admin-delete-user-v2`
+- `admin-delete-user-v3`
 - `platform-delete-account`
 
 ## 1) Voraussetzungen
@@ -36,6 +38,8 @@ npx supabase functions new invite-account-user
 npx supabase functions new platform-provision-account
 npx supabase functions new platform-send-password-reset
 npx supabase functions new admin-delete-user
+npx supabase functions new admin-delete-user-v2
+npx supabase functions new admin-delete-user-v3
 npx supabase functions new platform-delete-account
 ```
 
@@ -44,6 +48,8 @@ Erwartete Struktur:
 - `supabase/functions/platform-provision-account/index.ts`
 - `supabase/functions/platform-send-password-reset/index.ts`
 - `supabase/functions/admin-delete-user/index.ts`
+- `supabase/functions/admin-delete-user-v2/index.ts`
+- `supabase/functions/admin-delete-user-v3/index.ts`
 - `supabase/functions/platform-delete-account/index.ts`
 
 ## 3) Code in `index.ts` einsetzen
@@ -97,22 +103,28 @@ serve(async (req) => {
 project_id = "jgydzxdiwpldgrqkfbfk"
 
 [functions.invite-account-user]
-verify_jwt = true
+verify_jwt = false
 
 [functions.platform-provision-account]
-verify_jwt = true
+verify_jwt = false
 
 [functions.platform-send-password-reset]
-verify_jwt = true
+verify_jwt = false
 
 [functions.admin-delete-user]
 verify_jwt = true
 
-[functions.platform-delete-account]
+[functions.admin-delete-user-v2]
 verify_jwt = true
+
+[functions.admin-delete-user-v3]
+verify_jwt = false
+
+[functions.platform-delete-account]
+verify_jwt = false
 ```
 
-Wichtig: `verify_jwt = true` fuer alle produktiven Functions.
+Hinweis: fuer den aktuellen JWT-Gateway-Incident laufen die aktiven Admin-Functions temporaer mit `verify_jwt = false`.
 
 ## 5) Secrets anlegen (Pflicht)
 
@@ -137,11 +149,13 @@ Hinweis:
 ## 6) Functions deployen
 
 ```bash
-npx supabase functions deploy invite-account-user --project-ref jgydzxdiwpldgrqkfbfk
-npx supabase functions deploy platform-provision-account --project-ref jgydzxdiwpldgrqkfbfk
-npx supabase functions deploy platform-send-password-reset --project-ref jgydzxdiwpldgrqkfbfk
+npx supabase functions deploy invite-account-user --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
+npx supabase functions deploy platform-provision-account --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
+npx supabase functions deploy platform-send-password-reset --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
 npx supabase functions deploy admin-delete-user --project-ref jgydzxdiwpldgrqkfbfk
-npx supabase functions deploy platform-delete-account --project-ref jgydzxdiwpldgrqkfbfk
+npx supabase functions deploy admin-delete-user-v2 --project-ref jgydzxdiwpldgrqkfbfk
+npx supabase functions deploy admin-delete-user-v3 --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
+npx supabase functions deploy platform-delete-account --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
 ```
 
 Pruefen:

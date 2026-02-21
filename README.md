@@ -44,6 +44,8 @@ Set these in Supabase Function secrets (not as `VITE_` client env):
   - configuring `supabase/config.toml`
   - setting secrets
   - deploying and smoke testing
+- Runtime/governance baseline: `SUPABASE_MANIFEST.md`
+- JWT incident debugging: `SUPABASE_JWT_FORENSIC_CHECKLIST.md`
 
 ## Supabase SQL Governance
 - Source of truth is **migrations only**: `supabase_migration_*.sql`
