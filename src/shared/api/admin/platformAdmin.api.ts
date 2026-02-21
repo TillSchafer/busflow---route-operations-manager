@@ -1,5 +1,12 @@
 import { supabase } from '../../lib/supabase';
-import { PlatformAccount, PlatformAccountStatus } from './types';
+import {
+  DeleteAccountDryRunResult,
+  DeleteAccountResult,
+  DeleteUserResult,
+  MembershipItem,
+  PlatformAccount,
+  PlatformAccountStatus
+} from './types';
 
 export const PlatformAdminApi = {
   async getAccounts() {
@@ -10,6 +17,25 @@ export const PlatformAdminApi = {
 
     if (error) throw error;
     return (data || []) as PlatformAccount[];
+  },
+
+  async getAccountMembers(accountId: string): Promise<MembershipItem[]> {
+    const { data, error } = await supabase
+      .from('account_memberships')
+      .select(`
+        id,
+        account_id,
+        user_id,
+        role,
+        status,
+        created_at,
+        profiles(id, email, full_name)
+      `)
+      .eq('account_id', accountId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return (data || []) as MembershipItem[];
   },
 
   async provisionAccount(payload: { accountName: string; accountSlug: string; adminEmail: string }) {
@@ -41,5 +67,50 @@ export const PlatformAdminApi = {
       .eq('id', accountId);
 
     if (error) throw error;
+  },
+
+  async deleteAccountDryRun(accountId: string): Promise<DeleteAccountDryRunResult> {
+    const { data, error } = await supabase.functions.invoke('platform-delete-account', {
+      body: { accountId, dryRun: true }
+    });
+
+    if (error) {
+      throw new Error(error.message || 'Dry-Run für Firmenlöschung fehlgeschlagen.');
+    }
+    if (!data?.ok) {
+      throw new Error(data?.message || data?.code || 'Dry-Run für Firmenlöschung fehlgeschlagen.');
+    }
+
+    return data as DeleteAccountDryRunResult;
+  },
+
+  async deleteAccountHard(accountId: string, confirmSlug: string, reason?: string): Promise<DeleteAccountResult> {
+    const { data, error } = await supabase.functions.invoke('platform-delete-account', {
+      body: { accountId, dryRun: false, confirmSlug, reason }
+    });
+
+    if (error) {
+      throw new Error(error.message || 'Firma konnte nicht gelöscht werden.');
+    }
+    if (!data?.ok) {
+      throw new Error(data?.message || data?.code || 'Firma konnte nicht gelöscht werden.');
+    }
+
+    return data as DeleteAccountResult;
+  },
+
+  async deleteUserHard(userId: string, accountId?: string, reason?: string): Promise<DeleteUserResult> {
+    const { data, error } = await supabase.functions.invoke('admin-delete-user', {
+      body: { userId, accountId, reason }
+    });
+
+    if (error) {
+      throw new Error(error.message || 'User konnte nicht gelöscht werden.');
+    }
+    if (!data?.ok) {
+      throw new Error(data?.message || data?.code || 'User konnte nicht gelöscht werden.');
+    }
+
+    return data as DeleteUserResult;
   }
 };

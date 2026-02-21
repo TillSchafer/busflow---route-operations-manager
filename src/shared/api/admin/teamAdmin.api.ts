@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabase';
-import { InvitationItem, InvitationRole, MembershipItem, MembershipRole, PlatformAccount } from './types';
+import { DeleteUserResult, InvitationItem, InvitationRole, MembershipItem, MembershipRole, PlatformAccount } from './types';
 
 const invokeInvite = async (payload: { accountId: string; email: string; role: InvitationRole }) => {
   const { data, error } = await supabase.functions.invoke('invite-account-user', { body: payload });
@@ -86,5 +86,20 @@ export const TeamAdminApi = {
       .eq('status', 'PENDING');
 
     if (error) throw error;
+  },
+
+  async deleteUserHard(accountId: string, userId: string, reason?: string): Promise<DeleteUserResult> {
+    const { data, error } = await supabase.functions.invoke('admin-delete-user', {
+      body: { accountId, userId, reason }
+    });
+
+    if (error) {
+      throw new Error(error.message || 'User konnte nicht gelöscht werden.');
+    }
+    if (!data?.ok) {
+      throw new Error(data?.message || data?.code || 'User konnte nicht gelöscht werden.');
+    }
+
+    return data as DeleteUserResult;
   }
 };

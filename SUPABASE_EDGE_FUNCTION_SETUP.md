@@ -1,9 +1,11 @@
 # Supabase Edge Functions Setup (Schritt fuer Schritt)
 
-Diese Anleitung richtet die drei produktiven Functions in BusFlow ein:
+Diese Anleitung richtet die produktiven Functions in BusFlow ein:
 - `invite-account-user`
 - `platform-provision-account`
 - `platform-send-password-reset`
+- `admin-delete-user`
+- `platform-delete-account`
 
 ## 1) Voraussetzungen
 
@@ -33,12 +35,16 @@ Nur notwendig, wenn sie noch nicht existiert:
 npx supabase functions new invite-account-user
 npx supabase functions new platform-provision-account
 npx supabase functions new platform-send-password-reset
+npx supabase functions new admin-delete-user
+npx supabase functions new platform-delete-account
 ```
 
 Erwartete Struktur:
 - `supabase/functions/invite-account-user/index.ts`
 - `supabase/functions/platform-provision-account/index.ts`
 - `supabase/functions/platform-send-password-reset/index.ts`
+- `supabase/functions/admin-delete-user/index.ts`
+- `supabase/functions/platform-delete-account/index.ts`
 
 ## 3) Code in `index.ts` einsetzen
 
@@ -98,6 +104,12 @@ verify_jwt = true
 
 [functions.platform-send-password-reset]
 verify_jwt = true
+
+[functions.admin-delete-user]
+verify_jwt = true
+
+[functions.platform-delete-account]
+verify_jwt = true
 ```
 
 Wichtig: `verify_jwt = true` fuer alle produktiven Functions.
@@ -128,6 +140,8 @@ Hinweis:
 npx supabase functions deploy invite-account-user --project-ref jgydzxdiwpldgrqkfbfk
 npx supabase functions deploy platform-provision-account --project-ref jgydzxdiwpldgrqkfbfk
 npx supabase functions deploy platform-send-password-reset --project-ref jgydzxdiwpldgrqkfbfk
+npx supabase functions deploy admin-delete-user --project-ref jgydzxdiwpldgrqkfbfk
+npx supabase functions deploy platform-delete-account --project-ref jgydzxdiwpldgrqkfbfk
 ```
 
 Pruefen:

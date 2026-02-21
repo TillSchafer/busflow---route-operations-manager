@@ -34,3 +34,44 @@ export interface PlatformAccount {
   archived_at?: string | null;
   archived_by?: string | null;
 }
+
+export interface DeleteUserResult {
+  ok: boolean;
+  deletedUserId?: string;
+  code?: string;
+  message?: string;
+}
+
+export interface DeleteAccountDryRunResult {
+  ok: boolean;
+  dryRun: boolean;
+  account?: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  counts?: {
+    routes: number;
+    stops: number;
+    customers: number;
+    contacts: number;
+    workers: number;
+    busTypes: number;
+    appSettings: number;
+    memberships: number;
+    invitations: number;
+    users: number;
+  };
+  code?: string;
+  message?: string;
+}
+
+export interface DeleteAccountResult {
+  ok: boolean;
+  deletedAccountId?: string;
+  orphanUsersDeleted?: number;
+  orphanDeleteErrors?: string[];
+  counts?: DeleteAccountDryRunResult['counts'];
+  code?: string;
+  message?: string;
+}

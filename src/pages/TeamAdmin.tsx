@@ -38,13 +38,18 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
   const [inviteRole, setInviteRole] = useState<InvitationRole>('VIEWER');
   const [isInviting, setIsInviting] = useState(false);
 
-  const [membershipToSuspend, setMembershipToSuspend] = useState<MembershipItem | null>(null);
+  const [membershipToDelete, setMembershipToDelete] = useState<MembershipItem | null>(null);
   const [invitationToRevoke, setInvitationToRevoke] = useState<InvitationItem | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
 
   const accountIsWritable = accountStatus === 'ACTIVE';
 
   const activeMembers = useMemo(
     () => memberships.filter(item => item.status === 'ACTIVE'),
+    [memberships]
+  );
+  const activeAdmins = useMemo(
+    () => memberships.filter(item => item.status === 'ACTIVE' && item.role === 'ADMIN'),
     [memberships]
   );
 
@@ -111,18 +116,21 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
     }
   };
 
-  const handleSuspendMembership = async () => {
-    if (!activeAccountId || !membershipToSuspend || !accountIsWritable) return;
+  const handleDeleteUserHard = async () => {
+    if (!activeAccountId || !membershipToDelete || !accountIsWritable) return;
 
+    setIsDeletingUser(true);
     try {
-      await TeamAdminApi.suspendMembership(activeAccountId, membershipToSuspend.id);
-      pushToast({ type: 'success', title: 'Zugriff entzogen', message: 'Mitglied wurde deaktiviert.' });
+      await TeamAdminApi.deleteUserHard(activeAccountId, membershipToDelete.user_id);
+      pushToast({ type: 'success', title: 'User gelöscht', message: 'Nutzer wurde vollständig gelöscht.' });
       await loadData();
     } catch (error) {
       pushToast({ type: 'error', title: 'Aktion fehlgeschlagen', message: error instanceof Error ? error.message : 'Aktion konnte nicht ausgeführt werden.' });
+    } finally {
+      setIsDeletingUser(false);
     }
 
-    setMembershipToSuspend(null);
+    setMembershipToDelete(null);
   };
 
   const handleRevokeInvitation = async () => {
@@ -142,16 +150,18 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
   return (
     <div className="min-h-screen flex flex-col">
       <ConfirmDialog
-        isOpen={!!membershipToSuspend}
-        title="Mitglied deaktivieren"
-        message={`Möchten Sie den Zugriff für ${membershipToSuspend?.profiles && !Array.isArray(membershipToSuspend.profiles)
-          ? (membershipToSuspend.profiles.full_name || membershipToSuspend.profiles.email)
-          : 'dieses Mitglied'} wirklich entziehen?`}
-        confirmText="Deaktivieren"
+        isOpen={!!membershipToDelete}
+        title="User vollständig löschen"
+        message={`Möchten Sie ${membershipToDelete?.profiles && !Array.isArray(membershipToDelete.profiles)
+          ? (membershipToDelete.profiles.full_name || membershipToDelete.profiles.email)
+          : 'dieses Mitglied'} wirklich vollständig löschen? Diese Aktion ist irreversibel.`}
+        confirmText={isDeletingUser ? 'Lösche...' : 'User löschen'}
         cancelText="Abbrechen"
         type="danger"
-        onConfirm={handleSuspendMembership}
-        onCancel={() => setMembershipToSuspend(null)}
+        onConfirm={handleDeleteUserHard}
+        onCancel={() => {
+          setMembershipToDelete(null);
+        }}
       />
 
       <ConfirmDialog
@@ -235,6 +245,7 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
                   {memberships.map(item => {
                     const profile = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
                     const isCurrentUser = item.user_id === currentUserId;
+                    const isLastActiveAdmin = item.status === 'ACTIVE' && item.role === 'ADMIN' && activeAdmins.length <= 1;
 
                     return (
                       <div key={item.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 border border-slate-200 rounded-lg p-3 items-center">
@@ -261,11 +272,11 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
                         </div>
                         <div className="flex justify-end">
                           <button
-                            onClick={() => setMembershipToSuspend(item)}
-                            disabled={isCurrentUser || item.status !== 'ACTIVE' || !accountIsWritable}
+                            onClick={() => setMembershipToDelete(item)}
+                            disabled={isCurrentUser || isLastActiveAdmin || item.status !== 'ACTIVE' || !accountIsWritable}
                             className="px-3 py-2 rounded-md text-sm font-semibold text-red-600 hover:bg-red-50 disabled:text-slate-300 disabled:hover:bg-transparent"
                           >
-                            Zugriff entziehen
+                            User löschen
                           </button>
                         </div>
                       </div>
