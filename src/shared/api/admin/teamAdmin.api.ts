@@ -12,7 +12,7 @@ import {
 const invokeInvite = async (payload: { accountId: string; email: string; role: InvitationRole }) => {
   const data = await invokeAuthedFunction<
     { accountId: string; email: string; role: InvitationRole },
-    { ok: boolean; message?: string; code?: string }
+    { ok: boolean; emailSent?: boolean; message?: string; code?: string; invitationId?: string; accountName?: string }
   >('invite-account-user', payload);
   if (!data?.ok) {
     throw new Error(data?.message || data?.code || 'Einladung konnte nicht erstellt werden.');

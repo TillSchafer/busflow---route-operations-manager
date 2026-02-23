@@ -111,11 +111,15 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
 
     setIsInviting(true);
     try {
-      await TeamAdminApi.inviteTeamMember({ accountId: activeAccountId, email: inviteEmail.trim(), role: inviteRole });
+      const inviteResult = await TeamAdminApi.inviteTeamMember({ accountId: activeAccountId, email: inviteEmail.trim(), role: inviteRole });
       setInviteEmail('');
       setInviteRole('VIEWER');
       setIsInviteDialogOpen(false);
-      pushToast({ type: 'success', title: 'Einladung gesendet', message: 'Mitarbeiter wurde eingeladen.' });
+      if (inviteResult?.emailSent === false) {
+        pushToast({ type: 'warning', title: 'Einladung erstellt', message: 'Die Einladung wurde gespeichert, aber die E-Mail konnte nicht gesendet werden. Bitte prüfen Sie die E-Mail-Konfiguration in Supabase.' });
+      } else {
+        pushToast({ type: 'success', title: 'Einladung gesendet', message: 'Mitarbeiter wurde eingeladen.' });
+      }
       await loadData();
     } catch (error) {
       pushToast({

@@ -209,6 +209,34 @@ const InnerApp: React.FC = () => {
     );
   }
 
+  if (!user.isPlatformAdmin && !activeAccountId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-xl px-8 py-8 w-full max-w-md text-center space-y-4">
+          <h2 className="text-xl font-bold text-slate-900">Konto-Zugang ausstehend</h2>
+          <p className="text-sm text-slate-600">
+            Ihr Konto ist noch nicht vollständig aktiviert. Bitte öffnen Sie den Einladungslink aus Ihrer E-Mail erneut, um den Zugang abzuschließen.
+          </p>
+          <a
+            href="/auth/accept-invite"
+            className="inline-block bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors text-sm"
+          >
+            Einladungslink öffnen
+          </a>
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-sm text-slate-500 hover:text-slate-700 font-semibold"
+            >
+              Abmelden
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const apps = [
     {
       id: 'busflow',

@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 
-export type ToastType = 'success' | 'error' | 'info';
+export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
 export interface ToastInput {
   type: ToastType;
@@ -54,7 +54,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const duration =
       typeof toast.durationMs === 'number'
         ? toast.durationMs
-        : toast.type === 'error'
+        : toast.type === 'error' || toast.type === 'warning'
           ? 5000
           : 3500;
 

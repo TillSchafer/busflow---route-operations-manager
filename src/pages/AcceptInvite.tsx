@@ -100,13 +100,15 @@ const AcceptInvite: React.FC = () => {
         throw passwordError;
       }
 
-      const { data: claimResult, error: claimError } = await supabase.rpc('claim_my_invitation', {
-        p_account_id: null
-      });
+      if (!isRecoveryFlow) {
+        const { data: claimResult, error: claimError } = await supabase.rpc('claim_my_invitation', {
+          p_account_id: null
+        });
 
-      if (claimError) throw claimError;
-      if (!claimResult?.ok && claimResult?.code !== 'ALREADY_ACTIVE') {
-        throw new Error(mapClaimError(claimResult?.code));
+        if (claimError) throw claimError;
+        if (!claimResult?.ok && claimResult?.code !== 'ALREADY_ACTIVE') {
+          throw new Error(mapClaimError(claimResult?.code));
+        }
       }
 
       setState('success');
@@ -186,7 +188,9 @@ const AcceptInvite: React.FC = () => {
         {state === 'success' && (
           <div className="space-y-3">
             <p className="text-sm text-emerald-700 bg-emerald-50 p-3 rounded-lg">
-              Passwort erfolgreich gesetzt.
+              {isRecoveryFlow
+                ? 'Passwort erfolgreich zurückgesetzt.'
+                : 'Passwort erfolgreich gesetzt. Ihr Zugang wurde aktiviert.'}
             </p>
             <p className="text-sm text-slate-600">Sie werden weitergeleitet...</p>
           </div>

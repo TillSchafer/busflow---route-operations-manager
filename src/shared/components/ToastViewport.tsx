@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 import { ToastItem, useToastStore } from './ToastProvider';
 
 const styleByType: Record<ToastItem['type'], { icon: React.ReactNode; border: string; bg: string; title: string }> = {
@@ -14,6 +14,12 @@ const styleByType: Record<ToastItem['type'], { icon: React.ReactNode; border: st
     border: 'border-red-200',
     bg: 'bg-red-50/80',
     title: 'text-red-900'
+  },
+  warning: {
+    icon: <AlertTriangle className="w-5 h-5 text-amber-600" />,
+    border: 'border-amber-200',
+    bg: 'bg-amber-50/80',
+    title: 'text-amber-900'
   },
   info: {
     icon: <Info className="w-5 h-5 text-sky-600" />,
