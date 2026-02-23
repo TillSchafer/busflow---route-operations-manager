@@ -3,6 +3,8 @@ import { invokeAuthedFunction } from '../../lib/supabaseFunctions';
 import {
   DeleteUserResult,
   InvitationItem,
+  ManageInvitationAction,
+  ManageInvitationResult,
   InvitationRole,
   MembershipItem,
   MembershipRole,
@@ -19,6 +21,14 @@ const invokeInvite = async (payload: { accountId: string; email: string; role: I
   }
 
   return data;
+};
+
+type TeamAdminCodeError = Error & { code?: string };
+
+const createTeamAdminCodeError = (message: string, code?: string): TeamAdminCodeError => {
+  const error = new Error(message) as TeamAdminCodeError;
+  if (code) error.code = code;
+  return error;
 };
 
 export const TeamAdminApi = {
@@ -93,6 +103,26 @@ export const TeamAdminApi = {
       .eq('status', 'PENDING');
 
     if (error) throw error;
+  },
+
+  async manageInvitation(payload: {
+    accountId: string;
+    invitationId: string;
+    action: ManageInvitationAction;
+  }): Promise<ManageInvitationResult> {
+    const data = await invokeAuthedFunction<
+      { accountId: string; invitationId: string; action: ManageInvitationAction },
+      ManageInvitationResult
+    >('admin-manage-invitation-v1', payload);
+
+    if (!data?.ok) {
+      throw createTeamAdminCodeError(
+        data?.message || data?.code || 'Einladung konnte nicht verarbeitet werden.',
+        data?.code
+      );
+    }
+
+    return data as ManageInvitationResult;
   },
 
   async deleteUserHard(accountId: string, userId: string, reason?: string): Promise<DeleteUserResult> {

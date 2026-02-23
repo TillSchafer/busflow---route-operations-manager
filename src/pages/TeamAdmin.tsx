@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Leaf, Plus } from 'lucide-react';
+import { Leaf, Mail, Plus, Trash2 } from 'lucide-react';
 import AppHeader from '../shared/components/AppHeader';
 import ConfirmDialog from '../shared/components/ConfirmDialog';
 import { useToast } from '../shared/components/ToastProvider';
@@ -36,6 +36,20 @@ const toActionErrorMessage = (error: unknown, fallback: string) => {
   return error instanceof Error ? error.message : fallback;
 };
 
+const getActionErrorCode = (error: unknown) => {
+  if (!error || typeof error !== 'object') return null;
+  if (!('code' in error)) return null;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' && code ? code : null;
+};
+
+const isInvitationExpired = (value?: string) => {
+  if (!value) return false;
+  const expiresAt = new Date(value).getTime();
+  if (Number.isNaN(expiresAt)) return false;
+  return expiresAt < Date.now();
+};
+
 const invitationRoleOptions: Array<AppSelectOption<InvitationRole>> = [
   { value: 'VIEWER', label: 'Nur Lesen (Standard)' },
   { value: 'DISPATCH', label: 'Disposition' },
@@ -62,8 +76,10 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
 
   const [membershipToDelete, setMembershipToDelete] = useState<MembershipItem | null>(null);
-  const [invitationToRevoke, setInvitationToRevoke] = useState<InvitationItem | null>(null);
+  const [invitationToDelete, setInvitationToDelete] = useState<InvitationItem | null>(null);
+  const [invitationToResend, setInvitationToResend] = useState<InvitationItem | null>(null);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
+  const [isManagingInvitation, setIsManagingInvitation] = useState(false);
 
   const accountIsWritable = accountStatus === 'ACTIVE';
 
@@ -159,18 +175,119 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
     }
   };
 
-  const handleRevokeInvitation = async () => {
-    if (!activeAccountId || !invitationToRevoke || !accountIsWritable) return;
+  const handleDeleteInvitation = async () => {
+    if (!activeAccountId || !invitationToDelete || !accountIsWritable || isManagingInvitation) return;
 
+    setIsManagingInvitation(true);
     try {
-      await TeamAdminApi.revokeInvitation(activeAccountId, invitationToRevoke.id);
-      pushToast({ type: 'success', title: 'Einladung widerrufen', message: 'Die Einladung wurde widerrufen.' });
+      const result = await TeamAdminApi.manageInvitation({
+        accountId: activeAccountId,
+        invitationId: invitationToDelete.id,
+        action: 'DELETE',
+      });
+
+      if (result.code === 'CONFIRMED_USER_REQUIRES_MANUAL_ACTION' || result.code === 'ACTIVE_MEMBERSHIP_EXISTS') {
+        pushToast({
+          type: 'warning',
+          title: 'Einladung widerrufen',
+          message: result.message || 'Einladung wurde widerrufen. User wurde aus Sicherheitsgründen nicht automatisch gelöscht.',
+        });
+      } else {
+        const message = result.deletedGhostUser
+          ? 'Einladung wurde widerrufen und der unbestätigte User entfernt.'
+          : 'Einladung wurde widerrufen.';
+        pushToast({ type: 'success', title: 'Einladung gelöscht', message });
+      }
+
       await loadData();
     } catch (error) {
-      pushToast({ type: 'error', title: 'Aktion fehlgeschlagen', message: toActionErrorMessage(error, 'Aktion konnte nicht ausgeführt werden.') });
+      const code = getActionErrorCode(error);
+      if (code === 'INVITATION_NOT_PENDING') {
+        pushToast({
+          type: 'warning',
+          title: 'Nicht mehr offen',
+          message: 'Diese Einladung ist nicht mehr offen und wurde neu geladen.',
+        });
+        await loadData();
+      } else if (code === 'INVITATION_NOT_FOUND') {
+        pushToast({
+          type: 'warning',
+          title: 'Nicht gefunden',
+          message: 'Diese Einladung wurde bereits entfernt.',
+        });
+        await loadData();
+      } else {
+        pushToast({
+          type: 'error',
+          title: 'Aktion fehlgeschlagen',
+          message: toActionErrorMessage(error, 'Einladung konnte nicht gelöscht werden.'),
+        });
+      }
+    } finally {
+      setIsManagingInvitation(false);
+      setInvitationToDelete(null);
     }
+  };
 
-    setInvitationToRevoke(null);
+  const handleResendInvitation = async () => {
+    if (!activeAccountId || !invitationToResend || !accountIsWritable || isManagingInvitation) return;
+
+    setIsManagingInvitation(true);
+    try {
+      const result = await TeamAdminApi.manageInvitation({
+        accountId: activeAccountId,
+        invitationId: invitationToResend.id,
+        action: 'RESEND',
+      });
+
+      if (result.code === 'ACTIVE_MEMBERSHIP_EXISTS') {
+        pushToast({
+          type: 'warning',
+          title: 'Einladung nicht erneut möglich',
+          message: result.message || 'Für diese E-Mail besteht bereits ein aktiver Zugang.',
+        });
+      } else if (result.emailSent === false) {
+        pushToast({
+          type: 'warning',
+          title: 'Einladung neu erstellt',
+          message: 'Neue Einladung wurde angelegt, aber die E-Mail konnte nicht gesendet werden.',
+        });
+      } else {
+        pushToast({
+          type: 'success',
+          title: 'Einladung erneut gesendet',
+          message: 'Neue Einladung wurde erfolgreich versendet.',
+        });
+      }
+
+      await loadData();
+    } catch (error) {
+      const code = getActionErrorCode(error);
+      if (code === 'INVITATION_NOT_PENDING') {
+        pushToast({
+          type: 'warning',
+          title: 'Nicht mehr offen',
+          message: 'Diese Einladung ist nicht mehr offen und wurde neu geladen.',
+        });
+        await loadData();
+      } else if (code === 'INVITATION_NOT_FOUND') {
+        pushToast({
+          type: 'warning',
+          title: 'Nicht gefunden',
+          message: 'Diese Einladung wurde bereits entfernt.',
+        });
+        await loadData();
+      } else {
+        pushToast({
+          type: 'error',
+          title: 'Erneut einladen fehlgeschlagen',
+          message: toActionErrorMessage(error, 'Einladung konnte nicht erneut gesendet werden.'),
+        });
+      }
+    } finally {
+      setIsManagingInvitation(false);
+      setInvitationToResend(null);
+    }
   };
 
   return (
@@ -189,14 +306,25 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
       />
 
       <ConfirmDialog
-        isOpen={!!invitationToRevoke}
-        title="Einladung widerrufen"
-        message={`Soll die Einladung an ${invitationToRevoke?.email || 'diese E-Mail-Adresse'} widerrufen werden?`}
-        confirmText="Widerrufen"
+        isOpen={!!invitationToDelete}
+        title="Einladung löschen"
+        message={`Soll die Einladung an ${invitationToDelete?.email || 'diese E-Mail-Adresse'} widerrufen und ein unbestätigter Account (falls vorhanden) gelöscht werden?`}
+        confirmText={isManagingInvitation ? 'Lösche...' : 'Löschen'}
         cancelText="Abbrechen"
         type="danger"
-        onConfirm={handleRevokeInvitation}
-        onCancel={() => setInvitationToRevoke(null)}
+        onConfirm={handleDeleteInvitation}
+        onCancel={() => setInvitationToDelete(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={!!invitationToResend}
+        title="Einladung erneut senden"
+        message={`Soll die Einladung an ${invitationToResend?.email || 'diese E-Mail-Adresse'} neu erstellt und erneut per E-Mail versendet werden?`}
+        confirmText={isManagingInvitation ? 'Sende...' : 'Erneut senden'}
+        cancelText="Abbrechen"
+        type="warning"
+        onConfirm={handleResendInvitation}
+        onCancel={() => setInvitationToResend(null)}
       />
 
       <AppHeader
@@ -352,7 +480,9 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
                   <h3 className="text-sm font-bold text-slate-700">Offene Einladungen</h3>
                   {invitations
                     .filter(inv => inv.status === 'PENDING')
-                    .map(inv => (
+                    .map(inv => {
+                      const isExpired = isInvitationExpired(inv.expires_at);
+                      return (
                       <div key={inv.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 border border-slate-200 rounded-lg p-3 items-center">
                         <div className="md:col-span-2">
                           <p className="font-semibold text-slate-900 text-sm">{inv.email}</p>
@@ -360,19 +490,36 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
                         </div>
                         <div>
                           <p className="text-xs text-slate-500">Läuft ab</p>
-                          <p className="text-sm text-slate-700">{formatDateTime(inv.expires_at)}</p>
+                          <p className="text-sm text-slate-700">
+                            {formatDateTime(inv.expires_at)}
+                            <span className={`ml-2 text-xs font-semibold ${isExpired ? 'text-amber-600' : 'text-emerald-600'}`}>
+                              {isExpired ? 'Abgelaufen' : 'Offen'}
+                            </span>
+                          </p>
                         </div>
-                        <div className="flex justify-end">
+                        <div className="flex justify-end gap-2">
                           <button
-                            onClick={() => setInvitationToRevoke(inv)}
-                            disabled={!accountIsWritable}
-                            className="px-3 py-2 rounded-md text-sm font-semibold text-red-600 hover:bg-red-50 disabled:text-slate-300 disabled:hover:bg-transparent"
+                            onClick={() => setInvitationToResend(inv)}
+                            disabled={!accountIsWritable || isManagingInvitation}
+                            className="inline-flex items-center justify-center w-9 h-9 rounded-md text-blue-700 hover:bg-blue-50 disabled:text-slate-300 disabled:hover:bg-transparent"
+                            title="Erneut einladen"
+                            aria-label="Erneut einladen"
                           >
-                            Widerrufen
+                            <Mail className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setInvitationToDelete(inv)}
+                            disabled={!accountIsWritable || isManagingInvitation}
+                            className="inline-flex items-center justify-center w-9 h-9 rounded-md text-red-600 hover:bg-red-50 disabled:text-slate-300 disabled:hover:bg-transparent"
+                            title="Einladung löschen"
+                            aria-label="Einladung löschen"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
-                    ))}
+                    );
+                  })}
 
                   {invitations.filter(inv => inv.status === 'PENDING').length === 0 && (
                     <p className="text-sm text-slate-500">Keine offenen Einladungen.</p>

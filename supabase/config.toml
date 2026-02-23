@@ -18,6 +18,9 @@ verify_jwt = true
 [functions.admin-delete-user-v3]
 verify_jwt = false
 
+[functions.admin-manage-invitation-v1]
+verify_jwt = false
+
 [functions.admin-update-user-v1]
 verify_jwt = false
 

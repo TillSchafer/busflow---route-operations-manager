@@ -9,6 +9,7 @@ type AuthUrlPayload = {
   type: string | null;
   code: string | null;
   tokenHash: string | null;
+  token: string | null;
   accessToken: string | null;
   refreshToken: string | null;
   urlError: string | null;
@@ -47,6 +48,7 @@ const readAuthUrlPayload = (): AuthUrlPayload => {
     type: getParam('type'),
     code: getParam('code'),
     tokenHash: getParam('token_hash'),
+    token: getParam('token'),
     accessToken: getParam('access_token'),
     refreshToken: getParam('refresh_token'),
     urlError: getParam('error'),
@@ -109,9 +111,10 @@ const AcceptInvite: React.FC = () => {
         session = data.session;
       }
 
-      if (!session && authPayload.tokenHash && isAllowedOtpType(authPayload.type)) {
+      if (!session && (authPayload.tokenHash || authPayload.token) && isAllowedOtpType(authPayload.type)) {
+        const inviteTokenHash = authPayload.tokenHash || authPayload.token;
         const { error } = await supabase.auth.verifyOtp({
-          token_hash: authPayload.tokenHash,
+          token_hash: inviteTokenHash as string,
           type: authPayload.type,
         });
 
@@ -139,10 +142,14 @@ const AcceptInvite: React.FC = () => {
 
       if (!session) {
         const urlError = getUrlAuthErrorMessage(authPayload);
+        const inviteTokenPresent = Boolean((authPayload.tokenHash || authPayload.token) && authPayload.type);
+        const fallbackMessage = inviteTokenPresent
+          ? 'Invite-Link ungültig oder abgelaufen. Bitte neue Einladung anfordern.'
+          : 'Keine gültige Einladungssitzung gefunden. Öffnen Sie den Einladungslink aus der E-Mail erneut.';
         setErrorText(
           urlError
             || latestAuthError
-            || 'Keine gültige Einladungssitzung gefunden. Öffnen Sie den Einladungslink aus der E-Mail erneut.'
+            || fallbackMessage
         );
         setState('error');
         return;

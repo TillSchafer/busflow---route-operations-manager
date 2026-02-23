@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Bus, Leaf } from 'lucide-react';
 import { supabase } from './shared/lib/supabase';
 import Home from './pages/Home';
@@ -106,6 +106,7 @@ const LoginScreen: React.FC<{
 
 const InnerApp: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, activeAccountId, canManageTenantUsers, loading, logout } = useAuth();
   const { pushToast } = useToast();
 
@@ -209,13 +210,15 @@ const InnerApp: React.FC = () => {
     );
   }
 
-  if (!user.isPlatformAdmin && !activeAccountId) {
+  const isAcceptInviteRoute = location.pathname === '/auth/accept-invite';
+
+  if (!user.isPlatformAdmin && !activeAccountId && !isAcceptInviteRoute) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <div className="bg-white border border-slate-200 rounded-2xl shadow-xl px-8 py-8 w-full max-w-md text-center space-y-4">
           <h2 className="text-xl font-bold text-slate-900">Konto-Zugang ausstehend</h2>
           <p className="text-sm text-slate-600">
-            Ihr Konto ist noch nicht vollständig aktiviert. Bitte öffnen Sie den Einladungslink aus Ihrer E-Mail erneut, um den Zugang abzuschließen.
+            Ihr Konto ist noch nicht vollständig aktiviert. Bitte öffnen Sie den Einladungslink aus Ihrer E-Mail und setzen Sie dort Ihr Passwort, um den Zugang abzuschließen.
           </p>
           <a
             href="/auth/accept-invite"

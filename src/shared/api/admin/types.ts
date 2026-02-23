@@ -2,6 +2,7 @@ export type MembershipRole = 'ADMIN' | 'DISPATCH' | 'VIEWER';
 export type MembershipStatus = 'ACTIVE' | 'INVITED' | 'SUSPENDED';
 export type InvitationRole = 'ADMIN' | 'DISPATCH' | 'VIEWER';
 export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED';
+export type ManageInvitationAction = 'DELETE' | 'RESEND';
 export type PlatformAccountStatus = 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
 
 export interface MembershipItem {
@@ -83,6 +84,16 @@ export interface SupportPasswordResetResult {
   ok: boolean;
   code?: string;
   message?: string;
+  auditError?: string | null;
+}
+
+export interface ManageInvitationResult {
+  ok: boolean;
+  code?: string;
+  message?: string;
+  emailSent?: boolean;
+  deletedGhostUser?: boolean;
+  newInvitationId?: string;
   auditError?: string | null;
 }
 
