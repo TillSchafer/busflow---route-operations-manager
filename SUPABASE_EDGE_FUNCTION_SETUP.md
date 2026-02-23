@@ -200,6 +200,8 @@ Erwartung:
 
 - `MISSING_INVITE_REDIRECT_URL`:
   `APP_INVITE_REDIRECT_URL` fehlt.
+- `INVALID_INVITE_REDIRECT_PATH`:
+  `APP_INVITE_REDIRECT_URL` zeigt nicht auf `/auth/accept-invite`.
 - `MISSING_PASSWORD_RESET_REDIRECT_URL`:
   `APP_PASSWORD_RESET_REDIRECT_URL` fehlt.
 - Redirect-Link kommt nicht an:

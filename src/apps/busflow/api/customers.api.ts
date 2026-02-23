@@ -88,17 +88,22 @@ export async function updateCustomer(id: string, patch: Partial<Omit<Customer, '
 
 export async function deleteCustomer(id: string) {
   const accountId = requireActiveAccountId();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('busflow_customers')
     .delete()
     .eq('account_id', accountId)
-    .eq('id', id);
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
 
-  if (!error) return;
-
-  if (getPostgrestCode(error) === '23503') {
-    throw createCodeError('CUSTOMER_IN_USE', 'CUSTOMER_IN_USE');
+  if (error) {
+    if (getPostgrestCode(error) === '23503') {
+      throw createCodeError('CUSTOMER_IN_USE', 'CUSTOMER_IN_USE');
+    }
+    throw error;
   }
 
-  throw error;
+  if (!data) {
+    throw createCodeError('CUSTOMER_NOT_FOUND', 'CUSTOMER_NOT_FOUND');
+  }
 }

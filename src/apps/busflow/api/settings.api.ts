@@ -1,5 +1,5 @@
 import { BusType, MapDefaultView, Worker } from '../types';
-import { requireActiveAccountId, supabase, toMapDefaultView } from './shared';
+import { createCodeError, getPostgrestCode, requireActiveAccountId, supabase, toMapDefaultView } from './shared';
 
 export async function getBusTypes() {
   const accountId = requireActiveAccountId();
@@ -31,13 +31,24 @@ export async function createBusType(busType: Omit<BusType, 'id'>) {
 
 export async function deleteBusType(id: string) {
   const accountId = requireActiveAccountId();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('busflow_bus_types')
     .delete()
     .eq('account_id', accountId)
-    .eq('id', id);
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    if (getPostgrestCode(error) === '23503') {
+      throw createCodeError('BUS_TYPE_IN_USE', 'BUS_TYPE_IN_USE');
+    }
+    throw error;
+  }
+
+  if (!data) {
+    throw createCodeError('BUS_TYPE_NOT_FOUND', 'BUS_TYPE_NOT_FOUND');
+  }
 }
 
 export async function getWorkers() {
@@ -70,13 +81,24 @@ export async function createWorker(worker: Omit<Worker, 'id'>) {
 
 export async function deleteWorker(id: string) {
   const accountId = requireActiveAccountId();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('busflow_workers')
     .delete()
     .eq('account_id', accountId)
-    .eq('id', id);
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    if (getPostgrestCode(error) === '23503') {
+      throw createCodeError('WORKER_IN_USE', 'WORKER_IN_USE');
+    }
+    throw error;
+  }
+
+  if (!data) {
+    throw createCodeError('WORKER_NOT_FOUND', 'WORKER_NOT_FOUND');
+  }
 }
 
 export async function getMapDefaultView(): Promise<MapDefaultView | null> {

@@ -195,8 +195,14 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       setRoutes(prev => prev.filter(r => r.id !== routeIdToDelete));
       setRouteIdToDelete(null);
       pushToast({ type: 'success', title: 'Gelöscht', message: 'Die Route wurde gelöscht.' });
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      if (getErrorCode(error) === 'ROUTE_NOT_FOUND') {
+        setRouteIdToDelete(null);
+        await refreshRoutes();
+        pushToast({ type: 'error', title: 'Nicht gefunden', message: 'Diese Route wurde bereits gelöscht.' });
+        return;
+      }
+      console.error(error);
       pushToast({ type: 'error', title: 'Löschen fehlgeschlagen', message: 'Die Route konnte nicht gelöscht werden.' });
     }
   };
@@ -228,7 +234,17 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       await BusFlowApi.deleteBusType(id);
       await refreshSettingsData();
       pushToast({ type: 'success', title: 'Gelöscht', message: 'Bustyp wurde entfernt.' });
-    } catch {
+    } catch (error) {
+      const code = getErrorCode(error);
+      if (code === 'BUS_TYPE_IN_USE') {
+        pushToast({ type: 'error', title: 'Löschen nicht möglich', message: 'Bustyp kann nicht gelöscht werden, da noch Routen zugeordnet sind.' });
+        return;
+      }
+      if (code === 'BUS_TYPE_NOT_FOUND') {
+        pushToast({ type: 'error', title: 'Nicht gefunden', message: 'Der Bustyp wurde bereits gelöscht.' });
+        await refreshSettingsData();
+        return;
+      }
       pushToast({ type: 'error', title: 'Löschen fehlgeschlagen', message: 'Bustyp konnte nicht gelöscht werden.' });
     }
   };
@@ -250,7 +266,17 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       await BusFlowApi.deleteWorker(id);
       await refreshSettingsData();
       pushToast({ type: 'success', title: 'Gelöscht', message: 'Mitarbeiter wurde entfernt.' });
-    } catch {
+    } catch (error) {
+      const code = getErrorCode(error);
+      if (code === 'WORKER_IN_USE') {
+        pushToast({ type: 'error', title: 'Löschen nicht möglich', message: 'Mitarbeiter kann nicht gelöscht werden, da noch Routen zugeordnet sind.' });
+        return;
+      }
+      if (code === 'WORKER_NOT_FOUND') {
+        pushToast({ type: 'error', title: 'Nicht gefunden', message: 'Der Mitarbeiter wurde bereits gelöscht.' });
+        await refreshSettingsData();
+        return;
+      }
       pushToast({ type: 'error', title: 'Löschen fehlgeschlagen', message: 'Mitarbeiter konnte nicht gelöscht werden.' });
     }
   };
@@ -277,6 +303,12 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
     } catch (error) {
       if (getErrorCode(error) === 'CONTACT_IN_USE') {
         pushToast({ type: 'error', title: 'Löschen nicht möglich', message: 'Kontakt kann nicht gelöscht werden, da noch Routen zugeordnet sind.' });
+        return;
+      }
+      if (getErrorCode(error) === 'CONTACT_NOT_FOUND') {
+        pushToast({ type: 'error', title: 'Nicht gefunden', message: 'Der Kontakt wurde bereits gelöscht.' });
+        const fetched = await BusFlowApi.getCustomersForSuggestions();
+        setCustomers(fetched);
         return;
       }
       pushToast({ type: 'error', title: 'Löschen fehlgeschlagen', message: 'Kontakt konnte nicht gelöscht werden.' });

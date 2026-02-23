@@ -128,11 +128,16 @@ export async function saveRouteWithStops(route: RouteType, expectedUpdatedAt?: s
 
 export async function deleteRoute(id: string) {
   const accountId = requireActiveAccountId();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('busflow_routes')
     .delete()
     .eq('account_id', accountId)
-    .eq('id', id);
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
 
   if (error) throw error;
+  if (!data) {
+    throw createCodeError('ROUTE_NOT_FOUND', 'ROUTE_NOT_FOUND');
+  }
 }

@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeaders, json, extractBearerToken, isUuid } from '../_shared/utils.ts';
+import { requirePlatformOwner } from '../_shared/owner.ts';
 
 type DeleteAccountRequest = {
   accountId?: string;
@@ -91,14 +92,9 @@ serve(async (req) => {
     return json(401, { ok: false, code: 'UNAUTHORIZED' });
   }
 
-  const { data: callerProfile, error: callerProfileError } = await adminClient
-    .from('profiles')
-    .select('global_role')
-    .eq('id', caller.id)
-    .maybeSingle();
-
-  if (callerProfileError || callerProfile?.global_role !== 'ADMIN') {
-    return json(403, { ok: false, code: 'FORBIDDEN' });
+  const ownerGuardResponse = await requirePlatformOwner(adminClient, caller.id);
+  if (ownerGuardResponse) {
+    return ownerGuardResponse;
   }
 
   let body: DeleteAccountRequest;
@@ -193,29 +189,6 @@ serve(async (req) => {
 
     if (!confirmSlug || confirmSlug !== account.slug) {
       return json(409, { ok: false, code: 'CONFIRM_SLUG_MISMATCH' });
-    }
-
-    const accountScopedDeleteOrder = [
-      'busflow_stops',
-      'busflow_routes',
-      'busflow_customer_contacts',
-      'busflow_customers',
-      'busflow_workers',
-      'busflow_bus_types',
-      'busflow_app_settings',
-      'account_invitations',
-      'account_memberships',
-    ];
-
-    for (const table of accountScopedDeleteOrder) {
-      const { error: deleteError } = await adminClient.from(table).delete().eq('account_id', accountId);
-      if (deleteError) {
-        return json(500, {
-          ok: false,
-          code: 'DELETE_FAILED',
-          message: `Failed deleting ${table}: ${deleteError.message}`,
-        });
-      }
     }
 
     const { error: accountDeleteError } = await adminClient

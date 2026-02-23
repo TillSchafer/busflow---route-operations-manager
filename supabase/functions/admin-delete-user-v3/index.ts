@@ -8,18 +8,22 @@ type DeleteUserRequest = {
   reason?: string;
 };
 
-const cleanupUserReferences = async (adminClient: ReturnType<typeof createClient>, userId: string, userEmail?: string | null) => {
-  await adminClient.from('platform_accounts').update({ created_by: null }).eq('created_by', userId);
-  await adminClient.from('platform_accounts').update({ archived_by: null }).eq('archived_by', userId);
-  await adminClient.from('account_invitations').update({ invited_by: null }).eq('invited_by', userId);
+const revokePendingInvitationsByEmail = async (
+  adminClient: ReturnType<typeof createClient>,
+  userEmail?: string | null
+) => {
+  if (!userEmail) return null;
+  const { error } = await adminClient
+    .from('account_invitations')
+    .update({ status: 'REVOKED' })
+    .eq('status', 'PENDING')
+    .ilike('email', userEmail);
 
-  if (userEmail) {
-    await adminClient
-      .from('account_invitations')
-      .update({ status: 'REVOKED' })
-      .eq('status', 'PENDING')
-      .ilike('email', userEmail);
+  if (error) {
+    throw new Error(`pending invitation cleanup failed: ${error.message}`);
   }
+
+  return null;
 };
 
 serve(async (req) => {
@@ -94,7 +98,7 @@ serve(async (req) => {
       return json(400, { ok: false, code: 'ACCOUNT_REQUIRED' });
     }
 
-    const { data: callerMembership } = await adminClient
+    const { data: callerMembership, error: callerMembershipError } = await adminClient
       .from('account_memberships')
       .select('id')
       .eq('account_id', accountId)
@@ -102,6 +106,10 @@ serve(async (req) => {
       .eq('status', 'ACTIVE')
       .eq('role', 'ADMIN')
       .maybeSingle();
+
+    if (callerMembershipError) {
+      return json(500, { ok: false, code: 'LOOKUP_FAILED', message: callerMembershipError.message });
+    }
 
     if (!callerMembership) {
       return json(403, { ok: false, code: 'FORBIDDEN' });
@@ -113,11 +121,15 @@ serve(async (req) => {
     return json(404, { ok: false, code: 'USER_NOT_FOUND' });
   }
 
-  const { data: targetProfile } = await adminClient
+  const { data: targetProfile, error: targetProfileError } = await adminClient
     .from('profiles')
     .select('id, email, global_role')
     .eq('id', userId)
     .maybeSingle();
+
+  if (targetProfileError) {
+    return json(500, { ok: false, code: 'LOOKUP_FAILED', message: targetProfileError.message });
+  }
 
   const targetEmail = targetProfile?.email || authLookup.user.email || null;
   const targetGlobalRole = targetProfile?.global_role || null;
@@ -127,11 +139,15 @@ serve(async (req) => {
       return json(403, { ok: false, code: 'FORBIDDEN' });
     }
 
-    const { count: remainingAdmins } = await adminClient
+    const { count: remainingAdmins, error: remainingAdminsError } = await adminClient
       .from('profiles')
       .select('id', { count: 'exact', head: true })
       .eq('global_role', 'ADMIN')
       .neq('id', userId);
+
+    if (remainingAdminsError) {
+      return json(500, { ok: false, code: 'LOOKUP_FAILED', message: remainingAdminsError.message });
+    }
 
     if (!remainingAdmins || remainingAdmins < 1) {
       return json(409, { ok: false, code: 'LAST_PLATFORM_ADMIN_FORBIDDEN' });
@@ -141,19 +157,23 @@ serve(async (req) => {
   let auditAccountId: string | null = isUuid(accountId) ? accountId : null;
 
   if (isUuid(accountId)) {
-    const { data: targetMembership } = await adminClient
+    const { data: targetMembership, error: targetMembershipError } = await adminClient
       .from('account_memberships')
       .select('account_id, role, status')
       .eq('account_id', accountId)
       .eq('user_id', userId)
       .maybeSingle();
 
+    if (targetMembershipError) {
+      return json(500, { ok: false, code: 'LOOKUP_FAILED', message: targetMembershipError.message });
+    }
+
     if (!targetMembership && !isPlatformAdmin) {
       return json(403, { ok: false, code: 'USER_SCOPE_VIOLATION' });
     }
 
     if (!isPlatformAdmin && targetMembership?.role === 'ADMIN' && targetMembership.status === 'ACTIVE') {
-      const { count: remainingAccountAdmins } = await adminClient
+      const { count: remainingAccountAdmins, error: remainingAccountAdminsError } = await adminClient
         .from('account_memberships')
         .select('id', { count: 'exact', head: true })
         .eq('account_id', accountId)
@@ -161,31 +181,43 @@ serve(async (req) => {
         .eq('role', 'ADMIN')
         .neq('user_id', userId);
 
+      if (remainingAccountAdminsError) {
+        return json(500, { ok: false, code: 'LOOKUP_FAILED', message: remainingAccountAdminsError.message });
+      }
+
       if (!remainingAccountAdmins || remainingAccountAdmins < 1) {
         return json(409, { ok: false, code: 'LAST_ACCOUNT_ADMIN_FORBIDDEN' });
       }
     }
   } else {
-    const { data: anyMembership } = await adminClient
+    const { data: anyMembership, error: anyMembershipError } = await adminClient
       .from('account_memberships')
       .select('account_id')
       .eq('user_id', userId)
       .limit(1)
       .maybeSingle();
+
+    if (anyMembershipError) {
+      return json(500, { ok: false, code: 'LOOKUP_FAILED', message: anyMembershipError.message });
+    }
+
     auditAccountId = anyMembership?.account_id || null;
   }
 
   try {
-    await cleanupUserReferences(adminClient, userId, targetEmail);
-    await adminClient.from('app_permissions').delete().eq('user_id', userId);
-    await adminClient.from('account_memberships').delete().eq('user_id', userId);
-
     const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(userId);
     if (authDeleteError) {
       return json(500, { ok: false, code: 'DELETE_FAILED', message: authDeleteError.message });
     }
 
-    await adminClient
+    const cleanupWarnings: string[] = [];
+    try {
+      await revokePendingInvitationsByEmail(adminClient, targetEmail);
+    } catch (cleanupError) {
+      cleanupWarnings.push(cleanupError instanceof Error ? cleanupError.message : 'Unexpected invitation cleanup error.');
+    }
+
+    const { error: auditInsertError } = await adminClient
       .from('admin_access_audit')
       .insert({
         admin_user_id: caller.id,
@@ -197,12 +229,15 @@ serve(async (req) => {
           reason,
           requested_account_id: accountId || null,
           caller_is_platform_admin: isPlatformAdmin,
+          cleanup_warnings: cleanupWarnings,
         },
       });
 
     return json(200, {
       ok: true,
       deletedUserId: userId,
+      auditError: auditInsertError?.message || null,
+      cleanupWarnings,
     });
   } catch (error) {
     return json(500, {

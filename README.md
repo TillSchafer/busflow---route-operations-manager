@@ -35,6 +35,30 @@ BusFlow is a React + Vite app with Supabase auth, database, RLS, and realtime sy
 - Invite email must redirect to frontend route: `/auth/accept-invite`.
 - On that page, the invited user sets a password, then `claim_my_invitation()` activates membership.
 
+### Invite Troubleshooting Checklist (Read-Only)
+1. Edge function secrets:
+   - `APP_INVITE_REDIRECT_URL=https://<your-domain>/auth/accept-invite`
+   - `APP_PASSWORD_RESET_REDIRECT_URL=https://<your-domain>/auth/accept-invite`
+2. Supabase Dashboard -> `Authentication -> URL Configuration`:
+   - `Site URL` is set correctly.
+   - `Additional Redirect URLs` contains your exact invite URL.
+3. Supabase Auth email template:
+   - Invitation email uses `{{ .ConfirmationURL }}` (no hardcoded wrong path).
+4. Production SQL verification:
+```sql
+select proname, prosecdef
+from pg_proc p
+join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public'
+  and proname in ('is_platform_admin', 'handle_new_user', 'claim_my_invitation');
+
+select trigger_name, event_object_schema, event_object_table
+from information_schema.triggers
+where event_object_schema = 'auth'
+  and event_object_table = 'users'
+  and trigger_name = 'on_auth_user_created';
+```
+
 ### Required Edge Function Secret
 Set these in Supabase Function secrets (not as `VITE_` client env):
 - `APP_INVITE_REDIRECT_URL=https://<your-domain>/auth/accept-invite`
@@ -90,6 +114,8 @@ Set these in Supabase Function secrets (not as `VITE_` client env):
 - `supabase_migration_phase25_account_constraints.sql`: `account_id` NOT NULL + tenant uniqueness constraints
 - `supabase_migration_phase26_rpc_account_scope.sql`: account-scoped canonical route/stops RPC
 - `supabase_migration_phase28_legacy_cleanup_prep.sql`: non-destructive prep marker before app_permissions deprecation
+- `supabase_migration_phase39_invite_flow_consistency.sql`: canonical deferred invite claim flow (`INVITED` -> `ACTIVE`) + trigger verification notices
+- `supabase_migration_phase40_delete_workflow_hardening.sql`: delete hardening (account FK cascades, user-delete FK set-null, verification assertions)
 
 ## Canonical Backend Write Path
 - Routes + stops are saved through RPC: `save_busflow_route_with_stops`

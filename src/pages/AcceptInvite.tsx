@@ -5,6 +5,17 @@ import { supabase } from '../shared/lib/supabase';
 
 type ViewState = 'loading' | 'needs_password' | 'saving' | 'success' | 'error';
 
+type AuthUrlPayload = {
+  type: string | null;
+  code: string | null;
+  tokenHash: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  urlError: string | null;
+  urlErrorCode: string | null;
+  urlErrorDescription: string | null;
+};
+
 const isAllowedOtpType = (value: string | null): value is EmailOtpType => {
   if (!value) return false;
   return ['invite', 'magiclink', 'signup', 'recovery', 'email_change', 'email'].includes(value);
@@ -25,6 +36,50 @@ const mapClaimError = (code?: string): string => {
   }
 };
 
+const readAuthUrlPayload = (): AuthUrlPayload => {
+  const query = new URLSearchParams(window.location.search);
+  const hashRaw = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+  const hash = new URLSearchParams(hashRaw);
+
+  const getParam = (key: string) => query.get(key) ?? hash.get(key);
+
+  return {
+    type: getParam('type'),
+    code: getParam('code'),
+    tokenHash: getParam('token_hash'),
+    accessToken: getParam('access_token'),
+    refreshToken: getParam('refresh_token'),
+    urlError: getParam('error'),
+    urlErrorCode: getParam('error_code'),
+    urlErrorDescription: getParam('error_description'),
+  };
+};
+
+const clearAuthParamsFromUrl = () => {
+  if (!window.location.search && !window.location.hash) return;
+  window.history.replaceState({}, document.title, window.location.pathname);
+};
+
+const getUrlAuthErrorMessage = (payload: AuthUrlPayload): string | null => {
+  const parts = [payload.urlErrorDescription, payload.urlError, payload.urlErrorCode]
+    .map(value => value?.trim())
+    .filter((value): value is string => Boolean(value));
+
+  if (!parts.length) return null;
+  return parts.join(' | ');
+};
+
+const hasActiveMembership = async (userId: string): Promise<boolean> => {
+  const { count, error } = await supabase
+    .from('account_memberships')
+    .select('id', { head: true, count: 'exact' })
+    .eq('user_id', userId)
+    .eq('status', 'ACTIVE');
+
+  if (error) return false;
+  return (count || 0) > 0;
+};
+
 const AcceptInvite: React.FC = () => {
   const navigate = useNavigate();
   const [state, setState] = useState<ViewState>('loading');
@@ -32,44 +87,68 @@ const AcceptInvite: React.FC = () => {
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [errorText, setErrorText] = useState('');
 
-  const searchParams = useMemo(() => new URLSearchParams(window.location.search), []);
-  const isRecoveryFlow = useMemo(() => searchParams.get('type') === 'recovery', [searchParams]);
+  const authPayload = useMemo(() => readAuthUrlPayload(), []);
+  const isRecoveryFlow = authPayload.type === 'recovery';
 
   useEffect(() => {
     const init = async () => {
       setState('loading');
       setErrorText('');
 
-      let { data: sessionData } = await supabase.auth.getSession();
-      let session = sessionData.session;
+      let latestAuthError: string | null = null;
 
-      if (!session) {
-        const tokenHash = searchParams.get('token_hash');
-        const type = searchParams.get('type');
+      let {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-        if (tokenHash && isAllowedOtpType(type)) {
-          const { error } = await supabase.auth.verifyOtp({
-            token_hash: tokenHash,
-            type
-          });
+      if (!session && authPayload.code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(authPayload.code);
+        if (error) latestAuthError = error.message;
 
-          if (error) {
-            setErrorText('Der Einladungslink ist ungültig oder abgelaufen. Bitte lassen Sie sich erneut einladen.');
-            setState('error');
-            return;
-          }
+        const { data } = await supabase.auth.getSession();
+        session = data.session;
+      }
 
-          const { data: refreshedSession } = await supabase.auth.getSession();
-          session = refreshedSession.session;
+      if (!session && authPayload.tokenHash && isAllowedOtpType(authPayload.type)) {
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: authPayload.tokenHash,
+          type: authPayload.type,
+        });
+
+        if (error && !latestAuthError) {
+          latestAuthError = error.message;
         }
+
+        const { data } = await supabase.auth.getSession();
+        session = data.session;
+      }
+
+      if (!session && authPayload.accessToken && authPayload.refreshToken) {
+        const { error } = await supabase.auth.setSession({
+          access_token: authPayload.accessToken,
+          refresh_token: authPayload.refreshToken,
+        });
+
+        if (error && !latestAuthError) {
+          latestAuthError = error.message;
+        }
+
+        const { data } = await supabase.auth.getSession();
+        session = data.session;
       }
 
       if (!session) {
-        setErrorText('Keine gültige Einladungssitzung gefunden. Öffnen Sie den Einladungslink aus der E-Mail erneut.');
+        const urlError = getUrlAuthErrorMessage(authPayload);
+        setErrorText(
+          urlError
+            || latestAuthError
+            || 'Keine gültige Einladungssitzung gefunden. Öffnen Sie den Einladungslink aus der E-Mail erneut.'
+        );
         setState('error');
         return;
       }
 
+      clearAuthParamsFromUrl();
       setState('needs_password');
     };
 
@@ -77,7 +156,7 @@ const AcceptInvite: React.FC = () => {
       setErrorText(err instanceof Error ? err.message : 'Einladung konnte nicht verarbeitet werden.');
       setState('error');
     });
-  }, [searchParams]);
+  }, [authPayload]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,12 +181,34 @@ const AcceptInvite: React.FC = () => {
 
       if (!isRecoveryFlow) {
         const { data: claimResult, error: claimError } = await supabase.rpc('claim_my_invitation', {
-          p_account_id: null
+          p_account_id: null,
         });
 
-        if (claimError) throw claimError;
-        if (!claimResult?.ok && claimResult?.code !== 'ALREADY_ACTIVE') {
-          throw new Error(mapClaimError(claimResult?.code));
+        if (claimError) {
+          throw claimError;
+        }
+
+        const claimCode = claimResult?.code as string | undefined;
+        const claimOk = Boolean(claimResult?.ok);
+
+        if (!claimOk && claimCode !== 'ALREADY_ACTIVE') {
+          if (claimCode === 'NO_PENDING_INVITATION') {
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
+            const userId = session?.user?.id;
+
+            if (userId) {
+              const activeMembershipExists = await hasActiveMembership(userId);
+              if (!activeMembershipExists) {
+                throw new Error(mapClaimError(claimCode));
+              }
+            } else {
+              throw new Error(mapClaimError(claimCode));
+            }
+          } else {
+            throw new Error(mapClaimError(claimCode));
+          }
         }
       }
 

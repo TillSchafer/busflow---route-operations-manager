@@ -38,6 +38,8 @@ export interface PlatformAccount {
 export interface DeleteUserResult {
   ok: boolean;
   deletedUserId?: string;
+  auditError?: string | null;
+  cleanupWarnings?: string[];
   code?: string;
   message?: string;
 }
@@ -71,6 +73,7 @@ export interface DeleteAccountResult {
   deletedAccountId?: string;
   orphanUsersDeleted?: number;
   orphanDeleteErrors?: string[];
+  auditError?: string | null;
   counts?: DeleteAccountDryRunResult['counts'];
   code?: string;
   message?: string;

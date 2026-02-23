@@ -282,17 +282,22 @@ export async function updateCustomerContact(
 
 export async function deleteCustomerContact(contactId: string) {
   const accountId = requireActiveAccountId();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('busflow_customer_contacts')
     .delete()
     .eq('account_id', accountId)
-    .eq('id', contactId);
+    .eq('id', contactId)
+    .select('id')
+    .maybeSingle();
 
-  if (!error) return;
-
-  if (getPostgrestCode(error) === '23503') {
-    throw createCodeError('CONTACT_IN_USE', 'CONTACT_IN_USE');
+  if (error) {
+    if (getPostgrestCode(error) === '23503') {
+      throw createCodeError('CONTACT_IN_USE', 'CONTACT_IN_USE');
+    }
+    throw error;
   }
 
-  throw error;
+  if (!data) {
+    throw createCodeError('CONTACT_NOT_FOUND', 'CONTACT_NOT_FOUND');
+  }
 }

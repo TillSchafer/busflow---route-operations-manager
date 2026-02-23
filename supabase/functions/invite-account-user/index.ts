@@ -26,6 +26,14 @@ const json = (status: number, payload: Record<string, unknown>) =>
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const INVITE_REDIRECT_PATH = '/auth/accept-invite';
+
+const normalizePathname = (pathname: string) => {
+  if (!pathname) return '/';
+  const normalized = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+  return normalized || '/';
+};
+
 const extractBearerToken = (authHeader: string | null) => {
   if (!authHeader) return null;
   const [scheme, token, ...rest] = authHeader.trim().split(' ');
@@ -63,7 +71,20 @@ serve(async (req) => {
   try {
     const parsed = new URL(redirectTo);
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-      return json(500, { ok: false, code: 'INVALID_INVITE_REDIRECT_URL' });
+      return json(500, {
+        ok: false,
+        code: 'INVALID_INVITE_REDIRECT_URL',
+        message: 'APP_INVITE_REDIRECT_URL must start with http:// or https://',
+        meta: { redirectTo },
+      });
+    }
+    if (normalizePathname(parsed.pathname) !== INVITE_REDIRECT_PATH) {
+      return json(500, {
+        ok: false,
+        code: 'INVALID_INVITE_REDIRECT_PATH',
+        message: `APP_INVITE_REDIRECT_URL must use path ${INVITE_REDIRECT_PATH}.`,
+        meta: { redirectTo, expectedPath: INVITE_REDIRECT_PATH },
+      });
     }
   } catch {
     return json(500, { ok: false, code: 'INVALID_INVITE_REDIRECT_URL' });
