@@ -1,6 +1,14 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { corsHeaders, json, extractBearerToken, isUuid } from '../_shared/utils.ts';
+import { corsHeaders, json, extractBearerToken, isUuid, normalizeEmail } from '../_shared/utils.ts';
+import {
+  INVITE_BLOCKER_ACTIVE_MEMBERSHIP,
+  INVITE_BLOCKER_CONFIRMED_USER,
+  type InviteTargetState,
+  deleteGhostUserIfSafe,
+  getInvitationTargetState,
+  retryInviteUserByEmail,
+} from '../_shared/inviteAuth.ts';
 
 type ManageInvitationAction = 'DELETE' | 'RESEND';
 type InvitationRole = 'ADMIN' | 'DISPATCH' | 'VIEWER';
@@ -35,11 +43,6 @@ const toBusinessError = (code: string, message?: string) =>
     code,
     message: message || code,
   });
-
-const isUserNotFoundAuthError = (message?: string) => {
-  const normalized = message?.toLowerCase() || '';
-  return normalized.includes('user not found') || normalized.includes('not found');
-};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -172,48 +175,30 @@ serve(async (req) => {
     }
   }
 
-  const email = invitationRow.email.trim().toLowerCase();
+  const email = normalizeEmail(invitationRow.email);
   const nowIso = new Date().toISOString();
-  const baseMeta = invitationRow.meta && typeof invitationRow.meta === 'object'
-    ? invitationRow.meta
-    : {};
+  const baseMeta = invitationRow.meta && typeof invitationRow.meta === 'object' ? invitationRow.meta : {};
 
-  const { data: profileRows, error: profileLookupError } = await adminClient
-    .from('profiles')
-    .select('id')
-    .ilike('email', email)
-    .limit(1);
-
-  if (profileLookupError) {
-    return json(500, { ok: false, code: 'LOOKUP_FAILED', message: profileLookupError.message });
+  let targetState: InviteTargetState;
+  try {
+    targetState = await getInvitationTargetState(adminClient, email);
+  } catch (error) {
+    return json(500, {
+      ok: false,
+      code: 'LOOKUP_FAILED',
+      message: error instanceof Error ? error.message : 'Failed to resolve invitation target state.',
+    });
   }
 
-  const profileId = profileRows?.[0]?.id || null;
-  let activeMembershipCount = 0;
-  let isEmailConfirmed = false;
-  let canDeleteGhostUser = false;
+  let warningCode: string | null = null;
+  let warningMessage: string | null = null;
 
-  if (profileId) {
-    const { count, error: activeMembershipError } = await adminClient
-      .from('account_memberships')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', profileId)
-      .eq('status', 'ACTIVE');
-
-    if (activeMembershipError) {
-      return json(500, { ok: false, code: 'LOOKUP_FAILED', message: activeMembershipError.message });
-    }
-    activeMembershipCount = count || 0;
-
-    const { data: authUserData, error: authUserError } = await adminClient.auth.admin.getUserById(profileId);
-    if (authUserError && !isUserNotFoundAuthError(authUserError.message)) {
-      return json(500, { ok: false, code: 'LOOKUP_FAILED', message: authUserError.message });
-    }
-
-    if (authUserData?.user) {
-      isEmailConfirmed = !!authUserData.user.email_confirmed_at;
-      canDeleteGhostUser = !isEmailConfirmed && activeMembershipCount === 0;
-    }
+  if (targetState.activeMembershipCount > 0) {
+    warningCode = INVITE_BLOCKER_ACTIVE_MEMBERSHIP;
+    warningMessage = 'Einladung wurde widerrufen, da für diese E-Mail bereits ein aktiver Zugang existiert.';
+  } else if (targetState.isEmailConfirmed) {
+    warningCode = INVITE_BLOCKER_CONFIRMED_USER;
+    warningMessage = 'Einladung wurde widerrufen. Die E-Mail ist bereits registriert, bitte Login oder Passwort-Reset nutzen.';
   }
 
   const revokeMeta = {
@@ -245,30 +230,29 @@ serve(async (req) => {
   }
 
   let deletedGhostUser = false;
-  let warningCode: string | null = null;
-  let warningMessage: string | null = null;
-
-  if (profileId && canDeleteGhostUser) {
-    const { error: ghostDeleteError } = await adminClient.auth.admin.deleteUser(profileId);
-    if (ghostDeleteError) {
-      return json(500, { ok: false, code: 'GHOST_USER_DELETE_FAILED', message: ghostDeleteError.message });
+  let ghostDeleteAttempted = false;
+  if (targetState.canDeleteGhostUser) {
+    ghostDeleteAttempted = true;
+    try {
+      deletedGhostUser = await deleteGhostUserIfSafe(adminClient, targetState);
+    } catch (error) {
+      return json(500, {
+        ok: false,
+        code: 'GHOST_USER_DELETE_FAILED',
+        message: error instanceof Error ? error.message : 'Failed to delete ghost user.',
+      });
     }
-    deletedGhostUser = true;
-  } else if (profileId && activeMembershipCount > 0) {
-    warningCode = 'ACTIVE_MEMBERSHIP_EXISTS';
-    warningMessage = 'Einladung wurde widerrufen, der bestehende aktive User wurde nicht gelöscht.';
-  } else if (profileId && isEmailConfirmed) {
-    warningCode = 'CONFIRMED_USER_REQUIRES_MANUAL_ACTION';
-    warningMessage = 'Einladung wurde widerrufen, bestätigter User wurde aus Sicherheitsgründen nicht gelöscht.';
   }
 
   let emailSent: boolean | undefined;
   let newInvitationId: string | undefined;
   let responseCode: string | undefined = warningCode || undefined;
   let responseMessage: string | undefined = warningMessage || undefined;
+  let inviteRetryCount: number | null = null;
+  let inviteErrorMessage: string | null = null;
 
   if (action === 'RESEND') {
-    if (activeMembershipCount > 0) {
+    if (warningCode) {
       emailSent = false;
     } else {
       const { data: newInvitation, error: newInvitationError } = await adminClient
@@ -298,19 +282,59 @@ serve(async (req) => {
 
       newInvitationId = newInvitation.id;
 
-      const { error: sendInviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-        data: {
-          invited_account_id: accountId,
-          invited_role: invitationRow.role,
-          invitation_id: newInvitation.id,
-        },
-        redirectTo,
-      });
+      let retryResult;
+      try {
+        retryResult = await retryInviteUserByEmail(adminClient, {
+          email,
+          redirectTo: redirectTo as string,
+          data: {
+            invited_account_id: accountId,
+            invited_role: invitationRow.role,
+            invitation_id: newInvitation.id,
+          },
+          maxRetries: 2,
+        });
+      } catch (error) {
+        return json(500, {
+          ok: false,
+          code: 'INVITATION_SEND_FAILED',
+          message: error instanceof Error ? error.message : 'Failed to send invitation email.',
+        });
+      }
 
-      if (sendInviteError) {
+      inviteRetryCount = retryResult.attempts;
+      inviteErrorMessage = retryResult.inviteErrorMessage;
+      deletedGhostUser = deletedGhostUser || retryResult.deletedGhostUser;
+      ghostDeleteAttempted = ghostDeleteAttempted || retryResult.deletedGhostUser;
+
+      if (!retryResult.emailSent) {
         emailSent = false;
-        responseCode = 'INVITATION_CREATED_EMAIL_FAILED';
-        responseMessage = sendInviteError.message;
+        responseCode = retryResult.blockerCode || 'INVITATION_CREATED_EMAIL_FAILED';
+        responseMessage = retryResult.blockerMessage || retryResult.inviteErrorMessage || 'Invitation email could not be sent.';
+
+        const { error: rollbackError } = await adminClient
+          .from('account_invitations')
+          .update({
+            status: 'REVOKED',
+            meta: {
+              source: 'admin-manage-invitation-v1',
+              replaced_invitation_id: invitationRow.id,
+              reason,
+              send_failed_at: new Date().toISOString(),
+              send_failed_code: responseCode,
+              send_failed_message: responseMessage,
+            },
+          })
+          .eq('id', newInvitation.id)
+          .eq('status', 'PENDING');
+
+        if (rollbackError) {
+          return json(500, {
+            ok: false,
+            code: 'INVITATION_SEND_ROLLBACK_FAILED',
+            message: rollbackError.message,
+          });
+        }
       } else {
         emailSent = true;
         if (!responseMessage) {
@@ -334,11 +358,18 @@ serve(async (req) => {
         invitation_role: invitationRow.role,
         action,
         reason,
-        deleted_ghost_user: deletedGhostUser,
+        auth_user_id: targetState.authUserId,
+        auth_email_confirmed: targetState.isEmailConfirmed,
+        active_membership_count: targetState.activeMembershipCount,
+        active_membership_account_id: targetState.activeMembershipAccountId,
+        ghost_delete_attempted: ghostDeleteAttempted,
+        ghost_deleted: deletedGhostUser,
         warning_code: warningCode,
         warning_message: warningMessage,
         new_invitation_id: newInvitationId || null,
         email_sent: emailSent ?? null,
+        invite_retry_count: inviteRetryCount,
+        invite_error_message: inviteErrorMessage,
       },
     });
 

@@ -132,7 +132,11 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
       setInviteRole('VIEWER');
       setIsInviteDialogOpen(false);
       if (inviteResult?.emailSent === false) {
-        pushToast({ type: 'warning', title: 'Einladung erstellt', message: 'Die Einladung wurde gespeichert, aber die E-Mail konnte nicht gesendet werden. Bitte prüfen Sie die E-Mail-Konfiguration in Supabase.' });
+        pushToast({
+          type: 'warning',
+          title: 'Einladung erstellt',
+          message: inviteResult.message || 'Die Einladung wurde gespeichert, aber die E-Mail konnte nicht gesendet werden.',
+        });
       } else {
         pushToast({ type: 'success', title: 'Einladung gesendet', message: 'Mitarbeiter wurde eingeladen.' });
       }
@@ -246,11 +250,23 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
           title: 'Einladung nicht erneut möglich',
           message: result.message || 'Für diese E-Mail besteht bereits ein aktiver Zugang.',
         });
+      } else if (result.code === 'CONFIRMED_USER_REQUIRES_MANUAL_ACTION') {
+        pushToast({
+          type: 'warning',
+          title: 'Bereits registriert',
+          message: result.message || 'Die E-Mail ist bereits registriert. Bitte Login oder Passwort-Reset verwenden.',
+        });
+      } else if (result.code === 'INVITATION_CREATED_EMAIL_FAILED') {
+        pushToast({
+          type: 'warning',
+          title: 'Einladung konnte nicht gesendet werden',
+          message: result.message || 'Neue Einladung wurde angelegt, aber die E-Mail konnte nicht gesendet werden.',
+        });
       } else if (result.emailSent === false) {
         pushToast({
           type: 'warning',
           title: 'Einladung neu erstellt',
-          message: 'Neue Einladung wurde angelegt, aber die E-Mail konnte nicht gesendet werden.',
+          message: result.message || 'Neue Einladung wurde angelegt, aber die E-Mail konnte nicht gesendet werden.',
         });
       } else {
         pushToast({

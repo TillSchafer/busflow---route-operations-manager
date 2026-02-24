@@ -1,11 +1,12 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import {
+  INVITE_BLOCKER_CONFIRMED_USER,
+  type InviteTargetState,
+  getInvitationTargetState,
+  isAlreadyRegisteredError,
+  retryInviteUserByEmail,
+} from '../_shared/inviteAuth.ts';
 
 type InviteRole = 'ADMIN' | 'DISPATCH' | 'VIEWER';
 
@@ -13,6 +14,12 @@ type InviteRequest = {
   accountId?: string;
   email?: string;
   role?: InviteRole;
+};
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 const json = (status: number, payload: Record<string, unknown>) =>
@@ -165,27 +172,30 @@ serve(async (req) => {
     return json(404, { ok: false, code: 'ACCOUNT_NOT_FOUND' });
   }
 
-  const { data: existingProfile } = await adminClient
-    .from('profiles')
-    .select('id')
-    .ilike('email', email)
-    .maybeSingle();
+  let targetState: InviteTargetState;
+  try {
+    targetState = await getInvitationTargetState(adminClient, email);
+  } catch (error) {
+    return json(500, {
+      ok: false,
+      code: 'LOOKUP_FAILED',
+      message: error instanceof Error ? error.message : 'Failed to resolve invite target state.',
+    });
+  }
 
-  if (existingProfile?.id) {
-    const { data: existingMembership } = await adminClient
-      .from('account_memberships')
-      .select('id, account_id')
-      .eq('user_id', existingProfile.id)
-      .eq('status', 'ACTIVE')
-      .maybeSingle();
-
-    if (existingMembership?.id && existingMembership.account_id === accountId) {
+  if (targetState.activeMembershipCount > 0) {
+    if (targetState.activeMembershipAccountId === accountId) {
       return json(409, { ok: false, code: 'USER_ALREADY_ACTIVE_IN_ACCOUNT' });
     }
+    return json(409, { ok: false, code: 'USER_ALREADY_ACTIVE_IN_ANOTHER_ACCOUNT' });
+  }
 
-    if (existingMembership?.id && existingMembership.account_id !== accountId) {
-      return json(409, { ok: false, code: 'USER_ALREADY_ACTIVE_IN_ANOTHER_ACCOUNT' });
-    }
+  if (targetState.isEmailConfirmed) {
+    return json(409, {
+      ok: false,
+      code: INVITE_BLOCKER_CONFIRMED_USER,
+      message: 'Diese E-Mail ist bereits registriert. Bitte Login oder Passwort-Reset nutzen.',
+    });
   }
 
   const { data: pendingInvitation } = await adminClient
@@ -219,21 +229,62 @@ serve(async (req) => {
     return json(500, { ok: false, code: 'INVITE_CREATE_FAILED', message: invitationError?.message });
   }
 
-  const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-    data: {
-      invited_account_id: accountId,
-      invited_role: role,
-    },
-    redirectTo,
-  });
+  let retryResult;
+  try {
+    retryResult = await retryInviteUserByEmail(adminClient, {
+      email,
+      redirectTo,
+      data: {
+        invited_account_id: accountId,
+        invited_role: role,
+      },
+      maxRetries: 2,
+    });
+  } catch (error) {
+    return json(500, {
+      ok: false,
+      code: 'INVITE_SEND_FAILED',
+      message: error instanceof Error ? error.message : 'Failed to send invite email.',
+    });
+  }
 
-  if (inviteError) {
+  if (!retryResult.emailSent) {
+    const shouldRevoke =
+      !!retryResult.blockerCode || isAlreadyRegisteredError(retryResult.inviteErrorMessage || undefined);
+
+    if (shouldRevoke) {
+      const { error: rollbackError } = await adminClient
+        .from('account_invitations')
+        .update({
+          status: 'REVOKED',
+          meta: {
+            source: 'invite-account-user',
+            send_failed_at: new Date().toISOString(),
+            send_failed_code: retryResult.blockerCode || 'INVITATION_CREATED_EMAIL_FAILED',
+            send_failed_message: retryResult.inviteErrorMessage || null,
+          },
+        })
+        .eq('id', invitation.id)
+        .eq('status', 'PENDING');
+
+      if (rollbackError) {
+        return json(500, {
+          ok: false,
+          code: 'INVITATION_SEND_ROLLBACK_FAILED',
+          message: rollbackError.message,
+        });
+      }
+    }
+
     return json(200, {
       ok: true,
       emailSent: false,
-      code: 'INVITATION_CREATED_EMAIL_FAILED',
+      code: retryResult.blockerCode || 'INVITATION_CREATED_EMAIL_FAILED',
+      message: retryResult.blockerMessage || retryResult.inviteErrorMessage || 'Einladung erstellt, aber E-Mail konnte nicht gesendet werden.',
       invitationId: invitation.id,
       accountName: account.name,
+      deletedGhostUser: retryResult.deletedGhostUser,
+      inviteRetryCount: retryResult.attempts,
     });
   }
 
@@ -242,5 +293,7 @@ serve(async (req) => {
     emailSent: true,
     invitationId: invitation.id,
     accountName: account.name,
+    deletedGhostUser: retryResult.deletedGhostUser,
+    inviteRetryCount: retryResult.attempts,
   });
 });
