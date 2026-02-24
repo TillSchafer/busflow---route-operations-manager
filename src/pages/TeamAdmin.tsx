@@ -256,6 +256,20 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
           title: 'Bereits registriert',
           message: result.message || 'Die E-Mail ist bereits registriert. Bitte Login oder Passwort-Reset verwenden.',
         });
+      } else if (result.code === 'REACTIVATION_EMAIL_SENT') {
+        if (result.emailSent !== false) {
+          pushToast({
+            type: 'success',
+            title: 'Reaktivierungs-E-Mail gesendet',
+            message: result.message || 'Der Benutzer erhält eine E-Mail zum Passwort zurücksetzen. Nach dem Setzen des Passworts wird der Zugang automatisch aktiviert.',
+          });
+        } else {
+          pushToast({
+            type: 'warning',
+            title: 'Einladung erstellt',
+            message: result.message || 'Neue Einladung wurde angelegt, aber die Reaktivierungs-E-Mail konnte nicht gesendet werden.',
+          });
+        }
       } else if (result.code === 'INVITATION_CREATED_EMAIL_FAILED') {
         pushToast({
           type: 'warning',

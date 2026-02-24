@@ -252,8 +252,69 @@ serve(async (req) => {
   let inviteErrorMessage: string | null = null;
 
   if (action === 'RESEND') {
-    if (warningCode) {
+    const isReactivationCase = targetState.isEmailConfirmed && targetState.activeMembershipCount === 0;
+
+    if (warningCode && !isReactivationCase) {
+      // ACTIVE_MEMBERSHIP blocker — confirmed user already has an active account
       emailSent = false;
+    } else if (isReactivationCase) {
+      // User clicked the original invite link (email confirmed) but never set a password.
+      // Their membership is stuck as INVITED. Send a password-reset email so they can
+      // complete onboarding, then claim_my_invitation activates their membership.
+      const { data: newInvitation, error: newInvitationError } = await adminClient
+        .from('account_invitations')
+        .insert({
+          account_id: accountId,
+          email,
+          role: invitationRow.role,
+          status: 'PENDING',
+          invited_by: caller.id,
+          meta: {
+            source: 'admin-manage-invitation-v1',
+            reactivation: true,
+            replaced_invitation_id: invitationRow.id,
+            reason,
+          },
+        })
+        .select('id')
+        .single();
+
+      if (newInvitationError || !newInvitation) {
+        return json(500, {
+          ok: false,
+          code: 'INVITATION_CREATE_FAILED',
+          message: newInvitationError?.message || 'Failed to create reactivation invitation.',
+        });
+      }
+
+      newInvitationId = newInvitation.id;
+
+      const { error: resetError } = await adminClient.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectTo as string,
+      });
+
+      emailSent = !resetError;
+      responseCode = 'REACTIVATION_EMAIL_SENT';
+      responseMessage = resetError
+        ? 'Neue Einladung erstellt, aber Reaktivierungs-E-Mail konnte nicht gesendet werden.'
+        : 'Reaktivierungs-E-Mail wurde gesendet. Der Benutzer kann sein Passwort zurücksetzen und erhält dann automatisch Zugang.';
+
+      if (resetError) {
+        await adminClient
+          .from('account_invitations')
+          .update({
+            status: 'REVOKED',
+            meta: {
+              source: 'admin-manage-invitation-v1',
+              reactivation: true,
+              replaced_invitation_id: invitationRow.id,
+              send_failed_at: new Date().toISOString(),
+              send_failed_message: resetError.message,
+            },
+          })
+          .eq('id', newInvitation.id)
+          .eq('status', 'PENDING');
+      }
     } else {
       const { data: newInvitation, error: newInvitationError } = await adminClient
         .from('account_invitations')

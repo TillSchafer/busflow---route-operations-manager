@@ -200,14 +200,32 @@ serve(async (req) => {
 
   const { data: pendingInvitation } = await adminClient
     .from('account_invitations')
-    .select('id')
+    .select('id, expires_at')
     .eq('account_id', accountId)
     .eq('status', 'PENDING')
     .ilike('email', email)
     .maybeSingle();
 
   if (pendingInvitation?.id) {
-    return json(409, { ok: false, code: 'INVITE_ALREADY_PENDING' });
+    const isExpired = pendingInvitation.expires_at
+      ? new Date(pendingInvitation.expires_at) < new Date()
+      : false;
+
+    if (!isExpired) {
+      return json(409, { ok: false, code: 'INVITE_ALREADY_PENDING' });
+    }
+
+    // Auto-revoke the expired invitation and proceed with a fresh one
+    await adminClient
+      .from('account_invitations')
+      .update({
+        status: 'REVOKED',
+        meta: {
+          auto_revoked_reason: 'expired_on_reinvite',
+          auto_revoked_at: new Date().toISOString(),
+        },
+      })
+      .eq('id', pendingInvitation.id);
   }
 
   const { data: invitation, error: invitationError } = await adminClient

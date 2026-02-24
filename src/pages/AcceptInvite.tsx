@@ -82,6 +82,17 @@ const hasActiveMembership = async (userId: string): Promise<boolean> => {
   return (count || 0) > 0;
 };
 
+const hasInvitedMembership = async (userId: string): Promise<boolean> => {
+  const { count, error } = await supabase
+    .from('account_memberships')
+    .select('id', { head: true, count: 'exact' })
+    .eq('user_id', userId)
+    .eq('status', 'INVITED');
+
+  if (error) return false;
+  return (count || 0) > 0;
+};
+
 const AcceptInvite: React.FC = () => {
   const navigate = useNavigate();
   const [state, setState] = useState<ViewState>('loading');
@@ -214,6 +225,28 @@ const AcceptInvite: React.FC = () => {
               throw new Error(mapClaimError(claimCode));
             }
           } else {
+            throw new Error(mapClaimError(claimCode));
+          }
+        }
+      } else {
+        // Recovery flow (password reset): if the admin sent a reactivation email,
+        // the user has a fresh PENDING invitation. Claim it now to activate their membership.
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const userId = session?.user?.id;
+
+        if (userId && (await hasInvitedMembership(userId))) {
+          const { data: claimResult, error: claimError } = await supabase.rpc('claim_my_invitation', {
+            p_account_id: null,
+          });
+
+          if (claimError) {
+            throw claimError;
+          }
+
+          const claimCode = claimResult?.code as string | undefined;
+          if (!claimResult?.ok && claimCode !== 'ALREADY_ACTIVE') {
             throw new Error(mapClaimError(claimCode));
           }
         }
