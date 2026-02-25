@@ -21,6 +21,8 @@ export interface AccountSummary {
   name: string;
   slug: string;
   role: Role;
+  trialState?: 'TRIAL_ACTIVE' | 'TRIAL_ENDED' | 'SUBSCRIBED';
+  trialEndsAt?: string;
 }
 
 interface AuthContextType {
@@ -62,7 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role,
           status,
           created_at,
-          platform_accounts!inner (id, name, slug)
+          platform_accounts!inner (id, name, slug, trial_state, trial_ends_at)
         `)
         .eq('user_id', userId)
         .eq('status', 'ACTIVE')
@@ -78,7 +80,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const row = data[0] as {
         account_id: string;
         role: MembershipRole;
-        platform_accounts: { id: string; name: string; slug: string } | { id: string; name: string; slug: string }[];
+        platform_accounts:
+          | { id: string; name: string; slug: string; trial_state?: string | null; trial_ends_at?: string | null }
+          | { id: string; name: string; slug: string; trial_state?: string | null; trial_ends_at?: string | null }[];
       };
 
       const account = Array.isArray(row.platform_accounts) ? row.platform_accounts[0] : row.platform_accounts;
@@ -88,7 +92,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         id: account?.id || row.account_id,
         name: account?.name || 'Account',
         slug: account?.slug || '',
-        role: membershipRole
+        role: membershipRole,
+        trialState: (account?.trial_state as AccountSummary['trialState']) || undefined,
+        trialEndsAt: account?.trial_ends_at || undefined,
       };
 
       setActiveAccount(summary);

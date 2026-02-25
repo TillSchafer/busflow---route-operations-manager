@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Bus, Leaf } from 'lucide-react';
 import { supabase } from './shared/lib/supabase';
@@ -7,12 +7,14 @@ import PlatformAdmin from './pages/PlatformAdmin';
 import TeamAdmin from './pages/TeamAdmin';
 import Profile from './pages/Profile';
 import AcceptInvite from './pages/AcceptInvite';
+import Register from './pages/Register';
 import BusflowApp from './apps/busflow/BusflowApp';
 import { AuthProvider, useAuth } from './shared/auth/AuthContext';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { Analytics } from '@vercel/analytics/react';
 import { ToastProvider } from './shared/components/ToastProvider';
 import ToastViewport from './shared/components/ToastViewport';
+import AuthScreenShell from './shared/components/auth/AuthScreenShell';
 import { useToast } from './shared/components/ToastProvider';
 import { ProgressProvider } from './shared/components/ProgressProvider';
 import ProgressViewport from './shared/components/ProgressViewport';
@@ -40,14 +42,9 @@ const LoginScreen: React.FC<{
   onSubmit,
   onForgotPassword
 }) => (
-  <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-xl px-8 py-8 w-full max-w-md">
+  <AuthScreenShell>
       <h2 className="text-2xl font-bold text-slate-900 mb-2">Anmeldung</h2>
-      <p className="text-sm text-slate-500 mb-6">
-        Bitte melden Sie sich an, um fortzufahren.
-        <br />
-        <span className="font-medium text-slate-700">Zugang nur per Einladung.</span>
-      </p>
+      <p className="text-sm text-slate-500 mb-6">Bitte melden Sie sich an, um fortzufahren.</p>
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-semibold text-slate-700 mb-1">E-Mail</label>
@@ -55,7 +52,7 @@ const LoginScreen: React.FC<{
             type="email"
             value={email}
             onChange={e => onEmailChange(e.target.value)}
-            className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
+            className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white/80 border transition-all"
             placeholder="name@firma.de"
             required
           />
@@ -66,7 +63,7 @@ const LoginScreen: React.FC<{
             type="password"
             value={password}
             onChange={e => onPasswordChange(e.target.value)}
-            className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
+            className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white/80 border transition-all"
             placeholder="••••••••"
             required
             minLength={6}
@@ -94,20 +91,19 @@ const LoginScreen: React.FC<{
       </form>
 
       <div className="mt-4 text-sm text-slate-600">
-        Noch kein Passwort gesetzt?{' '}
-        <Link to="/auth/accept-invite" className="font-semibold text-blue-700 hover:text-blue-600">
-          Einladungslink öffnen und Passwort festlegen
+        Noch kein Account?{' '}
+        <Link to="/auth/register" className="font-semibold text-blue-700 hover:text-blue-600">
+          Jetzt registrieren
         </Link>
         .
       </div>
-    </div>
-  </div>
+  </AuthScreenShell>
 );
 
 const InnerApp: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, activeAccountId, canManageTenantUsers, loading, logout } = useAuth();
+  const { user, activeAccountId, activeAccount, canManageTenantUsers, loading, logout } = useAuth();
   const { pushToast } = useToast();
 
   const [email, setEmail] = useState('');
@@ -164,6 +160,28 @@ const InnerApp: React.FC = () => {
     navigate('/');
   };
 
+  // Auth-Callback-Normalizer: Supabase auth params may land on any route (e.g. '/')
+  // if the redirect URL is misconfigured. Detect callback params and redirect to the
+  // correct handler route before they get lost.
+  useEffect(() => {
+    if (location.pathname === '/auth/accept-invite') return;
+
+    const hasCallbackParam = (params: URLSearchParams): boolean =>
+      ['token', 'token_hash', 'code', 'access_token', 'refresh_token',
+        'type', 'error', 'error_code', 'error_description'].some(k => params.has(k));
+
+    const searchParams = new URLSearchParams(location.search);
+    const hashStr = location.hash.startsWith('#') ? location.hash.slice(1) : location.hash;
+    const hashParams = new URLSearchParams(hashStr);
+
+    if (hasCallbackParam(searchParams) || hasCallbackParam(hashParams)) {
+      navigate(
+        { pathname: '/auth/accept-invite', search: location.search, hash: location.hash },
+        { replace: true }
+      );
+    }
+  }, [location.pathname, location.search, location.hash, navigate]);
+
   const adminPath = canManageTenantUsers ? '/adminbereich' : '/';
   const ownerPath = user?.isPlatformOwner ? '/owner-bereich' : adminPath;
   const goAdmin = () => navigate(adminPath);
@@ -186,6 +204,7 @@ const InnerApp: React.FC = () => {
     return (
       <Routes>
         <Route path="/auth/accept-invite" element={<AcceptInvite />} />
+        <Route path="/auth/register" element={<Register />} />
         <Route
           path="*"
           element={
@@ -214,18 +233,18 @@ const InnerApp: React.FC = () => {
 
   if (!user.isPlatformAdmin && !activeAccountId && !isAcceptInviteRoute) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-xl px-8 py-8 w-full max-w-md text-center space-y-4">
+      <AuthScreenShell>
+        <div className="text-center space-y-4">
           <h2 className="text-xl font-bold text-slate-900">Konto-Zugang ausstehend</h2>
           <p className="text-sm text-slate-600">
-            Ihr Konto ist noch nicht vollständig aktiviert. Bitte öffnen Sie den Einladungslink aus Ihrer E-Mail und setzen Sie dort Ihr Passwort, um den Zugang abzuschließen.
+            Ihr Konto-Zugang wurde noch nicht vollständig aktiviert. Klicken Sie auf die Schaltfläche unten, um den Aktivierungsprozess abzuschließen.
           </p>
-          <a
-            href="/auth/accept-invite"
+          <Link
+            to="/auth/accept-invite"
             className="inline-block bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors text-sm"
           >
-            Einladungslink öffnen
-          </a>
+            Zugang aktivieren
+          </Link>
           <div className="pt-2">
             <button
               type="button"
@@ -236,7 +255,7 @@ const InnerApp: React.FC = () => {
             </button>
           </div>
         </div>
-      </div>
+      </AuthScreenShell>
     );
   }
 
@@ -259,6 +278,7 @@ const InnerApp: React.FC = () => {
             <Home
               apps={apps}
               auth={user}
+              activeAccount={activeAccount}
               onProfile={() => navigate('/profile')}
               onAdmin={goAdmin}
               onOwner={user.isPlatformOwner ? goOwner : undefined}

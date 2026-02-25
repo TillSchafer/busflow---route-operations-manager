@@ -29,6 +29,18 @@ export type RetryInviteResult = {
   blockerMessage?: string;
 };
 
+export type ExistingPendingInvitation = {
+  id: string;
+  account_id: string;
+  email: string;
+  role: string;
+  status: string;
+  expires_at: string;
+  created_at: string;
+  source: string;
+  isExpired: boolean;
+};
+
 const isUserNotFoundAuthError = (message?: string) => {
   const normalized = message?.toLowerCase() || '';
   return normalized.includes('user not found') || normalized.includes('not found');
@@ -158,6 +170,44 @@ export const deleteGhostUserIfSafe = async (
   }
 
   return true;
+};
+
+export const resolveExistingPendingInvitationForEmail = async (
+  adminClient: ReturnType<typeof createClient>,
+  email: string
+): Promise<ExistingPendingInvitation[]> => {
+  const normalized = normalizeEmail(email);
+  const { data, error } = await adminClient
+    .from('account_invitations')
+    .select('id, account_id, email, role, status, expires_at, created_at, meta')
+    .eq('status', 'PENDING')
+    .ilike('email', normalized)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(`pending invitation lookup failed: ${error.message}`);
+  }
+
+  const nowTs = Date.now();
+  return (data || []).map((row) => {
+    const meta = row.meta && typeof row.meta === 'object' ? row.meta as Record<string, unknown> : {};
+    const sourceRaw = meta.source;
+    const source = typeof sourceRaw === 'string' && sourceRaw.trim() ? sourceRaw.trim() : 'unknown';
+    const expiresAtRaw = row.expires_at || new Date(0).toISOString();
+    const isExpired = new Date(expiresAtRaw).getTime() <= nowTs;
+
+    return {
+      id: row.id,
+      account_id: row.account_id,
+      email: row.email,
+      role: row.role,
+      status: row.status,
+      expires_at: expiresAtRaw,
+      created_at: row.created_at,
+      source,
+      isExpired,
+    };
+  });
 };
 
 export const retryInviteUserByEmail = async (

@@ -80,11 +80,14 @@ Set these in Supabase Function secrets (not as `VITE_` client env):
 - Legacy paths (`/owner-settings`, `/company-settings`, `/platform-admin`, `/team-admin`, `/admin`) are redirected to the correct new area.
 
 ## Supabase SQL Governance
-- Source of truth is **migrations only**: `supabase_migration_*.sql`
+- Source of truth is **migrations only** in `supabase/migrations/`
+- Historical SQL files under `docs/migrations/` are archive/reference only
 - `supabase_schema.sql` is legacy reference and is **not** operational
 - Deprecated scripts live in `sql/legacy/` and must not be executed in production
 
-## Supabase Migration Map
+## Supabase Migration Map (Legacy Archive)
+These historical files live under `docs/migrations/` and remain documented for lineage:
+
 - `supabase_migration_workers.sql`: workers table
 - `supabase_migration_phase3.sql`: legacy `customer_name` route column
 - `supabase_migration_phase4.sql`: status migration to German statuses

@@ -44,7 +44,7 @@ serve(async (req) => {
 
   const { data: accounts, error: accountsError } = await adminClient
     .from('platform_accounts')
-    .select('id, name, slug, status, created_at, updated_at, archived_at, archived_by')
+    .select('id, name, slug, status, trial_started_at, trial_ends_at, trial_state, created_at, updated_at, archived_at, archived_by')
     .order('created_at', { ascending: false });
 
   if (accountsError) {

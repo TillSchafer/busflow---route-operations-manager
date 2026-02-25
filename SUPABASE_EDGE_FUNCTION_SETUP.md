@@ -4,9 +4,12 @@ Diese Anleitung richtet die produktiven Functions in BusFlow ein:
 - `invite-account-user`
 - `platform-provision-account`
 - `platform-send-password-reset`
-- `admin-delete-user`
-- `admin-delete-user-v2`
 - `admin-delete-user-v3`
+- `admin-manage-invitation-v1`
+- `admin-update-membership-role-v1`
+- `admin-update-user-v1`
+- `owner-update-account-v1`
+- `owner-company-overview-v1`
 - `platform-delete-account`
 
 ## 1) Voraussetzungen
@@ -37,9 +40,12 @@ Nur notwendig, wenn sie noch nicht existiert:
 npx supabase functions new invite-account-user
 npx supabase functions new platform-provision-account
 npx supabase functions new platform-send-password-reset
-npx supabase functions new admin-delete-user
-npx supabase functions new admin-delete-user-v2
 npx supabase functions new admin-delete-user-v3
+npx supabase functions new admin-manage-invitation-v1
+npx supabase functions new admin-update-membership-role-v1
+npx supabase functions new admin-update-user-v1
+npx supabase functions new owner-update-account-v1
+npx supabase functions new owner-company-overview-v1
 npx supabase functions new platform-delete-account
 ```
 
@@ -47,9 +53,12 @@ Erwartete Struktur:
 - `supabase/functions/invite-account-user/index.ts`
 - `supabase/functions/platform-provision-account/index.ts`
 - `supabase/functions/platform-send-password-reset/index.ts`
-- `supabase/functions/admin-delete-user/index.ts`
-- `supabase/functions/admin-delete-user-v2/index.ts`
 - `supabase/functions/admin-delete-user-v3/index.ts`
+- `supabase/functions/admin-manage-invitation-v1/index.ts`
+- `supabase/functions/admin-update-membership-role-v1/index.ts`
+- `supabase/functions/admin-update-user-v1/index.ts`
+- `supabase/functions/owner-update-account-v1/index.ts`
+- `supabase/functions/owner-company-overview-v1/index.ts`
 - `supabase/functions/platform-delete-account/index.ts`
 
 ## 3) Code in `index.ts` einsetzen
@@ -111,13 +120,22 @@ verify_jwt = false
 [functions.platform-send-password-reset]
 verify_jwt = false
 
-[functions.admin-delete-user]
-verify_jwt = true
-
-[functions.admin-delete-user-v2]
-verify_jwt = true
-
 [functions.admin-delete-user-v3]
+verify_jwt = false
+
+[functions.admin-manage-invitation-v1]
+verify_jwt = false
+
+[functions.admin-update-membership-role-v1]
+verify_jwt = false
+
+[functions.admin-update-user-v1]
+verify_jwt = false
+
+[functions.owner-update-account-v1]
+verify_jwt = false
+
+[functions.owner-company-overview-v1]
 verify_jwt = false
 
 [functions.platform-delete-account]
@@ -152,9 +170,12 @@ Hinweis:
 npx supabase functions deploy invite-account-user --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
 npx supabase functions deploy platform-provision-account --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
 npx supabase functions deploy platform-send-password-reset --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
-npx supabase functions deploy admin-delete-user --project-ref jgydzxdiwpldgrqkfbfk
-npx supabase functions deploy admin-delete-user-v2 --project-ref jgydzxdiwpldgrqkfbfk
 npx supabase functions deploy admin-delete-user-v3 --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
+npx supabase functions deploy admin-manage-invitation-v1 --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
+npx supabase functions deploy admin-update-membership-role-v1 --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
+npx supabase functions deploy admin-update-user-v1 --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
+npx supabase functions deploy owner-update-account-v1 --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
+npx supabase functions deploy owner-company-overview-v1 --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
 npx supabase functions deploy platform-delete-account --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
 ```
 

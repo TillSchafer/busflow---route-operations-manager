@@ -7,7 +7,7 @@ import {
   OwnerOverviewCompany,
   OwnerUpdateAccountResult,
   PlatformAccount,
-  PlatformAccountStatus
+  PlatformAccountStatus,
 } from './types';
 
 type OwnerOverviewData = {
@@ -59,6 +59,23 @@ export const PlatformAdminApi = {
 
     if (!data?.ok) {
       throw new Error(data?.message || data?.code || 'Account konnte nicht aktualisiert werden.');
+    }
+
+    return data as OwnerUpdateAccountResult;
+  },
+
+  async updateAccountTrial(
+    accountId: string,
+    trialAction: 'EXTEND_14_DAYS' | 'CANCEL_TRIAL',
+    reason?: string
+  ): Promise<OwnerUpdateAccountResult> {
+    const data = await invokeAuthedFunction<
+      { accountId: string; trialAction: 'EXTEND_14_DAYS' | 'CANCEL_TRIAL'; reason?: string },
+      OwnerUpdateAccountResult
+    >('owner-update-account-v1', { accountId, trialAction, reason });
+
+    if (!data?.ok) {
+      throw new Error(data?.message || data?.code || 'Trial-Status konnte nicht aktualisiert werden.');
     }
 
     return data as OwnerUpdateAccountResult;

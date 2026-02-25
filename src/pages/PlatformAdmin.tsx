@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Leaf } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown, ChevronRight, Leaf, X } from 'lucide-react';
 import AppHeader from '../shared/components/AppHeader';
 import ConfirmDialog from '../shared/components/ConfirmDialog';
 import { useToast } from '../shared/components/ToastProvider';
 import { PlatformAdminApi } from '../shared/api/admin/platformAdmin.api';
-import { MembershipItem, PlatformAccount, PlatformAccountStatus } from '../shared/api/admin/types';
+import { MembershipItem, PlatformAccount, PlatformAccountStatus, TrialState } from '../shared/api/admin/types';
 import { isFunctionAuthError } from '../shared/lib/supabaseFunctions';
 
 interface Props {
@@ -18,6 +18,19 @@ interface Props {
     onLogout: () => void;
   };
 }
+
+type DryRunCounts = {
+  routes: number;
+  stops: number;
+  customers: number;
+  contacts: number;
+  workers: number;
+  busTypes: number;
+  appSettings: number;
+  memberships: number;
+  invitations: number;
+  users: number;
+};
 
 const slugify = (value: string) =>
   value
@@ -34,10 +47,28 @@ const formatDateTime = (value?: string) => {
   return date.toLocaleString('de-DE');
 };
 
+const formatDate = (value?: string) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('de-DE');
+};
+
 const statusBadgeClass = (status?: PlatformAccountStatus) => {
   if (status === 'SUSPENDED') return 'bg-amber-100 text-amber-700';
   if (status === 'ARCHIVED') return 'bg-slate-200 text-slate-700';
   return 'bg-emerald-100 text-emerald-700';
+};
+
+const trialBadgeClass = (trialState?: TrialState) => {
+  if (trialState === 'TRIAL_ACTIVE') return 'bg-blue-100 text-blue-700';
+  if (trialState === 'TRIAL_ENDED') return 'bg-red-100 text-red-700';
+  return 'bg-emerald-100 text-emerald-700';
+};
+
+const trialDaysRemaining = (trialEndsAt: string): number => {
+  const diffMs = new Date(trialEndsAt).getTime() - Date.now();
+  return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 };
 
 const profileFromMembership = (membership: MembershipItem) => {
@@ -56,53 +87,84 @@ const memberDisplayEmail = (membership: MembershipItem) => {
 };
 
 const toActionErrorMessage = (error: unknown, fallback: string) => {
-  if (isFunctionAuthError(error)) {
-    return 'Sitzung ungültig/abgelaufen. Bitte neu anmelden.';
-  }
+  if (isFunctionAuthError(error)) return 'Sitzung ungültig/abgelaufen. Bitte neu anmelden.';
   return error instanceof Error ? error.message : fallback;
 };
 
 const PlatformAdmin: React.FC<Props> = ({ header }) => {
   const { pushToast } = useToast();
 
+  // --- List state ---
   const [loading, setLoading] = useState(true);
   const [accounts, setAccounts] = useState<PlatformAccount[]>([]);
   const [accountMembersByAccountId, setAccountMembersByAccountId] = useState<Record<string, MembershipItem[]>>({});
   const [expandedAccountIds, setExpandedAccountIds] = useState<Record<string, boolean>>({});
 
+  // --- Create account form ---
   const [newAccountName, setNewAccountName] = useState('');
   const [newAccountSlug, setNewAccountSlug] = useState('');
   const [newAccountAdminEmail, setNewAccountAdminEmail] = useState('');
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
 
-  const [accountToChangeStatus, setAccountToChangeStatus] = useState<{ account: PlatformAccount; status: PlatformAccountStatus } | null>(null);
+  // --- Edit modal core ---
+  const [editAccount, setEditAccount] = useState<PlatformAccount | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editSlug, setEditSlug] = useState('');
+  const [editStatus, setEditStatus] = useState<'ACTIVE' | 'SUSPENDED'>('ACTIVE');
+  const [editReason, setEditReason] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  const [accountToEdit, setAccountToEdit] = useState<PlatformAccount | null>(null);
-  const [editAccountName, setEditAccountName] = useState('');
-  const [editAccountSlug, setEditAccountSlug] = useState('');
-  const [editAccountReason, setEditAccountReason] = useState('');
-  const [isSavingAccountEdit, setIsSavingAccountEdit] = useState(false);
+  // --- Unsaved guard ---
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
-  const [accountToDelete, setAccountToDelete] = useState<PlatformAccount | null>(null);
-  const [accountDeleteSlugInput, setAccountDeleteSlugInput] = useState('');
-  const [accountDeleteReason, setAccountDeleteReason] = useState('');
-  const [accountDeleteDryRun, setAccountDeleteDryRun] = useState<{
-    routes: number;
-    stops: number;
-    customers: number;
-    contacts: number;
-    workers: number;
-    busTypes: number;
-    appSettings: number;
-    memberships: number;
-    invitations: number;
-    users: number;
-  } | null>(null);
+  // --- Archive / Reactivate ---
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [showReactivateConfirm, setShowReactivateConfirm] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+
+  // --- Delete step (inside modal) ---
+  const [showDeleteStep, setShowDeleteStep] = useState(false);
+  const [deleteSlugInput, setDeleteSlugInput] = useState('');
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleteDryRun, setDeleteDryRun] = useState<DryRunCounts | null>(null);
   const [isRunningDeleteDryRun, setIsRunningDeleteDryRun] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
-  const sortedAccounts = useMemo(() => accounts, [accounts]);
+  // --- Trial actions ---
+  const [pendingTrialAction, setPendingTrialAction] = useState<'EXTEND_14_DAYS' | 'CANCEL_TRIAL' | null>(null);
+  const [trialActionReason, setTrialActionReason] = useState('');
+  const [isUpdatingTrial, setIsUpdatingTrial] = useState(false);
 
+  // --- Computed dirty state ---
+  const isDirty = useMemo(() => {
+    if (!editAccount) return false;
+    const nameChanged = editName.trim() !== editAccount.name;
+    const slugChanged = editSlug !== editAccount.slug;
+    const originalStatus: 'ACTIVE' | 'SUSPENDED' = editAccount.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE';
+    const statusChanged = editAccount.status !== 'ARCHIVED' && editStatus !== originalStatus;
+    return nameChanged || slugChanged || statusChanged;
+  }, [editAccount, editName, editSlug, editStatus]);
+
+  const isDirtyRef = useRef(isDirty);
+  isDirtyRef.current = isDirty;
+
+  // --- ESC key handler ---
+  useEffect(() => {
+    if (!editAccount) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (showDiscardConfirm || showArchiveConfirm || showReactivateConfirm || pendingTrialAction) return;
+      if (isDirtyRef.current) {
+        setShowDiscardConfirm(true);
+      } else {
+        closeEditDialog();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [editAccount, showDiscardConfirm, showArchiveConfirm, showReactivateConfirm, pendingTrialAction]);
+
+  // --- Data loading ---
   const loadOwnerOverview = useCallback(async () => {
     setLoading(true);
     try {
@@ -112,9 +174,7 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
       setExpandedAccountIds(prev => {
         const next = { ...prev };
         for (const account of data.accounts) {
-          if (typeof next[account.id] === 'undefined') {
-            next[account.id] = false;
-          }
+          if (typeof next[account.id] === 'undefined') next[account.id] = false;
         }
         return next;
       });
@@ -129,35 +189,28 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
     }
   }, [pushToast]);
 
-  useEffect(() => {
-    loadOwnerOverview();
-  }, [loadOwnerOverview]);
+  useEffect(() => { loadOwnerOverview(); }, [loadOwnerOverview]);
 
+  // --- Create account ---
   const handleCreateAccountAndInviteAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsCreatingAccount(true);
-
     try {
       const accountName = newAccountName.trim();
-      const accountSlug = (newAccountSlug.trim() || slugify(accountName));
+      const accountSlug = newAccountSlug.trim() || slugify(accountName);
       const adminEmail = newAccountAdminEmail.trim().toLowerCase();
-
       if (!accountName || !accountSlug || !adminEmail) {
         throw new Error('Name, Slug und Admin-E-Mail sind erforderlich.');
       }
-
       const result = await PlatformAdminApi.provisionAccount({ accountName, accountSlug, adminEmail });
-
       setNewAccountName('');
       setNewAccountSlug('');
       setNewAccountAdminEmail('');
-
       pushToast({
         type: 'success',
         title: 'Firma erstellt',
-        message: `Der Account "${result.accountName || accountName}" wurde erstellt und der erste Admin eingeladen.`
+        message: `"${result.accountName || accountName}" wurde erstellt und der erste Admin eingeladen.`
       });
-
       await loadOwnerOverview();
     } catch (error) {
       pushToast({
@@ -170,82 +223,180 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
     }
   };
 
-  const openEditAccountDialog = (account: PlatformAccount) => {
-    setAccountToEdit(account);
-    setEditAccountName(account.name || '');
-    setEditAccountSlug(account.slug || '');
-    setEditAccountReason('');
+  // --- Edit modal lifecycle ---
+  const closeEditDialog = () => {
+    setEditAccount(null);
+    setEditName('');
+    setEditSlug('');
+    setEditStatus('ACTIVE');
+    setEditReason('');
+    setShowDiscardConfirm(false);
+    setShowArchiveConfirm(false);
+    setShowReactivateConfirm(false);
+    setShowDeleteStep(false);
+    setDeleteSlugInput('');
+    setDeleteReason('');
+    setDeleteDryRun(null);
+    setPendingTrialAction(null);
+    setTrialActionReason('');
   };
 
-  const handleSaveAccountEdit = async () => {
-    if (!accountToEdit) return;
-    const nextName = editAccountName.trim();
-    const nextSlug = slugify(editAccountSlug.trim());
+  const tryCloseEditDialog = () => {
+    if (isDirtyRef.current) {
+      setShowDiscardConfirm(true);
+    } else {
+      closeEditDialog();
+    }
+  };
+
+  const openEditDialog = (account: PlatformAccount) => {
+    const effectiveStatus: 'ACTIVE' | 'SUSPENDED' = account.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE';
+    setEditAccount(account);
+    setEditName(account.name || '');
+    setEditSlug(account.slug || '');
+    setEditStatus(effectiveStatus);
+    setEditReason('');
+    setShowDiscardConfirm(false);
+    setShowArchiveConfirm(false);
+    setShowReactivateConfirm(false);
+    setShowDeleteStep(false);
+    setDeleteSlugInput('');
+    setDeleteReason('');
+    setDeleteDryRun(null);
+    setPendingTrialAction(null);
+    setTrialActionReason('');
+  };
+
+  // --- Save name / slug / status ---
+  const handleSaveEdit = async () => {
+    if (!editAccount || !isDirty) return;
+    const nextName = editName.trim();
+    const nextSlug = slugify(editSlug);
     if (!nextName || !nextSlug) {
-      pushToast({
-        type: 'error',
-        title: 'Ungültige Eingabe',
-        message: 'Name und Slug sind erforderlich.'
-      });
+      pushToast({ type: 'error', title: 'Ungültige Eingabe', message: 'Name und Slug sind erforderlich.' });
       return;
     }
 
-    setIsSavingAccountEdit(true);
+    const payload: { name?: string; slug?: string; status?: PlatformAccountStatus; reason?: string } = {};
+    if (nextName !== editAccount.name) payload.name = nextName;
+    if (nextSlug !== editAccount.slug) payload.slug = nextSlug;
+    const originalStatus: 'ACTIVE' | 'SUSPENDED' = editAccount.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE';
+    if (editAccount.status !== 'ARCHIVED' && editStatus !== originalStatus) {
+      payload.status = editStatus;
+    }
+    if (editReason.trim()) payload.reason = editReason.trim();
+
+    setIsSavingEdit(true);
     try {
-      await PlatformAdminApi.updateAccount(accountToEdit.id, {
-        name: nextName,
-        slug: nextSlug,
-        reason: editAccountReason.trim() || undefined,
-      });
-      pushToast({
-        type: 'success',
-        title: 'Firma aktualisiert',
-        message: `Firma "${nextName}" wurde aktualisiert.`
-      });
-      setAccountToEdit(null);
-      await loadOwnerOverview();
+      const result = await PlatformAdminApi.updateAccount(editAccount.id, payload);
+      if (result.account) {
+        setEditAccount(prev => prev ? { ...prev, ...result.account } : prev);
+        setEditName(result.account.name || nextName);
+        setEditSlug(result.account.slug || nextSlug);
+        const savedStatus: 'ACTIVE' | 'SUSPENDED' = result.account.status === 'SUSPENDED' ? 'SUSPENDED' : 'ACTIVE';
+        setEditStatus(savedStatus);
+      }
+      setEditReason('');
+      pushToast({ type: 'success', title: 'Firma aktualisiert', message: `"${nextName}" wurde gespeichert.` });
+      loadOwnerOverview();
     } catch (error) {
       pushToast({
         type: 'error',
-        title: 'Aktualisierung fehlgeschlagen',
-        message: toActionErrorMessage(error, 'Firma konnte nicht aktualisiert werden.')
+        title: 'Speichern fehlgeschlagen',
+        message: toActionErrorMessage(error, 'Änderungen konnten nicht gespeichert werden.')
       });
     } finally {
-      setIsSavingAccountEdit(false);
+      setIsSavingEdit(false);
     }
   };
 
-  const handleAccountStatusChange = async () => {
-    if (!accountToChangeStatus) return;
+  // --- Archive ---
+  const handleArchive = async () => {
+    if (!editAccount) return;
+    setShowArchiveConfirm(false);
+    setIsArchiving(true);
     try {
-      await PlatformAdminApi.updateAccount(accountToChangeStatus.account.id, { status: accountToChangeStatus.status });
-      pushToast({
-        type: 'success',
-        title: 'Status aktualisiert',
-        message: `Status für ${accountToChangeStatus.account.name} ist jetzt ${accountToChangeStatus.status}.`
-      });
-      await loadOwnerOverview();
+      const result = await PlatformAdminApi.updateAccount(editAccount.id, { status: 'ARCHIVED' });
+      if (result.account) {
+        setEditAccount(prev => prev ? { ...prev, ...result.account } : prev);
+      }
+      pushToast({ type: 'success', title: 'Archiviert', message: `"${editAccount.name}" wurde archiviert.` });
+      loadOwnerOverview();
     } catch (error) {
       pushToast({
         type: 'error',
-        title: 'Statuswechsel fehlgeschlagen',
-        message: toActionErrorMessage(error, 'Account-Status konnte nicht geändert werden.')
+        title: 'Archivieren fehlgeschlagen',
+        message: toActionErrorMessage(error, 'Account konnte nicht archiviert werden.')
       });
     } finally {
-      setAccountToChangeStatus(null);
+      setIsArchiving(false);
     }
   };
 
-  const openDeleteAccountDialog = async (account: PlatformAccount) => {
-    setAccountToDelete(account);
-    setAccountDeleteSlugInput('');
-    setAccountDeleteReason('');
-    setAccountDeleteDryRun(null);
+  // --- Reactivate (un-archive) ---
+  const handleReactivate = async () => {
+    if (!editAccount) return;
+    setShowReactivateConfirm(false);
+    setIsArchiving(true);
+    try {
+      const result = await PlatformAdminApi.updateAccount(editAccount.id, { status: 'ACTIVE' });
+      if (result.account) {
+        setEditAccount(prev => prev ? { ...prev, ...result.account } : prev);
+        setEditStatus('ACTIVE');
+      }
+      pushToast({ type: 'success', title: 'Reaktiviert', message: `"${editAccount.name}" wurde reaktiviert.` });
+      loadOwnerOverview();
+    } catch (error) {
+      pushToast({
+        type: 'error',
+        title: 'Reaktivierung fehlgeschlagen',
+        message: toActionErrorMessage(error, 'Account konnte nicht reaktiviert werden.')
+      });
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+
+  // --- Trial action ---
+  const handleTrialAction = async () => {
+    if (!editAccount || !pendingTrialAction) return;
+    setIsUpdatingTrial(true);
+    try {
+      const result = await PlatformAdminApi.updateAccountTrial(
+        editAccount.id,
+        pendingTrialAction,
+        trialActionReason.trim() || undefined
+      );
+      if (result.account) {
+        setEditAccount(prev => prev ? { ...prev, ...result.account } : prev);
+      }
+      const actionText = pendingTrialAction === 'EXTEND_14_DAYS' ? 'um 14 Tage verlängert' : 'beendet';
+      pushToast({ type: 'success', title: 'Testphase aktualisiert', message: `Testphase wurde ${actionText}.` });
+      setPendingTrialAction(null);
+      setTrialActionReason('');
+      loadOwnerOverview();
+    } catch (error) {
+      pushToast({
+        type: 'error',
+        title: 'Aktion fehlgeschlagen',
+        message: toActionErrorMessage(error, 'Testphase konnte nicht aktualisiert werden.')
+      });
+    } finally {
+      setIsUpdatingTrial(false);
+    }
+  };
+
+  // --- Delete step ---
+  const handleShowDeleteStep = async () => {
+    if (!editAccount) return;
+    setShowDeleteStep(true);
+    setDeleteSlugInput('');
+    setDeleteReason('');
+    setDeleteDryRun(null);
     setIsRunningDeleteDryRun(true);
-
     try {
-      const dryRun = await PlatformAdminApi.deleteAccountDryRun(account.id);
-      setAccountDeleteDryRun(dryRun.counts || null);
+      const dryRun = await PlatformAdminApi.deleteAccountDryRun(editAccount.id);
+      setDeleteDryRun(dryRun.counts || null);
     } catch (error) {
       pushToast({
         type: 'error',
@@ -257,25 +408,21 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
     }
   };
 
-  const handleDeleteAccountHard = async () => {
-    if (!accountToDelete) return;
-    if (!accountDeleteSlugInput.trim()) {
-      pushToast({ type: 'error', title: 'Bestätigung fehlt', message: 'Bitte den Slug zur Bestätigung eingeben.' });
-      return;
-    }
-
+  const handleDeleteHard = async () => {
+    if (!editAccount) return;
     setIsDeletingAccount(true);
     try {
-      await PlatformAdminApi.deleteAccountHard(accountToDelete.id, accountDeleteSlugInput.trim(), accountDeleteReason.trim() || undefined);
+      await PlatformAdminApi.deleteAccountHard(
+        editAccount.id,
+        deleteSlugInput.trim(),
+        deleteReason.trim() || undefined
+      );
       pushToast({
         type: 'success',
         title: 'Firma gelöscht',
-        message: `Der Account "${accountToDelete.name}" wurde vollständig gelöscht.`
+        message: `"${editAccount.name}" wurde vollständig gelöscht.`
       });
-      setAccountToDelete(null);
-      setAccountDeleteSlugInput('');
-      setAccountDeleteReason('');
-      setAccountDeleteDryRun(null);
+      closeEditDialog();
       await loadOwnerOverview();
     } catch (error) {
       pushToast({
@@ -292,154 +439,344 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
     setExpandedAccountIds(prev => ({ ...prev, [accountId]: !prev[accountId] }));
   };
 
+  const isAnyActionBusy = isSavingEdit || isArchiving || isUpdatingTrial || isDeletingAccount;
+
   return (
     <div className="min-h-screen flex flex-col">
+
+      {/* Unsaved changes guard */}
       <ConfirmDialog
-        isOpen={!!accountToChangeStatus}
-        title="Account-Status ändern"
-        message={accountToChangeStatus
-          ? `Soll der Account "${accountToChangeStatus.account.name}" auf "${accountToChangeStatus.status}" gesetzt werden?`
-          : ''}
-        confirmText="Bestätigen"
-        cancelText="Abbrechen"
+        isOpen={showDiscardConfirm}
+        title="Änderungen verwerfen?"
+        message="Es gibt ungespeicherte Änderungen. Sollen diese verworfen werden?"
+        confirmText="Verwerfen"
+        cancelText="Weiter bearbeiten"
         type="warning"
-        onConfirm={handleAccountStatusChange}
-        onCancel={() => setAccountToChangeStatus(null)}
+        onConfirm={closeEditDialog}
+        onCancel={() => setShowDiscardConfirm(false)}
       />
 
-      {accountToEdit && (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="relative z-[2001] bg-white rounded-xl shadow-2xl max-w-xl w-full overflow-hidden">
-            <div className="p-6 space-y-4">
-              <h3 className="text-lg font-bold text-slate-900">Firma bearbeiten</h3>
-              <p className="text-sm text-slate-600">Account-ID: {accountToEdit.id}</p>
+      {/* Archive confirm */}
+      <ConfirmDialog
+        isOpen={showArchiveConfirm}
+        title="Account archivieren"
+        message={editAccount
+          ? `Soll "${editAccount.name}" archiviert werden? Benutzer verlieren den Zugriff, Daten bleiben erhalten.`
+          : ''}
+        confirmText="Archivieren"
+        cancelText="Abbrechen"
+        type="warning"
+        onConfirm={handleArchive}
+        onCancel={() => setShowArchiveConfirm(false)}
+      />
 
+      {/* Reactivate confirm */}
+      <ConfirmDialog
+        isOpen={showReactivateConfirm}
+        title="Account reaktivieren"
+        message={editAccount ? `Soll "${editAccount.name}" reaktiviert werden (Status: ACTIVE)?` : ''}
+        confirmText="Reaktivieren"
+        cancelText="Abbrechen"
+        type="warning"
+        onConfirm={handleReactivate}
+        onCancel={() => setShowReactivateConfirm(false)}
+      />
+
+      {/* ===== Unified Edit Modal ===== */}
+      {editAccount && (
+        <div
+          className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={e => { if (e.target === e.currentTarget) tryCloseEditDialog(); }}
+        >
+          <div className="relative z-[2001] bg-white rounded-xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[90vh]">
+
+            {/* Modal header */}
+            <div className="flex items-start justify-between p-6 border-b border-slate-200 shrink-0">
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Firmenname</label>
-                <input
-                  type="text"
-                  value={editAccountName}
-                  onChange={e => setEditAccountName(e.target.value)}
-                  className="w-full border-slate-300 rounded-lg p-2 text-sm"
-                  placeholder="Firmenname"
-                />
+                <h3 className="text-lg font-bold text-slate-900">
+                  {showDeleteStep ? 'Firma endgültig löschen' : 'Firma bearbeiten'}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5 font-mono">{editAccount.name} · {editAccount.id}</p>
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Slug</label>
-                <input
-                  type="text"
-                  value={editAccountSlug}
-                  onChange={e => setEditAccountSlug(slugify(e.target.value))}
-                  className="w-full border-slate-300 rounded-lg p-2 text-sm"
-                  placeholder="firmen-slug"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Grund (optional)</label>
-                <input
-                  type="text"
-                  value={editAccountReason}
-                  onChange={e => setEditAccountReason(e.target.value)}
-                  className="w-full border-slate-300 rounded-lg p-2 text-sm"
-                  placeholder="z. B. Stammdaten-Korrektur"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setAccountToEdit(null)}
-                  className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100"
-                  disabled={isSavingAccountEdit}
-                >
-                  Abbrechen
-                </button>
-                <button
-                  onClick={handleSaveAccountEdit}
-                  disabled={isSavingAccountEdit || !editAccountName.trim() || !editAccountSlug.trim()}
-                  className="px-4 py-2 rounded-lg text-white font-bold bg-slate-900 hover:bg-slate-800 disabled:opacity-50"
-                >
-                  {isSavingAccountEdit ? 'Speichere...' : 'Speichern'}
-                </button>
-              </div>
+              <button
+                onClick={tryCloseEditDialog}
+                disabled={isAnyActionBusy}
+                className="text-slate-400 hover:text-slate-700 disabled:opacity-40 ml-4 mt-0.5 shrink-0"
+                aria-label="Schließen"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-          </div>
-        </div>
-      )}
 
-      {accountToDelete && (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="relative z-[2001] bg-white rounded-xl shadow-2xl max-w-xl w-full overflow-hidden">
-            <div className="p-6 space-y-4">
-              <h3 className="text-lg font-bold text-slate-900">Firma vollständig löschen</h3>
-              <p className="text-sm text-slate-600">
-                Account: <strong>{accountToDelete.name}</strong> ({accountToDelete.slug})
-              </p>
+            {/* Modal body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {!showDeleteStep ? (
+                <>
+                  {/* === Firmendaten === */}
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-semibold text-slate-700">Firmendaten</h4>
 
-              {isRunningDeleteDryRun ? (
-                <p className="text-sm text-slate-500">Dry-Run wird geladen...</p>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Firmenname</label>
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={e => setEditName(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+                        placeholder="Firmenname"
+                        disabled={isAnyActionBusy}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Slug</label>
+                      <input
+                        type="text"
+                        value={editSlug}
+                        onChange={e => setEditSlug(slugify(e.target.value))}
+                        className="w-full border border-slate-300 rounded-lg p-2 text-sm font-mono"
+                        placeholder="firmen-slug"
+                        disabled={isAnyActionBusy}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Status</label>
+                      {editAccount.status === 'ARCHIVED' ? (
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex px-2 py-1 rounded text-xs font-semibold bg-slate-200 text-slate-700">ARCHIVED</span>
+                          <span className="text-xs text-slate-400">(über „Reaktivieren" ändern)</span>
+                        </div>
+                      ) : (
+                        <select
+                          value={editStatus}
+                          onChange={e => setEditStatus(e.target.value as 'ACTIVE' | 'SUSPENDED')}
+                          className="w-full border border-slate-300 rounded-lg p-2 text-sm bg-white"
+                          disabled={isAnyActionBusy}
+                        >
+                          <option value="ACTIVE">ACTIVE</option>
+                          <option value="SUSPENDED">SUSPENDED</option>
+                        </select>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">Grund (optional)</label>
+                      <input
+                        type="text"
+                        value={editReason}
+                        onChange={e => setEditReason(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+                        placeholder="z. B. Stammdaten-Korrektur"
+                        disabled={isAnyActionBusy}
+                      />
+                    </div>
+                  </div>
+
+                  {/* === Testphase === */}
+                  {editAccount.trial_state && (
+                    <div className="space-y-3 border-t border-slate-200 pt-5">
+                      <h4 className="text-sm font-semibold text-slate-700">Testphase</h4>
+
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${trialBadgeClass(editAccount.trial_state)}`}>
+                          {editAccount.trial_state}
+                        </span>
+                        {editAccount.trial_ends_at && (
+                          <span className="text-xs text-slate-500">
+                            Bis: {formatDate(editAccount.trial_ends_at)}
+                          </span>
+                        )}
+                        {editAccount.trial_state === 'TRIAL_ACTIVE' && editAccount.trial_ends_at && (
+                          <span className="text-xs text-blue-600 font-medium">
+                            Noch {trialDaysRemaining(editAccount.trial_ends_at)} Tage
+                          </span>
+                        )}
+                      </div>
+
+                      {pendingTrialAction ? (
+                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
+                          <p className="text-sm font-medium text-slate-700">
+                            {pendingTrialAction === 'EXTEND_14_DAYS'
+                              ? 'Testphase um 14 Tage verlängern bestätigen:'
+                              : 'Testphase sofort beenden (→ SUBSCRIBED) bestätigen:'}
+                          </p>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Grund (optional)</label>
+                            <input
+                              type="text"
+                              value={trialActionReason}
+                              onChange={e => setTrialActionReason(e.target.value)}
+                              className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+                              placeholder="z. B. Verlängerung genehmigt"
+                              disabled={isUpdatingTrial}
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => { setPendingTrialAction(null); setTrialActionReason(''); }}
+                              disabled={isUpdatingTrial}
+                              className="px-3 py-1.5 text-xs rounded border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                            >
+                              Abbrechen
+                            </button>
+                            <button
+                              onClick={handleTrialAction}
+                              disabled={isUpdatingTrial}
+                              className={`px-3 py-1.5 text-xs rounded text-white font-semibold disabled:opacity-40 ${pendingTrialAction === 'EXTEND_14_DAYS' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-800 hover:bg-slate-900'}`}
+                            >
+                              {isUpdatingTrial ? 'Wird gespeichert...' : 'Bestätigen'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => setPendingTrialAction('EXTEND_14_DAYS')}
+                            disabled={editAccount.status === 'ARCHIVED' || isAnyActionBusy}
+                            className="px-3 py-1.5 text-xs rounded border border-blue-300 text-blue-700 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            +14 Tage
+                          </button>
+                          <button
+                            onClick={() => setPendingTrialAction('CANCEL_TRIAL')}
+                            disabled={editAccount.trial_state === 'SUBSCRIBED' || isAnyActionBusy}
+                            className="px-3 py-1.5 text-xs rounded border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Testphase beenden
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* === Gefahrenbereich === */}
+                  <div className="space-y-3 border-t border-red-100 pt-5">
+                    <h4 className="text-sm font-semibold text-red-700">Gefahrenbereich</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {editAccount.status === 'ARCHIVED' ? (
+                        <button
+                          onClick={() => setShowReactivateConfirm(true)}
+                          disabled={isAnyActionBusy}
+                          className="px-3 py-1.5 text-xs rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50 disabled:opacity-40"
+                        >
+                          Reaktivieren
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setShowArchiveConfirm(true)}
+                          disabled={isAnyActionBusy}
+                          className="px-3 py-1.5 text-xs rounded border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-40"
+                        >
+                          Archivieren
+                        </button>
+                      )}
+                      <button
+                        onClick={handleShowDeleteStep}
+                        disabled={isAnyActionBusy}
+                        className="px-3 py-1.5 text-xs rounded border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-40"
+                      >
+                        Firma löschen
+                      </button>
+                    </div>
+                  </div>
+                </>
               ) : (
-                <div className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 border border-slate-200">
-                  <p className="font-semibold mb-2">Betroffene Datensätze (Dry-Run):</p>
-                  <p>Routen: {accountDeleteDryRun?.routes ?? 0}</p>
-                  <p>Halte: {accountDeleteDryRun?.stops ?? 0}</p>
-                  <p>Kunden: {accountDeleteDryRun?.customers ?? 0}</p>
-                  <p>Kontakte: {accountDeleteDryRun?.contacts ?? 0}</p>
-                  <p>Mitarbeiter: {accountDeleteDryRun?.workers ?? 0}</p>
-                  <p>Bustypen: {accountDeleteDryRun?.busTypes ?? 0}</p>
-                  <p>App Settings: {accountDeleteDryRun?.appSettings ?? 0}</p>
-                  <p>Memberships: {accountDeleteDryRun?.memberships ?? 0}</p>
-                  <p>Einladungen: {accountDeleteDryRun?.invitations ?? 0}</p>
-                  <p>Betroffene User: {accountDeleteDryRun?.users ?? 0}</p>
+                /* === Delete Step === */
+                <div className="space-y-4">
+                  <button
+                    onClick={() => setShowDeleteStep(false)}
+                    disabled={isDeletingAccount}
+                    className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 disabled:opacity-40"
+                  >
+                    ← Zurück
+                  </button>
+
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-sm font-semibold text-red-700 mb-1">Unwiderrufliche Aktion</p>
+                    <p className="text-sm text-red-600">
+                      Alle Daten von <strong>{editAccount.name}</strong> werden permanent gelöscht.
+                      Diese Aktion kann nicht rückgängig gemacht werden.
+                    </p>
+                  </div>
+
+                  {isRunningDeleteDryRun ? (
+                    <p className="text-sm text-slate-500">Dry-Run wird geladen...</p>
+                  ) : (
+                    <div className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 border border-slate-200">
+                      <p className="font-semibold mb-2">Betroffene Datensätze:</p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs">
+                        <p>Routen: {deleteDryRun?.routes ?? 0}</p>
+                        <p>Halte: {deleteDryRun?.stops ?? 0}</p>
+                        <p>Kunden: {deleteDryRun?.customers ?? 0}</p>
+                        <p>Kontakte: {deleteDryRun?.contacts ?? 0}</p>
+                        <p>Mitarbeiter: {deleteDryRun?.workers ?? 0}</p>
+                        <p>Bustypen: {deleteDryRun?.busTypes ?? 0}</p>
+                        <p>App Settings: {deleteDryRun?.appSettings ?? 0}</p>
+                        <p>Memberships: {deleteDryRun?.memberships ?? 0}</p>
+                        <p>Einladungen: {deleteDryRun?.invitations ?? 0}</p>
+                        <p>Betroffene User: {deleteDryRun?.users ?? 0}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">
+                      Zur Bestätigung Slug eingeben:{' '}
+                      <span className="text-slate-900 font-mono">{editAccount.slug}</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={deleteSlugInput}
+                      onChange={e => setDeleteSlugInput(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2 text-sm font-mono"
+                      placeholder="Slug eingeben"
+                      disabled={isDeletingAccount}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Grund (optional)</label>
+                    <input
+                      type="text"
+                      value={deleteReason}
+                      onChange={e => setDeleteReason(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2 text-sm"
+                      placeholder="z. B. Testaccount-Bereinigung"
+                      disabled={isDeletingAccount}
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleDeleteHard}
+                    disabled={isDeletingAccount || deleteSlugInput.trim() !== editAccount.slug}
+                    className="w-full px-4 py-2.5 rounded-lg text-white font-bold bg-red-600 hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {isDeletingAccount ? 'Wird gelöscht...' : 'Firma endgültig löschen'}
+                  </button>
                 </div>
               )}
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">
-                  Zur Bestätigung Slug eingeben: <span className="text-slate-900">{accountToDelete.slug}</span>
-                </label>
-                <input
-                  type="text"
-                  value={accountDeleteSlugInput}
-                  onChange={e => setAccountDeleteSlugInput(e.target.value)}
-                  className="w-full border-slate-300 rounded-lg p-2 text-sm"
-                  placeholder="Slug eingeben"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Grund (optional)</label>
-                <input
-                  type="text"
-                  value={accountDeleteReason}
-                  onChange={e => setAccountDeleteReason(e.target.value)}
-                  className="w-full border-slate-300 rounded-lg p-2 text-sm"
-                  placeholder="z. B. Testaccount-Bereinigung"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3">
+            {/* Modal footer — only in edit mode, not delete step */}
+            {!showDeleteStep && (
+              <div className="flex justify-end gap-3 p-6 border-t border-slate-200 shrink-0">
                 <button
-                  onClick={() => {
-                    setAccountToDelete(null);
-                    setAccountDeleteSlugInput('');
-                    setAccountDeleteReason('');
-                    setAccountDeleteDryRun(null);
-                  }}
-                  className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100"
+                  onClick={tryCloseEditDialog}
+                  disabled={isAnyActionBusy}
+                  className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-40"
                 >
                   Abbrechen
                 </button>
                 <button
-                  onClick={handleDeleteAccountHard}
-                  disabled={isDeletingAccount || accountDeleteSlugInput.trim() !== accountToDelete.slug}
-                  className="px-4 py-2 rounded-lg text-white font-bold bg-red-600 hover:bg-red-700 disabled:opacity-50"
+                  onClick={handleSaveEdit}
+                  disabled={!isDirty || isSavingEdit}
+                  className="px-4 py-2 rounded-lg text-white font-bold bg-slate-900 hover:bg-slate-800 disabled:opacity-50"
                 >
-                  {isDeletingAccount ? 'Lösche...' : 'Firma endgültig löschen'}
+                  {isSavingEdit ? 'Speichere...' : 'Speichern'}
                 </button>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
@@ -461,6 +798,7 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
           </div>
         ) : (
           <>
+            {/* Create account form */}
             <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
               <h2 className="text-xl font-bold text-slate-800">Firma anlegen + ersten Admin einladen</h2>
               <form onSubmit={handleCreateAccountAndInviteAdmin} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
@@ -472,9 +810,7 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
                     onChange={e => {
                       const name = e.target.value;
                       setNewAccountName(name);
-                      if (!newAccountSlug.trim()) {
-                        setNewAccountSlug(slugify(name));
-                      }
+                      if (!newAccountSlug.trim()) setNewAccountSlug(slugify(name));
                     }}
                     className="w-full border-slate-300 rounded-lg p-2 text-sm"
                     placeholder="z. B. Muster Logistik GmbH"
@@ -513,76 +849,55 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
               </form>
             </div>
 
+            {/* Companies list */}
             <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
               <h2 className="text-xl font-bold text-slate-800">Owner Bereich: Firmen und User</h2>
               <div className="space-y-3">
-                {sortedAccounts.map(account => {
+                {accounts.map(account => {
                   const status = account.status || 'ACTIVE';
                   const members = accountMembersByAccountId[account.id] || [];
                   const isExpanded = !!expandedAccountIds[account.id];
 
                   return (
-                    <div key={account.id} className="border border-slate-200 rounded-lg p-3 space-y-3">
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                    <div key={account.id} className="border border-slate-200 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center gap-3">
+                        {/* Expand / name */}
                         <button
                           onClick={() => toggleAccountExpanded(account.id)}
-                          className="md:col-span-4 text-left"
+                          className="flex-1 text-left min-w-0"
                         >
-                          <p className="font-semibold text-slate-800 flex items-center gap-2">
-                            {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                            {account.name}
+                          <p className="font-semibold text-slate-800 flex items-center gap-1.5 truncate">
+                            {isExpanded
+                              ? <ChevronDown className="w-4 h-4 shrink-0" />
+                              : <ChevronRight className="w-4 h-4 shrink-0" />}
+                            <span className="truncate">{account.name}</span>
                           </p>
-                          <p className="text-xs text-slate-500">Slug: {account.slug}</p>
-                          <p className="text-xs text-slate-500">Erstellt: {formatDateTime(account.created_at)}</p>
+                          <p className="text-xs text-slate-500 truncate pl-5">
+                            {account.slug} · Erstellt: {formatDateTime(account.created_at)}
+                          </p>
                         </button>
 
-                        <div className="md:col-span-2">
-                          <span className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${statusBadgeClass(status)}`}>
+                        {/* Badges + user count + edit button */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`hidden sm:inline-flex px-2 py-1 rounded text-xs font-semibold ${statusBadgeClass(status)}`}>
                             {status}
                           </span>
-                        </div>
-
-                        <div className="md:col-span-1 text-xs text-slate-500">
-                          {members.length} User
-                        </div>
-
-                        <div className="md:col-span-5 flex flex-wrap gap-2 justify-start md:justify-end">
+                          {account.trial_state && (
+                            <span className={`hidden sm:inline-flex px-2 py-1 rounded text-xs font-semibold ${trialBadgeClass(account.trial_state)}`}>
+                              {account.trial_state}
+                            </span>
+                          )}
+                          <span className="text-xs text-slate-500">{members.length} User</span>
                           <button
-                            onClick={() => openEditAccountDialog(account)}
-                            className="px-3 py-1.5 text-xs rounded border border-slate-300 text-slate-700 hover:bg-slate-100"
+                            onClick={() => openEditDialog(account)}
+                            className="px-3 py-1.5 text-xs rounded bg-slate-900 text-white hover:bg-slate-700 font-semibold"
                           >
                             Bearbeiten
-                          </button>
-                          <button
-                            onClick={() => setAccountToChangeStatus({ account, status: 'ACTIVE' })}
-                            className="px-3 py-1.5 text-xs rounded border border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                            disabled={status === 'ACTIVE'}
-                          >
-                            Aktivieren
-                          </button>
-                          <button
-                            onClick={() => setAccountToChangeStatus({ account, status: 'SUSPENDED' })}
-                            className="px-3 py-1.5 text-xs rounded border border-amber-300 text-amber-700 hover:bg-amber-50"
-                            disabled={status === 'SUSPENDED'}
-                          >
-                            Pausieren
-                          </button>
-                          <button
-                            onClick={() => setAccountToChangeStatus({ account, status: 'ARCHIVED' })}
-                            className="px-3 py-1.5 text-xs rounded border border-slate-300 text-slate-700 hover:bg-slate-100"
-                            disabled={status === 'ARCHIVED'}
-                          >
-                            Archivieren
-                          </button>
-                          <button
-                            onClick={() => openDeleteAccountDialog(account)}
-                            className="px-3 py-1.5 text-xs rounded border border-red-300 text-red-700 hover:bg-red-50"
-                          >
-                            Firma löschen
                           </button>
                         </div>
                       </div>
 
+                      {/* Expanded members list */}
                       {isExpanded && (
                         <div className="space-y-2 border-t border-slate-100 pt-3">
                           {members.length === 0 ? (
@@ -602,7 +917,7 @@ const PlatformAdmin: React.FC<Props> = ({ header }) => {
                     </div>
                   );
                 })}
-                {sortedAccounts.length === 0 && (
+                {accounts.length === 0 && (
                   <p className="text-sm text-slate-500">Noch keine Firmen angelegt.</p>
                 )}
               </div>

@@ -466,7 +466,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
         onCancel={() => setRouteIdToDelete(null)}
       />
       <AppHeader
-        title="Schäfer Tours Routenplanung"
+        title="BusFlow Routenplanung"
         user={view === 'EDITOR' ? null : authUser}
         onHome={onGoHome}
         onProfile={onProfile}

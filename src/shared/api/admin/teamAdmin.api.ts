@@ -8,7 +8,8 @@ import {
   InvitationRole,
   MembershipItem,
   MembershipRole,
-  PlatformAccount
+  PlatformAccount,
+  UpdateMembershipRoleResult,
 } from './types';
 
 const invokeInvite = async (payload: { accountId: string; email: string; role: InvitationRole }) => {
@@ -33,6 +34,28 @@ const createTeamAdminCodeError = (message: string, code?: string): TeamAdminCode
 
 export const TeamAdminApi = {
   async getTeamAdminData(accountId: string) {
+    const { error: expireByRpcError } = await supabase.rpc('mark_expired_invitations', {
+      p_account_id: accountId,
+    });
+
+    if (expireByRpcError) {
+      const nowIso = new Date().toISOString();
+      const { error: expireFallbackError } = await supabase
+        .from('account_invitations')
+        .update({ status: 'EXPIRED' })
+        .eq('account_id', accountId)
+        .eq('status', 'PENDING')
+        .lte('expires_at', nowIso);
+
+      if (expireFallbackError) {
+        // Expiration normalization is best-effort and must not block admin data loading.
+        console.warn('mark_expired_invitations failed', {
+          rpc: expireByRpcError.message,
+          fallback: expireFallbackError.message,
+        });
+      }
+    }
+
     const [membershipsRes, invitationsRes, accountRes] = await Promise.all([
       supabase
         .from('account_memberships')
@@ -75,13 +98,19 @@ export const TeamAdminApi = {
   },
 
   async updateMembershipRole(accountId: string, membershipId: string, role: MembershipRole) {
-    const { error } = await supabase
-      .from('account_memberships')
-      .update({ role })
-      .eq('account_id', accountId)
-      .eq('id', membershipId);
+    const data = await invokeAuthedFunction<
+      { accountId: string; membershipId: string; role: MembershipRole },
+      UpdateMembershipRoleResult
+    >('admin-update-membership-role-v1', { accountId, membershipId, role });
 
-    if (error) throw error;
+    if (!data?.ok) {
+      throw createTeamAdminCodeError(
+        data?.message || data?.code || 'Rolle konnte nicht gespeichert werden.',
+        data?.code
+      );
+    }
+
+    return data as UpdateMembershipRoleResult;
   },
 
   async suspendMembership(accountId: string, membershipId: string) {

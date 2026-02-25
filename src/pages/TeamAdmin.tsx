@@ -159,7 +159,15 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
       pushToast({ type: 'success', title: 'Gespeichert', message: 'Rolle wurde aktualisiert.' });
       await loadData();
     } catch (error) {
-      pushToast({ type: 'error', title: 'Aktualisierung fehlgeschlagen', message: toActionErrorMessage(error, 'Rolle konnte nicht aktualisiert werden.') });
+      const code = getActionErrorCode(error);
+      const message = code === 'LAST_ACCOUNT_ADMIN_FORBIDDEN'
+        ? 'Der letzte aktive Admin im Account kann nicht heruntergestuft werden.'
+        : code === 'MEMBERSHIP_NOT_FOUND'
+          ? 'Mitglied wurde nicht gefunden oder gehört nicht zu diesem Account.'
+          : code === 'FORBIDDEN'
+            ? 'Keine Berechtigung für diese Rollenänderung.'
+            : toActionErrorMessage(error, 'Rolle konnte nicht aktualisiert werden.');
+      pushToast({ type: 'error', title: 'Aktualisierung fehlgeschlagen', message });
     }
   };
 

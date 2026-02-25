@@ -19,6 +19,10 @@ interface User {
 interface Props {
   apps: AppCard[];
   auth: User | null;
+  activeAccount?: {
+    trialState?: 'TRIAL_ACTIVE' | 'TRIAL_ENDED' | 'SUBSCRIBED';
+    trialEndsAt?: string;
+  } | null;
   onProfile: () => void;
   onAdmin: () => void;
   onOwner?: () => void;
@@ -26,7 +30,12 @@ interface Props {
   onHome: () => void;
 }
 
-const Home: React.FC<Props> = ({ apps, auth, onProfile, onAdmin, onOwner, onLogout, onHome }) => {
+const Home: React.FC<Props> = ({ apps, auth, activeAccount, onProfile, onAdmin, onOwner, onLogout, onHome }) => {
+  const showTrialNotice = activeAccount?.trialState === 'TRIAL_ACTIVE' && !!activeAccount.trialEndsAt;
+  const trialEndDate = showTrialNotice
+    ? new Date(activeAccount.trialEndsAt as string).toLocaleDateString('de-DE')
+    : null;
+
   return (
     <div className="min-h-screen flex flex-col">
       <AppHeader
@@ -39,6 +48,11 @@ const Home: React.FC<Props> = ({ apps, auth, onProfile, onAdmin, onOwner, onLogo
         onLogout={onLogout}
       />
       <main className="flex-1 p-4 md:p-8 no-print max-w-7xl mx-auto w-full flex flex-col items-center justify-center">
+        {showTrialNotice && (
+          <div className="w-full max-w-5xl mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Testphase aktiv bis <span className="font-semibold">{trialEndDate}</span>. Ihr Zugang bleibt aktuell nutzbar.
+          </div>
+        )}
 
         <div className="text-center mb-10">
           <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 mt-2">

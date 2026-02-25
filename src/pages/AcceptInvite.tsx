@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../shared/lib/supabase';
+import AuthScreenShell from '../shared/components/auth/AuthScreenShell';
 
 type ViewState = 'loading' | 'needs_password' | 'saving' | 'success' | 'error';
 
@@ -36,6 +37,9 @@ const mapClaimError = (code?: string): string => {
       return 'Einladung konnte nicht abgeschlossen werden.';
   }
 };
+
+const isSignupVerificationType = (value: string | null) =>
+  value === 'signup' || value === 'email' || value === 'magiclink';
 
 const readAuthUrlPayload = (): AuthUrlPayload => {
   const query = new URLSearchParams(window.location.search);
@@ -102,6 +106,72 @@ const AcceptInvite: React.FC = () => {
 
   const authPayload = useMemo(() => readAuthUrlPayload(), []);
   const isRecoveryFlow = authPayload.type === 'recovery';
+  const isSignupVerificationFlow = !isRecoveryFlow && isSignupVerificationType(authPayload.type);
+
+  const completeClaimFlow = useCallback(async (mode: 'invite' | 'signup' | 'recovery') => {
+    if (mode !== 'recovery') {
+      const { data: claimResult, error: claimError } = await supabase.rpc('claim_my_invitation', {
+        p_account_id: null,
+      });
+
+      if (claimError) {
+        throw claimError;
+      }
+
+      const claimCode = claimResult?.code as string | undefined;
+      const claimOk = Boolean(claimResult?.ok);
+
+      if (!claimOk && claimCode !== 'ALREADY_ACTIVE') {
+        if (claimCode === 'NO_PENDING_INVITATION') {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          const userId = session?.user?.id;
+
+          if (userId) {
+            const activeMembershipExists = await hasActiveMembership(userId);
+            if (activeMembershipExists) {
+              return;
+            }
+          }
+
+          if (mode === 'signup') {
+            throw new Error('Registrierungslink ungültig oder abgelaufen. Bitte Registrierung erneut starten.');
+          }
+
+          throw new Error(mapClaimError(claimCode));
+        }
+
+        throw new Error(mapClaimError(claimCode));
+      }
+
+      return;
+    }
+
+    // Recovery flow (password reset): if the admin sent a reactivation email,
+    // the user has a fresh PENDING invitation. Claim it now to activate their membership.
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+
+    if (!userId || !(await hasInvitedMembership(userId))) {
+      return;
+    }
+
+    const { data: claimResult, error: claimError } = await supabase.rpc('claim_my_invitation', {
+      p_account_id: null,
+    });
+
+    if (claimError) {
+      throw claimError;
+    }
+
+    const claimCode = claimResult?.code as string | undefined;
+    if (!claimResult?.ok && claimCode !== 'ALREADY_ACTIVE') {
+      throw new Error(mapClaimError(claimCode));
+    }
+  }, []);
 
   useEffect(() => {
     const init = async () => {
@@ -113,6 +183,36 @@ const AcceptInvite: React.FC = () => {
       let {
         data: { session },
       } = await supabase.auth.getSession();
+
+      // Session-only resume: user navigated to /auth/accept-invite while already
+      // logged in but with no auth params in the URL (e.g. from the "Konto-Zugang
+      // ausstehend" pending page). Try to claim an INVITED membership directly.
+      const hasNoAuthParams =
+        !authPayload.token && !authPayload.tokenHash && !authPayload.code &&
+        !authPayload.accessToken && !authPayload.refreshToken && !authPayload.type &&
+        !authPayload.urlError;
+
+      if (session && hasNoAuthParams) {
+        const userId = session.user.id;
+        if (await hasInvitedMembership(userId)) {
+          try {
+            await completeClaimFlow('invite');
+            setState('success');
+            window.setTimeout(() => navigate('/'), 1200);
+          } catch (error) {
+            setErrorText(error instanceof Error ? error.message : 'Zugang konnte nicht aktiviert werden.');
+            setState('error');
+          }
+          return;
+        }
+        if (await hasActiveMembership(userId)) {
+          navigate('/');
+          return;
+        }
+        setErrorText('Keine offene Einladung gefunden. Bitte lassen Sie sich erneut einladen.');
+        setState('error');
+        return;
+      }
 
       if (!session && authPayload.code) {
         const { error } = await supabase.auth.exchangeCodeForSession(authPayload.code);
@@ -167,6 +267,19 @@ const AcceptInvite: React.FC = () => {
       }
 
       clearAuthParamsFromUrl();
+      if (isSignupVerificationFlow) {
+        setState('saving');
+        try {
+          await completeClaimFlow('signup');
+          setState('success');
+          window.setTimeout(() => navigate('/'), 1200);
+        } catch (error) {
+          setErrorText(error instanceof Error ? error.message : 'Registrierung konnte nicht abgeschlossen werden.');
+          setState('error');
+        }
+        return;
+      }
+
       setState('needs_password');
     };
 
@@ -174,7 +287,7 @@ const AcceptInvite: React.FC = () => {
       setErrorText(err instanceof Error ? err.message : 'Einladung konnte nicht verarbeitet werden.');
       setState('error');
     });
-  }, [authPayload]);
+  }, [authPayload, completeClaimFlow, isSignupVerificationFlow, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -197,60 +310,7 @@ const AcceptInvite: React.FC = () => {
         throw passwordError;
       }
 
-      if (!isRecoveryFlow) {
-        const { data: claimResult, error: claimError } = await supabase.rpc('claim_my_invitation', {
-          p_account_id: null,
-        });
-
-        if (claimError) {
-          throw claimError;
-        }
-
-        const claimCode = claimResult?.code as string | undefined;
-        const claimOk = Boolean(claimResult?.ok);
-
-        if (!claimOk && claimCode !== 'ALREADY_ACTIVE') {
-          if (claimCode === 'NO_PENDING_INVITATION') {
-            const {
-              data: { session },
-            } = await supabase.auth.getSession();
-            const userId = session?.user?.id;
-
-            if (userId) {
-              const activeMembershipExists = await hasActiveMembership(userId);
-              if (!activeMembershipExists) {
-                throw new Error(mapClaimError(claimCode));
-              }
-            } else {
-              throw new Error(mapClaimError(claimCode));
-            }
-          } else {
-            throw new Error(mapClaimError(claimCode));
-          }
-        }
-      } else {
-        // Recovery flow (password reset): if the admin sent a reactivation email,
-        // the user has a fresh PENDING invitation. Claim it now to activate their membership.
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const userId = session?.user?.id;
-
-        if (userId && (await hasInvitedMembership(userId))) {
-          const { data: claimResult, error: claimError } = await supabase.rpc('claim_my_invitation', {
-            p_account_id: null,
-          });
-
-          if (claimError) {
-            throw claimError;
-          }
-
-          const claimCode = claimResult?.code as string | undefined;
-          if (!claimResult?.ok && claimCode !== 'ALREADY_ACTIVE') {
-            throw new Error(mapClaimError(claimCode));
-          }
-        }
-      }
+      await completeClaimFlow(isRecoveryFlow ? 'recovery' : 'invite');
 
       setState('success');
       window.setTimeout(() => navigate('/'), 1200);
@@ -261,14 +321,19 @@ const AcceptInvite: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-xl px-8 py-8 w-full max-w-md">
+    <AuthScreenShell>
         <h2 className="text-2xl font-bold text-slate-900 mb-2">
-          {isRecoveryFlow ? 'Passwort zurücksetzen' : 'Einladung abschließen'}
+          {isRecoveryFlow ? 'Passwort zurücksetzen' : isSignupVerificationFlow ? 'Registrierung abschließen' : 'Einladung abschließen'}
         </h2>
 
         {state === 'loading' && (
-          <p className="text-sm text-slate-600">Einladung wird geprüft...</p>
+          <p className="text-sm text-slate-600">
+            {isSignupVerificationFlow ? 'Registrierung wird geprüft...' : 'Einladung wird geprüft...'}
+          </p>
+        )}
+
+        {state === 'saving' && isSignupVerificationFlow && (
+          <p className="text-sm text-slate-600">Zugang wird aktiviert...</p>
         )}
 
         {state === 'error' && (
@@ -280,10 +345,18 @@ const AcceptInvite: React.FC = () => {
             >
               Zur Anmeldung
             </Link>
+            {isSignupVerificationFlow && (
+              <Link
+                to="/auth/register"
+                className="inline-flex items-center justify-center w-full border border-slate-300 hover:border-slate-400 text-slate-700 px-4 py-2.5 rounded-lg font-semibold transition-colors"
+              >
+                Neu registrieren
+              </Link>
+            )}
           </div>
         )}
 
-        {(state === 'needs_password' || state === 'saving') && (
+        {(state === 'needs_password' || (state === 'saving' && !isSignupVerificationFlow)) && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <p className="text-sm text-slate-600">
               {isRecoveryFlow
@@ -296,7 +369,7 @@ const AcceptInvite: React.FC = () => {
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
+                className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white/80 border transition-all"
                 placeholder="Mindestens 8 Zeichen"
                 minLength={8}
                 required
@@ -309,7 +382,7 @@ const AcceptInvite: React.FC = () => {
                 type="password"
                 value={passwordConfirm}
                 onChange={e => setPasswordConfirm(e.target.value)}
-                className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
+                className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white/80 border transition-all"
                 minLength={8}
                 required
                 disabled={state === 'saving'}
@@ -331,13 +404,14 @@ const AcceptInvite: React.FC = () => {
             <p className="text-sm text-emerald-700 bg-emerald-50 p-3 rounded-lg">
               {isRecoveryFlow
                 ? 'Passwort erfolgreich zurückgesetzt.'
-                : 'Passwort erfolgreich gesetzt. Ihr Zugang wurde aktiviert.'}
+                : isSignupVerificationFlow
+                  ? 'E-Mail erfolgreich bestätigt. Ihr Zugang wurde aktiviert.'
+                  : 'Passwort erfolgreich gesetzt. Ihr Zugang wurde aktiviert.'}
             </p>
             <p className="text-sm text-slate-600">Sie werden weitergeleitet...</p>
           </div>
         )}
-      </div>
-    </div>
+    </AuthScreenShell>
   );
 };
 

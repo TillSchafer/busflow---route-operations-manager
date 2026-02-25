@@ -9,16 +9,13 @@ verify_jwt = false
 [functions.platform-send-password-reset]
 verify_jwt = false
 
-[functions.admin-delete-user]
-verify_jwt = true
-
-[functions.admin-delete-user-v2]
-verify_jwt = true
-
 [functions.admin-delete-user-v3]
 verify_jwt = false
 
 [functions.admin-manage-invitation-v1]
+verify_jwt = false
+
+[functions.admin-update-membership-role-v1]
 verify_jwt = false
 
 [functions.admin-update-user-v1]
@@ -31,4 +28,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.platform-delete-account]
+verify_jwt = false
+
+[functions.public-register-trial-v1]
 verify_jwt = false

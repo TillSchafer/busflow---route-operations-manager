@@ -4,6 +4,7 @@ import { corsHeaders, json, extractBearerToken, isUuid } from '../_shared/utils.
 import { requirePlatformOwner } from '../_shared/owner.ts';
 
 type PlatformAccountStatus = 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
+type TrialAction = 'EXTEND_14_DAYS' | 'CANCEL_TRIAL';
 
 type UpdateAccountRequest = {
   accountId?: string;
@@ -11,6 +12,7 @@ type UpdateAccountRequest = {
   slug?: string;
   status?: PlatformAccountStatus;
   reason?: string;
+  trialAction?: TrialAction;
 };
 
 const slugify = (value: string) =>
@@ -74,22 +76,32 @@ serve(async (req) => {
   const rawSlug = getString(body.slug);
   const reason = getString(body.reason) || null;
   const status = body.status;
+  const trialAction = body.trialAction;
 
   if (!isUuid(accountId)) {
     return json(400, { ok: false, code: 'INVALID_ACCOUNT_ID' });
   }
 
-  if (!rawName && !rawSlug && !status) {
+  if (!rawName && !rawSlug && !status && !trialAction) {
     return json(400, { ok: false, code: 'NOTHING_TO_UPDATE' });
+  }
+
+  // Trial actions must not be mixed with name/slug/status changes
+  if (trialAction && (rawName || rawSlug || status)) {
+    return json(400, { ok: false, code: 'INVALID_COMBINED_UPDATE' });
   }
 
   if (status && !['ACTIVE', 'SUSPENDED', 'ARCHIVED'].includes(status)) {
     return json(400, { ok: false, code: 'INVALID_STATUS' });
   }
 
+  if (trialAction && !['EXTEND_14_DAYS', 'CANCEL_TRIAL'].includes(trialAction)) {
+    return json(400, { ok: false, code: 'INVALID_TRIAL_ACTION' });
+  }
+
   const { data: existingAccount, error: existingAccountError } = await adminClient
     .from('platform_accounts')
-    .select('id, name, slug, status, created_at, updated_at, archived_at, archived_by')
+    .select('id, name, slug, status, trial_state, trial_ends_at, created_at, updated_at, archived_at, archived_by')
     .eq('id', accountId)
     .maybeSingle();
 
@@ -98,6 +110,11 @@ serve(async (req) => {
   }
   if (!existingAccount) {
     return json(404, { ok: false, code: 'ACCOUNT_NOT_FOUND' });
+  }
+
+  // Block trial actions on archived accounts
+  if (trialAction && existingAccount.status === 'ARCHIVED') {
+    return json(409, { ok: false, code: 'ACCOUNT_ARCHIVED' });
   }
 
   const payload: Record<string, unknown> = {};
@@ -123,6 +140,17 @@ serve(async (req) => {
     }
   }
 
+  if (trialAction === 'EXTEND_14_DAYS') {
+    const existingEnds = existingAccount.trial_ends_at ? new Date(existingAccount.trial_ends_at).getTime() : 0;
+    const base = new Date(Math.max(Date.now(), existingEnds));
+    base.setDate(base.getDate() + 14);
+    payload.trial_ends_at = base.toISOString();
+    payload.trial_state = 'TRIAL_ACTIVE';
+  } else if (trialAction === 'CANCEL_TRIAL') {
+    payload.trial_state = 'SUBSCRIBED';
+    payload.trial_ends_at = new Date().toISOString();
+  }
+
   if (Object.keys(payload).length === 0) {
     return json(400, { ok: false, code: 'NOTHING_TO_UPDATE' });
   }
@@ -131,7 +159,7 @@ serve(async (req) => {
     .from('platform_accounts')
     .update(payload)
     .eq('id', accountId)
-    .select('id, name, slug, status, created_at, updated_at, archived_at, archived_by')
+    .select('id, name, slug, status, trial_started_at, trial_ends_at, trial_state, created_at, updated_at, archived_at, archived_by')
     .single();
 
   if (updateError) {
@@ -155,6 +183,11 @@ serve(async (req) => {
         changed_slug: Object.prototype.hasOwnProperty.call(payload, 'slug'),
         changed_status: Object.prototype.hasOwnProperty.call(payload, 'status'),
         status: status || null,
+        changed_trial_action: trialAction || null,
+        previous_trial_state: existingAccount.trial_state || null,
+        previous_trial_ends_at: existingAccount.trial_ends_at || null,
+        next_trial_state: (payload.trial_state as string | undefined) || existingAccount.trial_state || null,
+        next_trial_ends_at: (payload.trial_ends_at as string | undefined) || existingAccount.trial_ends_at || null,
       },
     });
 

@@ -25,6 +25,8 @@ export interface InvitationItem {
   created_at: string;
 }
 
+export type TrialState = 'TRIAL_ACTIVE' | 'TRIAL_ENDED' | 'SUBSCRIBED';
+
 export interface PlatformAccount {
   id: string;
   name: string;
@@ -34,6 +36,9 @@ export interface PlatformAccount {
   updated_at?: string;
   archived_at?: string | null;
   archived_by?: string | null;
+  trial_started_at?: string;
+  trial_ends_at?: string;
+  trial_state?: TrialState;
 }
 
 export interface DeleteUserResult {
@@ -41,6 +46,17 @@ export interface DeleteUserResult {
   deletedUserId?: string;
   auditError?: string | null;
   cleanupWarnings?: string[];
+  code?: string;
+  message?: string;
+}
+
+export interface UpdateMembershipRoleResult {
+  ok: boolean;
+  accountId?: string;
+  membershipId?: string;
+  previousRole?: MembershipRole;
+  nextRole?: MembershipRole;
+  auditError?: string | null;
   code?: string;
   message?: string;
 }
