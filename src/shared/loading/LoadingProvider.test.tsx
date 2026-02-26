@@ -3,31 +3,31 @@ import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LoadingProvider, useLoading, type LoadingContextValue } from './LoadingProvider';
 
-let latestLoading: LoadingContextValue | null = null;
-
-const LoadingProbe: React.FC = () => {
+const LoadingProbe = React.forwardRef<LoadingContextValue, Record<string, never>>((_, ref) => {
   const loading = useLoading();
-  latestLoading = loading;
+  React.useImperativeHandle(ref, () => loading, [loading]);
 
   return (
     <output data-testid="loading-state">
       {loading.activeCount}|{loading.shouldReveal ? '1' : '0'}
     </output>
   );
-};
+});
+LoadingProbe.displayName = 'LoadingProbe';
 
 const renderProbe = () => {
+  const loadingRef = React.createRef<LoadingContextValue>();
   render(
     <LoadingProvider>
-      <LoadingProbe />
+      <LoadingProbe ref={loadingRef} />
     </LoadingProvider>
   );
-  expect(latestLoading).not.toBeNull();
+  expect(loadingRef.current).not.toBeNull();
+  return loadingRef;
 };
 
 describe('LoadingProvider', () => {
   beforeEach(() => {
-    latestLoading = null;
     vi.useFakeTimers();
   });
 
@@ -36,11 +36,11 @@ describe('LoadingProvider', () => {
   });
 
   it('cleans up loading state after success and error paths', async () => {
-    renderProbe();
+    const loadingRef = renderProbe();
 
     let successRun!: Promise<void>;
     act(() => {
-      successRun = latestLoading!.runWithLoading(async () => {
+      successRun = loadingRef.current!.runWithLoading(async () => {
         await new Promise<void>(resolve => setTimeout(resolve, 200));
       });
     });
@@ -61,7 +61,7 @@ describe('LoadingProvider', () => {
 
     let failingRun!: Promise<never>;
     act(() => {
-      failingRun = latestLoading!.runWithLoading(async () => {
+      failingRun = loadingRef.current!.runWithLoading(async () => {
         throw new Error('boom');
       });
     });
@@ -80,36 +80,36 @@ describe('LoadingProvider', () => {
   });
 
   it('keeps loading active while overlapping operations are in progress', () => {
-    renderProbe();
+    const loadingRef = renderProbe();
 
     let firstToken: string;
     let secondToken: string;
     act(() => {
-      firstToken = latestLoading!.start({ message: 'first' });
-      secondToken = latestLoading!.start({ message: 'second' });
+      firstToken = loadingRef.current!.start({ message: 'first' });
+      secondToken = loadingRef.current!.start({ message: 'second' });
     });
 
     expect(screen.getByTestId('loading-state')).toHaveTextContent('2|0');
 
     act(() => {
-      latestLoading!.stop(firstToken);
+      loadingRef.current!.stop(firstToken);
     });
     expect(screen.getByTestId('loading-state')).toHaveTextContent('1|0');
 
     act(() => {
-      latestLoading!.stop(secondToken);
+      loadingRef.current!.stop(secondToken);
     });
     expect(screen.getByTestId('loading-state')).toHaveTextContent('0|0');
   });
 
   it('cancels delayed reveal when operation completes before threshold', () => {
-    renderProbe();
+    const loadingRef = renderProbe();
 
     let token: string;
     act(() => {
-      token = latestLoading!.start();
+      token = loadingRef.current!.start();
       vi.advanceTimersByTime(100);
-      latestLoading!.stop(token);
+      loadingRef.current!.stop(token);
     });
 
     expect(screen.getByTestId('loading-state')).toHaveTextContent('0|0');

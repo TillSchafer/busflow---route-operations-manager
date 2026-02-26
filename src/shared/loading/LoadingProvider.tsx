@@ -26,7 +26,7 @@ interface LoadingProviderProps {
 
 export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children, options }) => {
   const engineRef = useRef<LoadingEngine | null>(null);
-  if (!engineRef.current) {
+  if (engineRef.current == null) {
     engineRef.current = new LoadingEngine(options);
   }
   const engine = engineRef.current;
@@ -49,17 +49,11 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children, opti
   );
 
   const value = useMemo<LoadingContextValue>(() => {
-    const nowMs = Date.now();
-    const isShortVisible =
-      snapshot.shouldReveal &&
-      snapshot.visibleSinceMs !== null &&
-      nowMs - snapshot.visibleSinceMs < snapshot.shortVariantThresholdMs;
-
     return {
       activeCount: snapshot.activeCount,
       isActive: snapshot.isActive,
       shouldReveal: snapshot.shouldReveal,
-      isShortVisible,
+      isShortVisible: snapshot.isShortVisible,
       revealDelayMs: snapshot.revealDelayMs,
       shortVariantThresholdMs: snapshot.shortVariantThresholdMs,
       visibleSinceMs: snapshot.visibleSinceMs,

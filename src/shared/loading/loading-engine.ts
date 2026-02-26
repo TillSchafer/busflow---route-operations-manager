@@ -39,7 +39,9 @@ export class LoadingEngine {
   private readonly now: () => number;
 
   private revealTimer: ReturnType<typeof setTimeout> | null = null;
+  private shortVariantTimer: ReturnType<typeof setTimeout> | null = null;
   private shouldReveal = false;
+  private isShortVisible = false;
   private visibleSinceMs: number | null = null;
   private lastSettledAtMs: number | null = null;
   private snapshot: LoadingEngineSnapshot;
@@ -70,6 +72,7 @@ export class LoadingEngine {
       activeCount: this.operations.size,
       isActive: this.operations.size > 0,
       shouldReveal: this.shouldReveal,
+      isShortVisible: this.isShortVisible,
       visibleSinceMs: this.visibleSinceMs,
       lastSettledAtMs: this.lastSettledAtMs,
       revealDelayMs: this.revealDelayMs,
@@ -146,11 +149,14 @@ export class LoadingEngine {
       if (this.visibleSinceMs === null) {
         this.visibleSinceMs = nowMs;
       }
+      this.startShortVariantCountdown();
       return;
     }
 
     this.shouldReveal = false;
+    this.isShortVisible = false;
     this.visibleSinceMs = null;
+    this.clearShortVariantTimer();
     this.revealTimer = setTimeout(() => {
       if (this.operations.size === 0) {
         return;
@@ -159,13 +165,16 @@ export class LoadingEngine {
       if (this.visibleSinceMs === null) {
         this.visibleSinceMs = this.now();
       }
+      this.startShortVariantCountdown();
       this.emit();
     }, this.revealDelayMs);
   }
 
   private finishRevealCycle(): void {
     this.clearRevealTimer();
+    this.clearShortVariantTimer();
     this.shouldReveal = false;
+    this.isShortVisible = false;
     this.visibleSinceMs = null;
     this.lastSettledAtMs = this.now();
   }
@@ -175,6 +184,25 @@ export class LoadingEngine {
       clearTimeout(this.revealTimer);
       this.revealTimer = null;
     }
+  }
+
+  private clearShortVariantTimer(): void {
+    if (this.shortVariantTimer !== null) {
+      clearTimeout(this.shortVariantTimer);
+      this.shortVariantTimer = null;
+    }
+  }
+
+  private startShortVariantCountdown(): void {
+    this.isShortVisible = true;
+    this.clearShortVariantTimer();
+    this.shortVariantTimer = setTimeout(() => {
+      if (this.operations.size === 0 || !this.shouldReveal) {
+        return;
+      }
+      this.isShortVisible = false;
+      this.emit();
+    }, this.shortVariantThresholdMs);
   }
 
   private getDisplayState(): LoadingDisplayState {

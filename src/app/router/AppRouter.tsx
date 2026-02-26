@@ -1,11 +1,12 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Bus, Leaf } from 'lucide-react';
+import { Bus } from 'lucide-react';
 import { supabase } from '../../shared/lib/supabase';
 import { useAuth } from '../../shared/auth/AuthContext';
 import AuthScreenShell from '../../shared/components/auth/AuthScreenShell';
 import { useToast } from '../../shared/components/ToastProvider';
 import { ProfileSecurityApi } from '../../shared/api/profile/profileSecurity.api';
+import AppLoadingBridge, { RouteLoadingFallback } from '../../shared/loading/AppLoadingBridge';
 import AuthCallbackNormalizer from './AuthCallbackNormalizer';
 
 const Home = lazy(() => import('../../features/home/pages/HomePage'));
@@ -16,17 +17,6 @@ const AcceptInvite = lazy(() => import('../../features/auth/pages/AcceptInvitePa
 const AccountSecurity = lazy(() => import('../../features/auth/pages/AccountSecurityPage'));
 const Register = lazy(() => import('../../features/auth/pages/RegisterPage'));
 const BusflowApp = lazy(() => import('../../features/busflow/pages/BusflowAppPage'));
-
-const RouteFallback: React.FC = () => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
-    <div className="flex flex-col items-center space-y-4">
-      <div className="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
-        <Leaf className="w-7 h-7 animate-spin" />
-      </div>
-      <p className="text-sm font-semibold text-slate-600">Lade Ansicht ...</p>
-    </div>
-  </div>
-);
 
 const LoginScreen: React.FC<{
   email: string;
@@ -250,16 +240,23 @@ const AppRouter: React.FC = () => {
   const ownerPath = user?.isPlatformOwner ? '/owner-bereich' : adminPath;
   const goAdmin = () => navigate(adminPath);
   const goOwner = () => navigate(ownerPath);
+  const suspenseFallback = <RouteLoadingFallback message="Lade..." />;
 
   if (loading) {
-    return <RouteFallback />;
+    return (
+      <>
+        <AppLoadingBridge authLoading={loading} />
+        <div className="min-h-screen bg-slate-50" />
+      </>
+    );
   }
 
   if (!user) {
     return (
       <>
+        <AppLoadingBridge authLoading={loading} />
         <AuthCallbackNormalizer />
-        <Suspense fallback={<RouteFallback />}>
+        <Suspense fallback={suspenseFallback}>
           <Routes>
             <Route path="/auth/accept-invite" element={<AcceptInvite />} />
             <Route path="/auth/account-security" element={<AccountSecurity />} />
@@ -333,8 +330,9 @@ const AppRouter: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
+      <AppLoadingBridge authLoading={loading} />
       <AuthCallbackNormalizer />
-      <Suspense fallback={<RouteFallback />}>
+      <Suspense fallback={suspenseFallback}>
         <Routes>
           <Route
             path="/"

@@ -28,6 +28,7 @@ export interface LoadingEngineSnapshot {
   activeCount: number;
   isActive: boolean;
   shouldReveal: boolean;
+  isShortVisible: boolean;
   visibleSinceMs: number | null;
   lastSettledAtMs: number | null;
   revealDelayMs: number;

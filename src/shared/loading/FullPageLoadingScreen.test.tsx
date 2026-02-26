@@ -4,25 +4,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import FullPageLoadingScreen from './FullPageLoadingScreen';
 import { LoadingProvider, useLoading, type LoadingContextValue } from './LoadingProvider';
 
-let latestLoading: LoadingContextValue | null = null;
-
-const Harness: React.FC = () => {
-  latestLoading = useLoading();
+const Harness = React.forwardRef<LoadingContextValue, Record<string, never>>((_, ref) => {
+  const loading = useLoading();
+  React.useImperativeHandle(ref, () => loading, [loading]);
   return <FullPageLoadingScreen />;
-};
+});
+Harness.displayName = 'Harness';
 
 const renderScreen = () => {
+  const loadingRef = React.createRef<LoadingContextValue>();
   render(
     <LoadingProvider>
-      <Harness />
+      <Harness ref={loadingRef} />
     </LoadingProvider>
   );
-  expect(latestLoading).not.toBeNull();
+  expect(loadingRef.current).not.toBeNull();
+  return loadingRef;
 };
 
 describe('FullPageLoadingScreen', () => {
   beforeEach(() => {
-    latestLoading = null;
     vi.useFakeTimers();
   });
 
@@ -31,10 +32,10 @@ describe('FullPageLoadingScreen', () => {
   });
 
   it('renders fallback message when no custom message is provided', () => {
-    renderScreen();
+    const loadingRef = renderScreen();
 
     act(() => {
-      latestLoading!.start();
+      loadingRef.current!.start();
       vi.advanceTimersByTime(150);
     });
 
@@ -43,11 +44,11 @@ describe('FullPageLoadingScreen', () => {
   });
 
   it('shows determinate percentage only when progress data exists', () => {
-    renderScreen();
+    const loadingRef = renderScreen();
 
     let firstToken = '';
     act(() => {
-      firstToken = latestLoading!.start({ progress: { current: 3, total: 5 } });
+      firstToken = loadingRef.current!.start({ progress: { current: 3, total: 5 } });
       vi.advanceTimersByTime(150);
     });
 
@@ -55,8 +56,8 @@ describe('FullPageLoadingScreen', () => {
 
     let secondToken = '';
     act(() => {
-      latestLoading!.stop(firstToken);
-      secondToken = latestLoading!.start({ message: 'No progress' });
+      loadingRef.current!.stop(firstToken);
+      secondToken = loadingRef.current!.start({ message: 'No progress' });
       vi.advanceTimersByTime(1);
     });
 
@@ -64,16 +65,16 @@ describe('FullPageLoadingScreen', () => {
     expect(screen.queryByText(/%/)).not.toBeInTheDocument();
 
     act(() => {
-      latestLoading!.stop(secondToken);
+      loadingRef.current!.stop(secondToken);
     });
   });
 
   it('renders blocking overlay with faint backdrop and short-variant state', () => {
-    renderScreen();
+    const loadingRef = renderScreen();
 
     let token = '';
     act(() => {
-      token = latestLoading!.start({ message: 'Initial load' });
+      token = loadingRef.current!.start({ message: 'Initial load' });
       vi.advanceTimersByTime(150);
     });
 
@@ -89,7 +90,7 @@ describe('FullPageLoadingScreen', () => {
 
     act(() => {
       vi.advanceTimersByTime(900);
-      latestLoading!.update(token, { message: 'Still loading' });
+      loadingRef.current!.update(token, { message: 'Still loading' });
     });
 
     expect(card).toHaveAttribute('data-short-variant', 'false');
