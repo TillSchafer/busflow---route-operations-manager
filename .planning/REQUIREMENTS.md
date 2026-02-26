@@ -9,7 +9,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Loading Foundation
 
-- [ ] **LOAD-01**: Platform uses one shared full-page loading screen component as the canonical loading UI.
+- [x] **LOAD-01**: Platform uses one shared full-page loading screen component as the canonical loading UI.
 - [x] **LOAD-02**: Loading screen appears only after a short delay threshold to avoid flicker on fast actions.
 - [ ] **LOAD-03**: Loading system supports action-specific messages and uses `Lade...` as fallback text.
 - [x] **LOAD-04**: Loading lifecycle is managed through a centralized start/stop contract that guarantees cleanup on success, error, and cancellation.
@@ -58,7 +58,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LOAD-01 | Phase 1 | Pending |
+| LOAD-01 | Phase 1 | Complete |
 | LOAD-02 | Phase 1 | Complete |
 | LOAD-03 | Phase 2 | Pending |
 | LOAD-04 | Phase 1 | Complete |
