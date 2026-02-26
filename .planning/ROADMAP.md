@@ -12,7 +12,7 @@ This roadmap upgrades BusFlow’s loading behavior from inconsistent, page-local
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Loading Core Foundation** - Build shared loading engine, lifecycle contract, and delayed reveal behavior.
+- [x] **Phase 1: Loading Core Foundation** - Build shared loading engine, lifecycle contract, and delayed reveal behavior. (completed 2026-02-26)
 - [ ] **Phase 2: Messaging + Route/Auth Integration** - Integrate route/auth loading and scoped message system with fallback behavior.
 - [ ] **Phase 3: Platform Action Coverage Rollout** - Wire all async action flows to the unified loading orchestration.
 - [ ] **Phase 4: Accessibility + Consistency Cleanup** - Complete accessibility semantics and remove all legacy divergent loading variants.
@@ -100,7 +100,7 @@ Phases execute in numeric order: 2 → 2.1 → 2.2 → 3 → 3.1 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Loading Core Foundation | 2/3 | In Progress|  |
+| 1. Loading Core Foundation | 3/3 | Complete   | 2026-02-26 |
 | 2. Messaging + Route/Auth Integration | 0/3 | Not started | - |
 | 3. Platform Action Coverage Rollout | 0/3 | Not started | - |
 | 4. Accessibility + Consistency Cleanup | 0/2 | Not started | - |
