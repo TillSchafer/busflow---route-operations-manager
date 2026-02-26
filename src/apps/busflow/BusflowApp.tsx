@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, ArrowLeft, Printer, Settings as SettingsIcon, Leaf, Search, History, Calendar } from 'lucide-react';
+import { Plus, Printer, Settings as SettingsIcon, Leaf, Search, History, Calendar } from 'lucide-react';
+import BackToOverviewButton from '../../shared/components/BackToOverviewButton';
 import RouteEditor from './components/RouteEditor';
 import RouteList from './components/RouteList';
 import PrintPreview from './components/PrintPreview';
@@ -24,6 +25,7 @@ import { useToast } from '../../shared/components/ToastProvider';
 import { useBusflowData } from './hooks/useBusflowData';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { useRouteFiltering } from './hooks/useRouteFiltering';
+import { getErrorCode, getErrorMessage } from '../../shared/lib/error-mapping';
 
 interface User {
   name: string;
@@ -41,13 +43,6 @@ interface Props {
   onAdmin: () => void;
   onOwner?: () => void;
 }
-
-const getErrorCode = (error: unknown): string | undefined =>
-  error && typeof error === 'object' && 'code' in error
-    ? String((error as { code?: unknown }).code ?? '')
-    : undefined;
-const getErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : '';
 
 const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onLogout, onGoHome, onAdmin, onOwner }) => {
   const { pushToast, clearToasts } = useToast();
@@ -466,7 +461,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
         onCancel={() => setRouteIdToDelete(null)}
       />
       <AppHeader
-        title="BusFlow Routenplanung"
+        title="BusPilot Routenplanung"
         user={view === 'EDITOR' ? null : authUser}
         onHome={onGoHome}
         onProfile={onProfile}
@@ -551,10 +546,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
 
         {view === 'EDITOR' && currentRoute && (
           <div className="space-y-6">
-            <button onClick={() => setView('LIST')} className="flex items-center space-x-2 text-slate-500 hover:text-slate-800 transition-colors">
-              <ArrowLeft className="w-4 h-4" />
-              <span>Zur Übersicht</span>
-            </button>
+            <BackToOverviewButton onClick={() => setView('LIST')} />
             {editConflictMessage && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
                 <p className="text-sm text-amber-900 font-medium">{editConflictMessage}</p>
@@ -575,10 +567,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
 
         {view === 'SETTINGS' && (
           <div className="space-y-6">
-            <button onClick={() => setView('LIST')} className="flex items-center space-x-2 text-slate-500 hover:text-slate-800 transition-colors">
-              <ArrowLeft className="w-4 h-4" />
-              <span>Zur Übersicht</span>
-            </button>
+            <BackToOverviewButton onClick={() => setView('LIST')} />
             <Settings
               busTypes={busTypes}
               workers={workers}

@@ -5,7 +5,14 @@ import ConfirmDialog from '../shared/components/ConfirmDialog';
 import { useToast } from '../shared/components/ToastProvider';
 import { PlatformAdminApi } from '../shared/api/admin/platformAdmin.api';
 import { MembershipItem, PlatformAccount, PlatformAccountStatus, TrialState } from '../shared/api/admin/types';
-import { isFunctionAuthError } from '../shared/lib/supabaseFunctions';
+import { toActionErrorMessage } from '../shared/lib/error-mapping';
+import {
+  formatDate,
+  formatDateTime,
+  slugify,
+  statusBadgeClass,
+  trialBadgeClass,
+} from '../features/admin/shared/lib/admin-ui';
 
 interface Props {
   header: {
@@ -32,40 +39,6 @@ type DryRunCounts = {
   users: number;
 };
 
-const slugify = (value: string) =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-');
-
-const formatDateTime = (value?: string) => {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('de-DE');
-};
-
-const formatDate = (value?: string) => {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('de-DE');
-};
-
-const statusBadgeClass = (status?: PlatformAccountStatus) => {
-  if (status === 'SUSPENDED') return 'bg-amber-100 text-amber-700';
-  if (status === 'ARCHIVED') return 'bg-slate-200 text-slate-700';
-  return 'bg-emerald-100 text-emerald-700';
-};
-
-const trialBadgeClass = (trialState?: TrialState) => {
-  if (trialState === 'TRIAL_ACTIVE') return 'bg-blue-100 text-blue-700';
-  if (trialState === 'TRIAL_ENDED') return 'bg-red-100 text-red-700';
-  return 'bg-emerald-100 text-emerald-700';
-};
-
 const trialDaysRemaining = (trialEndsAt: string): number => {
   const diffMs = new Date(trialEndsAt).getTime() - Date.now();
   return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
@@ -84,11 +57,6 @@ const memberDisplayName = (membership: MembershipItem) => {
 const memberDisplayEmail = (membership: MembershipItem) => {
   const profile = profileFromMembership(membership);
   return profile?.email || membership.user_id;
-};
-
-const toActionErrorMessage = (error: unknown, fallback: string) => {
-  if (isFunctionAuthError(error)) return 'Sitzung ungültig/abgelaufen. Bitte neu anmelden.';
-  return error instanceof Error ? error.message : fallback;
 };
 
 const PlatformAdmin: React.FC<Props> = ({ header }) => {

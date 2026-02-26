@@ -11,6 +11,8 @@ Diese Anleitung richtet die produktiven Functions in BusFlow ein:
 - `owner-update-account-v1`
 - `owner-company-overview-v1`
 - `platform-delete-account`
+- `public-register-trial-v1`
+- `self-profile-security-v1`
 
 ## 1) Voraussetzungen
 
@@ -47,6 +49,8 @@ npx supabase functions new admin-update-user-v1
 npx supabase functions new owner-update-account-v1
 npx supabase functions new owner-company-overview-v1
 npx supabase functions new platform-delete-account
+npx supabase functions new public-register-trial-v1
+npx supabase functions new self-profile-security-v1
 ```
 
 Erwartete Struktur:
@@ -60,6 +64,8 @@ Erwartete Struktur:
 - `supabase/functions/owner-update-account-v1/index.ts`
 - `supabase/functions/owner-company-overview-v1/index.ts`
 - `supabase/functions/platform-delete-account/index.ts`
+- `supabase/functions/public-register-trial-v1/index.ts`
+- `supabase/functions/self-profile-security-v1/index.ts`
 
 ## 3) Code in `index.ts` einsetzen
 
@@ -140,18 +146,28 @@ verify_jwt = false
 
 [functions.platform-delete-account]
 verify_jwt = false
+
+[functions.public-register-trial-v1]
+verify_jwt = false
+
+[functions.self-profile-security-v1]
+verify_jwt = false
 ```
 
 Hinweis: fuer den aktuellen JWT-Gateway-Incident laufen die aktiven Admin-Functions temporaer mit `verify_jwt = false`.
+Hinweis: Remote-Drift aktuell bekannt bei `admin-update-membership-role-v1` (remote `verify_jwt=true`, lokal `false`).
 
 ## 5) Secrets anlegen (Pflicht)
 
-Diese zwei Secrets werden von deinem aktuellen Code verwendet:
+Diese Secrets werden vom aktuellen Function-Code verwendet:
 
 ```bash
 npx supabase secrets set --project-ref jgydzxdiwpldgrqkfbfk \
   APP_INVITE_REDIRECT_URL="https://<deine-domain>/auth/accept-invite" \
-  APP_PASSWORD_RESET_REDIRECT_URL="https://<deine-domain>/auth/accept-invite"
+  APP_PASSWORD_RESET_REDIRECT_URL="https://<deine-domain>/auth/accept-invite" \
+  APP_ACCOUNT_SECURITY_REDIRECT_URL="https://<deine-domain>/auth/account-security" \
+  PLATFORM_OWNER_EMAIL="owner@your-domain.tld" \
+  SELF_SIGNUP_IP_HASH_SALT="<random-long-secret>"
 ```
 
 Pruefen:
@@ -163,6 +179,8 @@ npx supabase secrets list --project-ref jgydzxdiwpldgrqkfbfk
 Hinweis:
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` kommen in Functions aus der Supabase Runtime.
 - Diese drei Werte setzt man nicht als eigene Custom-Secrets fuer jede Function.
+- Optional: `SELF_SIGNUP_ENABLED=true|false` als Feature-Flag fuer `public-register-trial-v1`.
+- Optional/legacy: `SUPABASE_DB_URL` kann als reserviert markiert bleiben, wird aktuell nicht im Function-Code verwendet.
 
 ## 6) Functions deployen
 
@@ -177,6 +195,8 @@ npx supabase functions deploy admin-update-user-v1 --project-ref jgydzxdiwpldgrq
 npx supabase functions deploy owner-update-account-v1 --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
 npx supabase functions deploy owner-company-overview-v1 --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
 npx supabase functions deploy platform-delete-account --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
+npx supabase functions deploy public-register-trial-v1 --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
+npx supabase functions deploy self-profile-security-v1 --project-ref jgydzxdiwpldgrqkfbfk --no-verify-jwt
 ```
 
 Pruefen:
@@ -192,6 +212,7 @@ Supabase Dashboard:
 
 Allowed Redirect URLs:
 - `https://<deine-domain>/auth/accept-invite`
+- `https://<deine-domain>/auth/account-security`
 
 Ohne diesen Schritt funktionieren Einladungs- und Reset-Links nicht sauber.
 
@@ -203,7 +224,22 @@ const { data, error } = await supabase.functions.invoke('invite-account-user', {
 });
 ```
 
-## 9) Smoke-Test mit `curl`
+## 9) Smoke-Tests (empfohlen via Node-Skript)
+
+Boundary/Contract Smoke:
+
+```bash
+node scripts/supabase/smoke-functions.mjs --out docs/supabase/smoke-functions-<date>.json
+```
+
+Staging RBAC/E2E Matrix:
+
+```bash
+E2E_ALLOW_MUTATIONS=true node scripts/supabase/e2e-functions-auth-matrix.mjs \
+  --out docs/supabase/e2e-functions-auth-matrix-<date>.json
+```
+
+Optional: manueller Einzeltest mit `curl`
 
 ```bash
 curl -X POST "https://jgydzxdiwpldgrqkfbfk.functions.supabase.co/invite-account-user" \
@@ -225,5 +261,9 @@ Erwartung:
   `APP_INVITE_REDIRECT_URL` zeigt nicht auf `/auth/accept-invite`.
 - `MISSING_PASSWORD_RESET_REDIRECT_URL`:
   `APP_PASSWORD_RESET_REDIRECT_URL` fehlt.
+- `MISSING_REDIRECT_URL` bei self-profile:
+  `APP_ACCOUNT_SECURITY_REDIRECT_URL` fehlt.
+- `MISSING_SELF_SIGNUP_IP_HASH_SALT`:
+  Secret fuer `public-register-trial-v1` fehlt.
 - Redirect-Link kommt nicht an:
   URL nicht in Auth Redirect-Allowlist eingetragen.

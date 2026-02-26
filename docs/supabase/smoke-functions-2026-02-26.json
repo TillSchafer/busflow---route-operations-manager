@@ -1,0 +1,342 @@
+{
+  "startedAt": "2026-02-26T11:42:08.112Z",
+  "finishedAt": "2026-02-26T11:42:29.385Z",
+  "projectUrl": "https://jgydzxdiwpldgrqkfbfk.supabase.co",
+  "functionCount": 12,
+  "results": [
+    {
+      "function": "invite-account-user",
+      "url": "https://jgydzxdiwpldgrqkfbfk.supabase.co/functions/v1/invite-account-user",
+      "options": {
+        "status": 200,
+        "body": "ok",
+        "pass": true
+      },
+      "postNoAuth": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "postAnonBearer": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "pass": true
+    },
+    {
+      "function": "platform-provision-account",
+      "url": "https://jgydzxdiwpldgrqkfbfk.supabase.co/functions/v1/platform-provision-account",
+      "options": {
+        "status": 200,
+        "body": "ok",
+        "pass": true
+      },
+      "postNoAuth": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "postAnonBearer": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "pass": true
+    },
+    {
+      "function": "platform-send-password-reset",
+      "url": "https://jgydzxdiwpldgrqkfbfk.supabase.co/functions/v1/platform-send-password-reset",
+      "options": {
+        "status": 200,
+        "body": "ok",
+        "pass": true
+      },
+      "postNoAuth": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "postAnonBearer": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "pass": true
+    },
+    {
+      "function": "platform-delete-account",
+      "url": "https://jgydzxdiwpldgrqkfbfk.supabase.co/functions/v1/platform-delete-account",
+      "options": {
+        "status": 200,
+        "body": "ok",
+        "pass": true
+      },
+      "postNoAuth": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "postAnonBearer": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "pass": true
+    },
+    {
+      "function": "admin-delete-user-v3",
+      "url": "https://jgydzxdiwpldgrqkfbfk.supabase.co/functions/v1/admin-delete-user-v3",
+      "options": {
+        "status": 200,
+        "body": "ok",
+        "pass": true
+      },
+      "postNoAuth": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "postAnonBearer": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "pass": true
+    },
+    {
+      "function": "admin-manage-invitation-v1",
+      "url": "https://jgydzxdiwpldgrqkfbfk.supabase.co/functions/v1/admin-manage-invitation-v1",
+      "options": {
+        "status": 200,
+        "body": "ok",
+        "pass": true
+      },
+      "postNoAuth": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "postAnonBearer": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "pass": true
+    },
+    {
+      "function": "admin-update-membership-role-v1",
+      "url": "https://jgydzxdiwpldgrqkfbfk.supabase.co/functions/v1/admin-update-membership-role-v1",
+      "options": {
+        "status": 200,
+        "body": "ok",
+        "pass": true
+      },
+      "postNoAuth": {
+        "status": 401,
+        "body": "{\"code\":401,\"message\":\"Missing authorization header\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "postAnonBearer": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "pass": true
+    },
+    {
+      "function": "admin-update-user-v1",
+      "url": "https://jgydzxdiwpldgrqkfbfk.supabase.co/functions/v1/admin-update-user-v1",
+      "options": {
+        "status": 200,
+        "body": "ok",
+        "pass": true
+      },
+      "postNoAuth": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "postAnonBearer": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "pass": true
+    },
+    {
+      "function": "owner-update-account-v1",
+      "url": "https://jgydzxdiwpldgrqkfbfk.supabase.co/functions/v1/owner-update-account-v1",
+      "options": {
+        "status": 200,
+        "body": "ok",
+        "pass": true
+      },
+      "postNoAuth": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "postAnonBearer": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "pass": true
+    },
+    {
+      "function": "owner-company-overview-v1",
+      "url": "https://jgydzxdiwpldgrqkfbfk.supabase.co/functions/v1/owner-company-overview-v1",
+      "options": {
+        "status": 200,
+        "body": "ok",
+        "pass": true
+      },
+      "postNoAuth": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "postAnonBearer": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "pass": true
+    },
+    {
+      "function": "public-register-trial-v1",
+      "url": "https://jgydzxdiwpldgrqkfbfk.supabase.co/functions/v1/public-register-trial-v1",
+      "options": {
+        "status": 200,
+        "body": "ok",
+        "pass": true
+      },
+      "postNoAuth": {
+        "status": 400,
+        "body": "{\"ok\":false,\"code\":\"INVALID_INPUT\",\"message\":\"Name, Firmenname und eine gültige E-Mail sind erforderlich.\"}",
+        "pass": true,
+        "expected": [
+          400,
+          403
+        ]
+      },
+      "postAnonBearer": {
+        "status": 400,
+        "body": "{\"ok\":false,\"code\":\"INVALID_INPUT\",\"message\":\"Name, Firmenname und eine gültige E-Mail sind erforderlich.\"}",
+        "pass": true,
+        "expected": [
+          400,
+          403
+        ]
+      },
+      "pass": true
+    },
+    {
+      "function": "self-profile-security-v1",
+      "url": "https://jgydzxdiwpldgrqkfbfk.supabase.co/functions/v1/self-profile-security-v1",
+      "options": {
+        "status": 200,
+        "body": "ok",
+        "pass": true
+      },
+      "postNoAuth": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "postAnonBearer": {
+        "status": 401,
+        "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+        "pass": true,
+        "expected": [
+          401
+        ]
+      },
+      "pass": true
+    }
+  ],
+  "additionalChecks": {
+    "publicInvalidEmail": {
+      "status": 400,
+      "body": "{\"ok\":false,\"code\":\"INVALID_INPUT\",\"message\":\"Name, Firmenname und eine gültige E-Mail sind erforderlich.\"}",
+      "expected": [
+        400,
+        403
+      ],
+      "pass": true
+    },
+    "selfUnknownActionWithAnon": {
+      "status": 401,
+      "body": "{\"ok\":false,\"code\":\"UNAUTHORIZED\"}",
+      "expected": [
+        401
+      ],
+      "pass": true
+    }
+  },
+  "allPassed": true
+}

@@ -1,6 +1,6 @@
 # Supabase Manifest (Source of Truth)
 
-Last verified: `2026-02-24 18:00:00 UTC`
+Last verified: `2026-02-26 11:39:07 UTC`
 Project ref: `jgydzxdiwpldgrqkfbfk`
 
 ## Policy
@@ -23,6 +23,8 @@ Project ref: `jgydzxdiwpldgrqkfbfk`
 - `supabase/functions/owner-update-account-v1/index.ts`
 - `supabase/functions/owner-company-overview-v1/index.ts`
 - `supabase/functions/platform-delete-account/index.ts`
+- `supabase/functions/public-register-trial-v1/index.ts`
+- `supabase/functions/self-profile-security-v1/index.ts`
 - `supabase/migrations/*.sql` (canonical, CLI-driven)
 - `docs/migrations/*.sql` (legacy archive)
 
@@ -32,11 +34,13 @@ Project ref: `jgydzxdiwpldgrqkfbfk`
 - `platform-send-password-reset` (ACTIVE, `verify_jwt=false`, temporary fallback)
 - `admin-delete-user-v3` (target canonical delete endpoint, `verify_jwt=false`, temporary fallback)
 - `admin-manage-invitation-v1` (ACTIVE, `verify_jwt=false`)
-- `admin-update-membership-role-v1` (ACTIVE; currently `verify_jwt=true` in remote metadata)
+- `admin-update-membership-role-v1` (ACTIVE; currently `verify_jwt=true` in remote metadata, local config expects `false`)
 - `admin-update-user-v1` (ACTIVE, `verify_jwt=false`, legacy candidate)
 - `owner-update-account-v1` (ACTIVE, `verify_jwt=false`)
 - `owner-company-overview-v1` (ACTIVE, `verify_jwt=false`)
 - `platform-delete-account` (ACTIVE, `verify_jwt=false`, temporary fallback)
+- `public-register-trial-v1` (ACTIVE, `verify_jwt=false`)
+- `self-profile-security-v1` (ACTIVE, `verify_jwt=false`)
 
 ## Required Secrets (verified present in project)
 - `SUPABASE_URL`
@@ -44,18 +48,26 @@ Project ref: `jgydzxdiwpldgrqkfbfk`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `APP_INVITE_REDIRECT_URL`
 - `APP_PASSWORD_RESET_REDIRECT_URL`
+- `APP_ACCOUNT_SECURITY_REDIRECT_URL`
+- `PLATFORM_OWNER_EMAIL`
+- `SELF_SIGNUP_IP_HASH_SALT`
 
-## Cleanup Actions (2026-02-24)
-- Removed from remote project:
-  - `admin-delete-user`
-  - `admin-delete-user-v2`
-  - `smart-function`
-- Kept intentionally for phase 2 review:
-  - `admin-update-user-v1`
-  - `platform-send-password-reset`
+## Optional Secrets / Reserved
+- `SELF_SIGNUP_ENABLED` (optional feature flag; currently not set remotely, defaults to enabled in code)
+- `SUPABASE_DB_URL` (currently present remotely but not referenced in deployed function code)
+
+## Runtime Usage Snapshot (frontend)
+- Active callers: `invite-account-user`, `admin-update-membership-role-v1`, `admin-manage-invitation-v1`, `admin-delete-user-v3`, `owner-company-overview-v1`, `owner-update-account-v1`, `platform-provision-account`, `platform-delete-account`, `public-register-trial-v1`, `self-profile-security-v1`.
+- Decommission candidates (no active runtime caller): `admin-update-user-v1`, `platform-send-password-reset`.
 
 ## Runtime Guardrails
 - Temporary incident mitigation: selected admin functions run with `verify_jwt=false` while enforcing strict bearer token validation and role checks in function code.
 - Re-enable `verify_jwt=true` function-by-function after Supabase support confirms gateway behavior is fixed.
 - Do not use direct client deletes on `profiles` / `platform_accounts`.
 - Use edge functions for privileged mutations with audit logging.
+
+## Audit Artifacts
+- `docs/supabase/supabase-function-secret-audit-2026-02-26.md`
+- `docs/supabase/smoke-functions-2026-02-26.json`
+- `scripts/supabase/smoke-functions.mjs`
+- `scripts/supabase/e2e-functions-auth-matrix.mjs`

@@ -5,8 +5,9 @@ import ConfirmDialog from '../shared/components/ConfirmDialog';
 import { useToast } from '../shared/components/ToastProvider';
 import { TeamAdminApi } from '../shared/api/admin/teamAdmin.api';
 import { InvitationItem, InvitationRole, MembershipItem, MembershipRole } from '../shared/api/admin/types';
-import { isFunctionAuthError } from '../shared/lib/supabaseFunctions';
 import AppSelect, { AppSelectOption } from '../shared/components/form/AppSelect';
+import { formatDateTime, isLastActiveAdmin } from '../features/admin/shared/lib/admin-ui';
+import { getActionErrorCode, toActionErrorMessage } from '../shared/lib/error-mapping';
 
 interface Props {
   currentUserId?: string;
@@ -21,27 +22,6 @@ interface Props {
     onLogout: () => void;
   };
 }
-
-const formatDateTime = (value?: string) => {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('de-DE');
-};
-
-const toActionErrorMessage = (error: unknown, fallback: string) => {
-  if (isFunctionAuthError(error)) {
-    return 'Sitzung ungültig/abgelaufen. Bitte neu anmelden.';
-  }
-  return error instanceof Error ? error.message : fallback;
-};
-
-const getActionErrorCode = (error: unknown) => {
-  if (!error || typeof error !== 'object') return null;
-  if (!('code' in error)) return null;
-  const code = (error as { code?: unknown }).code;
-  return typeof code === 'string' && code ? code : null;
-};
 
 const isInvitationExpired = (value?: string) => {
   if (!value) return false;
@@ -474,7 +454,7 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
                   {memberships.map(item => {
                     const profile = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
                     const isCurrentUser = item.user_id === currentUserId;
-                    const isLastActiveAdmin = item.status === 'ACTIVE' && item.role === 'ADMIN' && activeAdmins.length <= 1;
+                    const isLastAccountAdmin = isLastActiveAdmin(item, activeAdmins.length);
 
                     return (
                       <div key={item.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 border border-slate-200 rounded-lg p-3 items-center">
@@ -499,7 +479,7 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
                         <div className="flex justify-end">
                           <button
                             onClick={() => setMembershipToDelete(item)}
-                            disabled={isCurrentUser || isLastActiveAdmin || item.status !== 'ACTIVE' || !accountIsWritable}
+                            disabled={isCurrentUser || isLastAccountAdmin || item.status !== 'ACTIVE' || !accountIsWritable}
                             className="px-3 py-2 rounded-md text-sm font-semibold text-red-600 hover:bg-red-50 disabled:text-slate-300 disabled:hover:bg-transparent"
                           >
                             User löschen

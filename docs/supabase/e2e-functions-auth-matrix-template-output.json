@@ -1,0 +1,91 @@
+{
+  "startedAt": "2026-02-26T11:42:08.113Z",
+  "supabaseUrl": "https://jgydzxdiwpldgrqkfbfk.supabase.co",
+  "allowMutations": false,
+  "results": [
+    {
+      "id": "owner-overview-owner",
+      "role": "owner",
+      "functionName": "owner-company-overview-v1",
+      "payload": {},
+      "expectedStatuses": [
+        200
+      ],
+      "requiresMutation": false,
+      "skipped": true,
+      "reason": "Missing credentials for role: owner"
+    },
+    {
+      "id": "owner-overview-viewer-forbidden",
+      "role": "viewer",
+      "functionName": "owner-company-overview-v1",
+      "payload": {},
+      "expectedStatuses": [
+        401,
+        403
+      ],
+      "requiresMutation": false,
+      "skipped": true,
+      "reason": "Missing credentials for role: viewer"
+    },
+    {
+      "id": "team-role-change-admin",
+      "role": "account_admin",
+      "functionName": "admin-update-membership-role-v1",
+      "payloadEnv": "E2E_PAYLOAD_ADMIN_UPDATE_MEMBERSHIP_ROLE",
+      "expectedStatuses": [
+        200
+      ],
+      "requiresMutation": true,
+      "skipped": true,
+      "reason": "Missing credentials for role: account_admin"
+    },
+    {
+      "id": "team-role-change-viewer-forbidden",
+      "role": "viewer",
+      "functionName": "admin-update-membership-role-v1",
+      "payloadEnv": "E2E_PAYLOAD_ADMIN_UPDATE_MEMBERSHIP_ROLE",
+      "expectedStatuses": [
+        401,
+        403
+      ],
+      "requiresMutation": true,
+      "skipped": true,
+      "reason": "Missing credentials for role: viewer"
+    },
+    {
+      "id": "self-profile-email-change",
+      "role": "dispatch",
+      "functionName": "self-profile-security-v1",
+      "payload": {
+        "action": "REQUEST_EMAIL_CHANGE",
+        "newEmail": "replace-me@example.invalid"
+      },
+      "expectedStatuses": [
+        200,
+        400,
+        409
+      ],
+      "requiresMutation": true,
+      "notes": "Use disposable inbox in staging and override payload via E2E_PAYLOAD_SELF_PROFILE_EMAIL_CHANGE.",
+      "skipped": true,
+      "reason": "Missing credentials for role: dispatch"
+    },
+    {
+      "id": "self-profile-password-reset",
+      "role": "dispatch",
+      "functionName": "self-profile-security-v1",
+      "payload": {
+        "action": "REQUEST_PASSWORD_RESET"
+      },
+      "expectedStatuses": [
+        200
+      ],
+      "requiresMutation": true,
+      "skipped": true,
+      "reason": "Missing credentials for role: dispatch"
+    }
+  ],
+  "passed": true,
+  "skippedCount": 6
+}

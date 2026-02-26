@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.public-register-trial-v1]
 verify_jwt = false
+
+[functions.self-profile-security-v1]
+verify_jwt = false

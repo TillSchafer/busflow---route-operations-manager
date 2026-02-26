@@ -1,27 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import type { EmailOtpType } from '@supabase/supabase-js';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../shared/lib/supabase';
 import AuthScreenShell from '../shared/components/auth/AuthScreenShell';
+import {
+  clearAuthParamsFromUrl,
+  getUrlAuthErrorMessage,
+  hydrateSessionFromAuthPayload,
+  readAuthUrlPayload,
+} from '../features/auth/lib/auth-callback';
 
 type ViewState = 'loading' | 'needs_password' | 'saving' | 'success' | 'error';
-
-type AuthUrlPayload = {
-  type: string | null;
-  code: string | null;
-  tokenHash: string | null;
-  token: string | null;
-  accessToken: string | null;
-  refreshToken: string | null;
-  urlError: string | null;
-  urlErrorCode: string | null;
-  urlErrorDescription: string | null;
-};
-
-const isAllowedOtpType = (value: string | null): value is EmailOtpType => {
-  if (!value) return false;
-  return ['invite', 'magiclink', 'signup', 'recovery', 'email_change', 'email'].includes(value);
-};
 
 const mapClaimError = (code?: string): string => {
   switch (code) {
@@ -40,40 +28,6 @@ const mapClaimError = (code?: string): string => {
 
 const isSignupVerificationType = (value: string | null) =>
   value === 'signup' || value === 'email' || value === 'magiclink';
-
-const readAuthUrlPayload = (): AuthUrlPayload => {
-  const query = new URLSearchParams(window.location.search);
-  const hashRaw = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
-  const hash = new URLSearchParams(hashRaw);
-
-  const getParam = (key: string) => query.get(key) ?? hash.get(key);
-
-  return {
-    type: getParam('type'),
-    code: getParam('code'),
-    tokenHash: getParam('token_hash'),
-    token: getParam('token'),
-    accessToken: getParam('access_token'),
-    refreshToken: getParam('refresh_token'),
-    urlError: getParam('error'),
-    urlErrorCode: getParam('error_code'),
-    urlErrorDescription: getParam('error_description'),
-  };
-};
-
-const clearAuthParamsFromUrl = () => {
-  if (!window.location.search && !window.location.hash) return;
-  window.history.replaceState({}, document.title, window.location.pathname);
-};
-
-const getUrlAuthErrorMessage = (payload: AuthUrlPayload): string | null => {
-  const parts = [payload.urlErrorDescription, payload.urlError, payload.urlErrorCode]
-    .map(value => value?.trim())
-    .filter((value): value is string => Boolean(value));
-
-  if (!parts.length) return null;
-  return parts.join(' | ');
-};
 
 const hasActiveMembership = async (userId: string): Promise<boolean> => {
   const { count, error } = await supabase
@@ -214,41 +168,10 @@ const AcceptInvite: React.FC = () => {
         return;
       }
 
-      if (!session && authPayload.code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(authPayload.code);
-        if (error) latestAuthError = error.message;
-
-        const { data } = await supabase.auth.getSession();
-        session = data.session;
-      }
-
-      if (!session && (authPayload.tokenHash || authPayload.token) && isAllowedOtpType(authPayload.type)) {
-        const inviteTokenHash = authPayload.tokenHash || authPayload.token;
-        const { error } = await supabase.auth.verifyOtp({
-          token_hash: inviteTokenHash as string,
-          type: authPayload.type,
-        });
-
-        if (error && !latestAuthError) {
-          latestAuthError = error.message;
-        }
-
-        const { data } = await supabase.auth.getSession();
-        session = data.session;
-      }
-
-      if (!session && authPayload.accessToken && authPayload.refreshToken) {
-        const { error } = await supabase.auth.setSession({
-          access_token: authPayload.accessToken,
-          refresh_token: authPayload.refreshToken,
-        });
-
-        if (error && !latestAuthError) {
-          latestAuthError = error.message;
-        }
-
-        const { data } = await supabase.auth.getSession();
-        session = data.session;
+      if (!session) {
+        const hydrated = await hydrateSessionFromAuthPayload(supabase, authPayload);
+        session = hydrated.session;
+        latestAuthError = hydrated.latestAuthError;
       }
 
       if (!session) {

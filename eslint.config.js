@@ -10,6 +10,20 @@ export default [
   },
   js.configs.recommended,
   {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: {
+        ...globals.node,
+        fetch: 'readonly'
+      }
+    },
+    rules: {
+      'no-undef': 'off'
+    }
+  },
+  {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
       parser: tsParser,

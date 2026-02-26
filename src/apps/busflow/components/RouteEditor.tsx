@@ -1,9 +1,9 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Route, Stop, BusType, Worker, Customer, CustomerContact, MapDefaultView } from '../types';
+import { Route, Stop, BusType, Worker, Customer, MapDefaultView } from '../types';
 import { Save, Plus, Trash2, AlertCircle, ChevronDown } from 'lucide-react';
 import RouteMap from './RouteMap';
-import { BusFlowApi } from '../api';
+import CustomerContactSelector from './route-editor/CustomerContactSelector';
 
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import AppSelect, { AppSelectOption } from '../../../shared/components/form/AppSelect';
@@ -40,18 +40,14 @@ const routeStatusOptions: Array<AppSelectOption<Route['status']>> = [
 
 const dropdownTriggerButtonClass = `${DROPDOWN_TRIGGER} text-left flex items-center justify-between`;
 const dropdownMenuClass = `${DROPDOWN_MENU} overflow-hidden`;
-const dropdownMenuScrollableClass = `${DROPDOWN_MENU} overflow-hidden max-h-60`;
 
 const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, workers, customers, mapDefaultView }) => {
   const [formData, setFormData] = useState<Route>({ ...route });
   const [errors, setErrors] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<Record<string, Array<{ label: string; lat: number; lon: number }>>>({});
   const [activeStopId, setActiveStopId] = useState<string | null>(null);
-  const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
-  const [isCustomerContactDropdownOpen, setIsCustomerContactDropdownOpen] = useState(false);
   const [isBusTypeDropdownOpen, setIsBusTypeDropdownOpen] = useState(false);
   const [isWorkerDropdownOpen, setIsWorkerDropdownOpen] = useState(false);
-  const [customerContacts, setCustomerContacts] = useState<CustomerContact[]>([]);
   const searchTimeouts = useRef<Record<string, number>>({});
   const searchControllers = useRef<Record<string, AbortController>>({});
 
@@ -88,36 +84,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
     [busTypes, formData.busTypeId]
   );
 
-  const filteredCustomers = useMemo(() => {
-    const q = (formData.customerName || '').trim().toLowerCase();
-    if (!q) return customers.slice(0, 8);
-    return customers
-      .filter(customer => customer.name.toLowerCase().includes(q))
-      .slice(0, 8);
-  }, [customers, formData.customerName]);
   const customerRequiredForStatus = formData.status !== 'Entwurf';
-  const hasUnlinkedCustomerText =
-    customerRequiredForStatus && Boolean((formData.customerName || '').trim()) && formData.customerId === '';
-
-  useEffect(() => {
-    let isMounted = true;
-    const loadContacts = async () => {
-      if (!formData.customerId) {
-        setCustomerContacts([]);
-        return;
-      }
-      try {
-        const contacts = await BusFlowApi.getCustomerContacts(formData.customerId);
-        if (isMounted) setCustomerContacts(contacts);
-      } catch {
-        if (isMounted) setCustomerContacts([]);
-      }
-    };
-    loadContacts();
-    return () => {
-      isMounted = false;
-    };
-  }, [formData.customerId]);
 
   const selectedBusType = useMemo(
     () => busTypes.find(busType => busType.id === formData.busTypeId),
@@ -307,112 +274,20 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                 placeholder="Neue Route"
               />
             </div>
-            <div className="col-span-1 md:col-span-2">
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Kunde / Auftraggeber</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={formData.customerName || ''}
-                  onChange={e => {
-                    setFormData({
-                      ...formData,
-                      customerName: e.target.value,
-                      customerId: '',
-                      customerContactId: undefined,
-                      customerContactName: undefined
-                    });
-                    setIsCustomerDropdownOpen(true);
-                  }}
-                  onFocus={() => setIsCustomerDropdownOpen(true)}
-                  onBlur={() => window.setTimeout(() => setIsCustomerDropdownOpen(false), 150)}
-                  className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
-                  placeholder="z. B. Stadtwerke GmbH"
-                />
-                {isCustomerDropdownOpen && filteredCustomers.length > 0 && (
-                  <div className={dropdownMenuClass}>
-                    {filteredCustomers.map(customer => (
-                      <button
-                        key={customer.id}
-                        type="button"
-                        onMouseDown={e => e.preventDefault()}
-                        onClick={() => {
-                          setFormData({
-                            ...formData,
-                            customerName: customer.name,
-                            customerId: customer.id,
-                            customerContactId: undefined,
-                            customerContactName: undefined
-                          });
-                          setIsCustomerDropdownOpen(false);
-                        }}
-                        className={DROPDOWN_ITEM}
-                      >
-                        {customer.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {hasUnlinkedCustomerText && (
-                <p className="text-xs text-amber-600 mt-1">Für Geplant/Aktiv/Archiviert muss ein Kunde aus der Liste gewählt werden.</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Kontaktperson (optional)</label>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsCustomerContactDropdownOpen(prev => !prev)}
-                  onBlur={() => window.setTimeout(() => setIsCustomerContactDropdownOpen(false), 150)}
-                  disabled={!formData.customerId}
-                  className={dropdownTriggerButtonClass}
-                >
-                  <span className={formData.customerContactId ? 'text-slate-800' : 'text-slate-400'}>
-                    {formData.customerContactName || 'Kontakt auswählen'}
-                  </span>
-                  <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isCustomerContactDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {isCustomerContactDropdownOpen && formData.customerId && (
-                  <div className={dropdownMenuScrollableClass}>
-                    <button
-                      type="button"
-                      onMouseDown={e => e.preventDefault()}
-                      onClick={() => {
-                        setFormData({ ...formData, customerContactId: undefined, customerContactName: undefined });
-                        setIsCustomerContactDropdownOpen(false);
-                      }}
-                      className={`${DROPDOWN_ITEM} text-slate-600`}
-                    >
-                      Kein Kontakt
-                    </button>
-                    {customerContacts.map(contact => (
-                      <button
-                        key={contact.id}
-                        type="button"
-                        onMouseDown={e => e.preventDefault()}
-                        onClick={() => {
-                          setFormData({
-                            ...formData,
-                            customerContactId: contact.id,
-                            customerContactName: contact.fullName || contact.email || contact.phone || 'Kontakt'
-                          });
-                          setIsCustomerContactDropdownOpen(false);
-                        }}
-                        className={DROPDOWN_ITEM}
-                      >
-                        {contact.fullName || 'Kontakt'}
-                        {(contact.email || contact.phone) && (
-                          <span className="text-slate-500"> ({contact.email || contact.phone})</span>
-                        )}
-                      </button>
-                    ))}
-                    {customerContacts.length === 0 && (
-                      <div className={`${DROPDOWN_ITEM} text-slate-500 cursor-default`}>Keine Kontakte vorhanden</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+            <CustomerContactSelector
+              customerName={formData.customerName || ''}
+              customerId={formData.customerId || ''}
+              customerContactId={formData.customerContactId}
+              customerContactName={formData.customerContactName}
+              customers={customers}
+              customerRequiredForStatus={customerRequiredForStatus}
+              onChange={patch =>
+                setFormData(prev => ({
+                  ...prev,
+                  ...patch,
+                }))
+              }
+            />
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Datum</label>
               <input
