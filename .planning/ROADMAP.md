@@ -31,9 +31,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: Implement `LoadingProvider` and token/ref-count lifecycle contract.
-- [ ] 01-02: Implement shared `FullPageLoadingScreen` with delay-reveal logic.
-- [ ] 01-03: Integrate provider into app root and replace base fallback wiring.
+- [ ] 01-01-PLAN.md — Build loading lifecycle engine + provider contract with cleanup/concurrency tests.
+- [ ] 01-02-PLAN.md — Build canonical full-page loading screen and spinner adapter behavior.
+- [ ] 01-03-PLAN.md — Integrate loading foundation into app root and replace baseline fallback wiring.
 
 ### Phase 2: Messaging + Route/Auth Integration
 **Goal**: Standardize loading copy and ensure route/auth transitions use unified loading behavior.
