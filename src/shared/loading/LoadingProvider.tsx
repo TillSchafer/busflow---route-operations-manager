@@ -37,6 +37,17 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children, opti
     () => engine.getSnapshot()
   );
 
+  const actions = useMemo(
+    () => ({
+      start: (startOptions?: LoadingStartOptions) => engine.start(startOptions),
+      update: (token: LoadingToken, patch: LoadingUpdatePatch) => engine.update(token, patch),
+      stop: (token: LoadingToken) => engine.stop(token),
+      runWithLoading: <T,>(operation: () => Promise<T> | T, runOptions?: LoadingStartOptions) =>
+        engine.runWithLoading(operation, runOptions)
+    }),
+    [engine]
+  );
+
   const value = useMemo<LoadingContextValue>(() => {
     const nowMs = Date.now();
     const isShortVisible =
@@ -53,12 +64,9 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children, opti
       shortVariantThresholdMs: snapshot.shortVariantThresholdMs,
       visibleSinceMs: snapshot.visibleSinceMs,
       display: snapshot.display,
-      start: startOptions => engine.start(startOptions),
-      update: (token, patch) => engine.update(token, patch),
-      stop: token => engine.stop(token),
-      runWithLoading: (operation, runOptions) => engine.runWithLoading(operation, runOptions)
+      ...actions
     };
-  }, [engine, snapshot]);
+  }, [actions, snapshot]);
 
   return <LoadingContext.Provider value={value}>{children}</LoadingContext.Provider>;
 };
