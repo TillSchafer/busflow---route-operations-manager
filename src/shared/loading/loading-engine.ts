@@ -42,6 +42,7 @@ export class LoadingEngine {
   private shouldReveal = false;
   private visibleSinceMs: number | null = null;
   private lastSettledAtMs: number | null = null;
+  private snapshot: LoadingEngineSnapshot;
 
   constructor(options: LoadingEngineOptions = {}) {
     this.revealDelayMs = options.revealDelayMs ?? DEFAULT_REVEAL_DELAY_MS;
@@ -49,6 +50,7 @@ export class LoadingEngine {
     this.shortVariantThresholdMs = options.shortVariantThresholdMs ?? DEFAULT_SHORT_VARIANT_THRESHOLD_MS;
     this.defaultMessage = options.defaultMessage ?? DEFAULT_MESSAGE;
     this.now = options.now ?? (() => Date.now());
+    this.snapshot = this.buildSnapshot();
   }
 
   subscribe(listener: () => void): () => void {
@@ -59,6 +61,10 @@ export class LoadingEngine {
   }
 
   getSnapshot(): LoadingEngineSnapshot {
+    return this.snapshot;
+  }
+
+  private buildSnapshot(): LoadingEngineSnapshot {
     const display = this.getDisplayState();
     return {
       activeCount: this.operations.size,
@@ -188,6 +194,7 @@ export class LoadingEngine {
   }
 
   private emit(): void {
+    this.snapshot = this.buildSnapshot();
     for (const listener of this.listeners) {
       listener();
     }
