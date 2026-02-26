@@ -1,5 +1,5 @@
 import React from 'react';
-import { Loader2 } from 'lucide-react';
+import LoadingSpinner from './LoadingSpinner';
 import { useLoading } from './LoadingProvider';
 import { LOADING_FALLBACK_MESSAGE, loadingCardClassName, toProgressPercent } from './loading-ui';
 
@@ -27,7 +27,7 @@ const FullPageLoadingScreen: React.FC = () => {
       <div className={loadingCardClassName(isShortVisible)} data-short-variant={isShortVisible ? 'true' : 'false'}>
         <div className="flex items-center gap-3">
           <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900/5">
-            <Loader2 className="h-6 w-6 animate-spin text-slate-700" />
+            <LoadingSpinner className="h-6 w-6 text-slate-700" />
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold tracking-tight text-slate-800">{message}</p>
