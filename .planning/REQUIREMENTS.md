@@ -11,12 +11,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **LOAD-01**: Platform uses one shared full-page loading screen component as the canonical loading UI.
 - [x] **LOAD-02**: Loading screen appears only after a short delay threshold to avoid flicker on fast actions.
-- [ ] **LOAD-03**: Loading system supports action-specific messages and uses `Lade...` as fallback text.
+- [x] **LOAD-03**: Loading system supports action-specific messages and uses `Lade...` as fallback text.
 - [x] **LOAD-04**: Loading lifecycle is managed through a centralized start/stop contract that guarantees cleanup on success, error, and cancellation.
 
 ### Flow Coverage
 
-- [ ] **FLOW-01**: Route-based/lazy view transitions show the shared loading screen consistently.
+- [x] **FLOW-01**: Route-based/lazy view transitions show the shared loading screen consistently.
 - [ ] **FLOW-02**: Initial auth/session/account hydration shows the shared loading screen consistently.
 - [ ] **FLOW-03**: Critical mutation actions (save, delete, invite, import, profile security actions) trigger the shared loading screen consistently.
 - [ ] **FLOW-04**: Concurrent async actions are handled correctly so loading visibility remains accurate until all active operations are complete.
@@ -60,9 +60,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | LOAD-01 | Phase 1 | Complete |
 | LOAD-02 | Phase 1 | Complete |
-| LOAD-03 | Phase 2 | Pending |
+| LOAD-03 | Phase 2 | Complete |
 | LOAD-04 | Phase 1 | Complete |
-| FLOW-01 | Phase 2 | Pending |
+| FLOW-01 | Phase 2 | Complete |
 | FLOW-02 | Phase 2 | Pending |
 | FLOW-03 | Phase 3 | Pending |
 | FLOW-04 | Phase 3 | Pending |
