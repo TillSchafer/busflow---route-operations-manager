@@ -1,7 +1,7 @@
 import React from 'react';
 import styled from 'styled-components';
 
-interface Loader15Props extends React.HTMLAttributes<HTMLDivElement> {}
+type Loader15Props = React.HTMLAttributes<HTMLDivElement>;
 
 const Loader15: React.FC<Loader15Props> = ({ className, ...props }) => {
   return (

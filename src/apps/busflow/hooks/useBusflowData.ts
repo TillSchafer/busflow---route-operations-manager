@@ -1,6 +1,7 @@
 import { useState, useEffect, Dispatch, SetStateAction } from 'react';
 import { BusType, Customer, MapDefaultView, Route, Worker } from '../types';
 import { BusFlowApi } from '../api';
+import { useLoading } from '../../../shared/loading';
 
 const DEFAULT_MAP_VIEW: MapDefaultView = { address: 'Deutschland', lat: 51.1657, lon: 10.4515, zoom: 6 };
 
@@ -21,6 +22,7 @@ export interface BusflowData {
 }
 
 export function useBusflowData(activeAccountId: string | null): BusflowData {
+  const { runWithLoading } = useLoading();
   const [routes, setRoutes] = useState<Route[]>([]);
   const [busTypes, setBusTypes] = useState<BusType[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
@@ -45,18 +47,20 @@ export function useBusflowData(activeAccountId: string | null): BusflowData {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [fetchedRoutes, fetchedBusTypes, fetchedWorkers, fetchedCustomers] = await Promise.all([
-          BusFlowApi.getRoutes(),
-          BusFlowApi.getBusTypes(),
-          BusFlowApi.getWorkers(),
-          BusFlowApi.getCustomersForSuggestions(),
-        ]);
-        const fetchedMapDefault = await BusFlowApi.getMapDefaultView();
-        setRoutes(fetchedRoutes);
-        setBusTypes(fetchedBusTypes);
-        setWorkers(fetchedWorkers);
-        setCustomers(fetchedCustomers);
-        if (fetchedMapDefault) setMapDefaultView(fetchedMapDefault);
+        await runWithLoading(async () => {
+          const [fetchedRoutes, fetchedBusTypes, fetchedWorkers, fetchedCustomers] = await Promise.all([
+            BusFlowApi.getRoutes(),
+            BusFlowApi.getBusTypes(),
+            BusFlowApi.getWorkers(),
+            BusFlowApi.getCustomersForSuggestions(),
+          ]);
+          const fetchedMapDefault = await BusFlowApi.getMapDefaultView();
+          setRoutes(fetchedRoutes);
+          setBusTypes(fetchedBusTypes);
+          setWorkers(fetchedWorkers);
+          setCustomers(fetchedCustomers);
+          if (fetchedMapDefault) setMapDefaultView(fetchedMapDefault);
+        }, { scope: 'route' });
       } catch (error) {
         console.error('Fehler beim Laden der Daten:', error);
       } finally {
@@ -65,7 +69,7 @@ export function useBusflowData(activeAccountId: string | null): BusflowData {
     };
 
     loadData();
-  }, [activeAccountId]);
+  }, [activeAccountId, runWithLoading]);
 
   const refreshRoutes = async () => {
     const fetched = await BusFlowApi.getRoutes();
