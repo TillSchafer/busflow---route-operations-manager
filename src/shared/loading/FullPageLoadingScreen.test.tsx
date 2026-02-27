@@ -41,6 +41,8 @@ describe('FullPageLoadingScreen', () => {
 
     expect(screen.getByTestId('full-page-loading-screen')).toBeInTheDocument();
     expect(screen.getByText('Lade...')).toBeInTheDocument();
+    expect(screen.queryByText('Bitte einen Moment...')).not.toBeInTheDocument();
+    expect(screen.getByTestId('loading-spinner-loader15')).toBeInTheDocument();
   });
 
   it('shows determinate percentage only when progress data exists', () => {
@@ -69,12 +71,12 @@ describe('FullPageLoadingScreen', () => {
     });
   });
 
-  it('renders blocking overlay with faint backdrop and short-variant state', () => {
+  it('renders blocking overlay with transparent backdrop variant for non-route scopes', () => {
     const loadingRef = renderScreen();
 
     let token = '';
     act(() => {
-      token = loadingRef.current!.start({ message: 'Initial load' });
+      token = loadingRef.current!.start({ message: 'Initial load', scope: 'action' });
       vi.advanceTimersByTime(150);
     });
 
@@ -82,8 +84,8 @@ describe('FullPageLoadingScreen', () => {
     expect(overlay).toHaveClass('pointer-events-auto');
     expect(overlay).toHaveAttribute('aria-busy', 'true');
 
-    const backdrop = overlay.querySelector('.bg-slate-900\\/18');
-    expect(backdrop).not.toBeNull();
+    const backdrop = screen.getByTestId('loading-backdrop');
+    expect(backdrop).toHaveAttribute('data-backdrop-variant', 'transparent');
 
     const card = overlay.querySelector('[data-short-variant]');
     expect(card).toHaveAttribute('data-short-variant', 'true');
@@ -94,5 +96,16 @@ describe('FullPageLoadingScreen', () => {
     });
 
     expect(card).toHaveAttribute('data-short-variant', 'false');
+  });
+
+  it('uses white backdrop variant for route scope', () => {
+    const loadingRef = renderScreen();
+
+    act(() => {
+      loadingRef.current!.start({ scope: 'route', message: 'Route change' });
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(screen.getByTestId('loading-backdrop')).toHaveAttribute('data-backdrop-variant', 'white');
   });
 });
