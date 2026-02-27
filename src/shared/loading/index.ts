@@ -21,5 +21,7 @@ export {
   SHORT_VARIANT_THRESHOLD_MS,
   isDeterminateProgress,
   toProgressPercent,
-  loadingCardClassName
+  resolveBackdropVariant,
+  loadingBackdropClassName,
+  loadingContentClassName
 } from './loading-ui';
