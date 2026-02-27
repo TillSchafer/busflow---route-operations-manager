@@ -10,11 +10,7 @@ const hasCustomLoader = typeof Loader15 === 'function';
 
 const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ className }) => {
   if (hasCustomLoader) {
-    return (
-      <span className={className} data-testid="loading-spinner-loader15">
-        <Loader15 />
-      </span>
-    );
+    return <Loader15 className={className} data-testid="loading-spinner-loader15" />;
   }
 
   return <Loader2 className={className} data-testid="loading-spinner-fallback" />;
