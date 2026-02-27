@@ -12,7 +12,7 @@ This roadmap upgrades BusFlow’s loading behavior from inconsistent, page-local
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [x] **Phase 1: Loading Core Foundation** - Build shared loading engine, lifecycle contract, and delayed reveal behavior. (completed 2026-02-26)
+- [x] **Phase 1: Loading Core Foundation** - Build shared loading engine, lifecycle contract, and delayed reveal behavior. (completed 2026-02-27)
 - [ ] **Phase 2: Messaging + Route/Auth Integration** - Integrate route/auth loading and scoped message system with fallback behavior.
 - [ ] **Phase 3: Platform Action Coverage Rollout** - Wire all async action flows to the unified loading orchestration.
 - [ ] **Phase 4: Accessibility + Consistency Cleanup** - Complete accessibility semantics and remove all legacy divergent loading variants.
@@ -23,17 +23,19 @@ Decimal phases appear between their surrounding integers in numeric order.
 ### Phase 1: Loading Core Foundation
 **Goal**: Introduce one global loading infrastructure that can safely coordinate async operations.
 **Depends on**: Nothing (first phase)
-**Requirements**: [LOAD-01, LOAD-02, LOAD-04]
+**Requirements**: [LOAD-01, LOAD-02, LOAD-03, LOAD-04, FLOW-01, FLOW-02, QUAL-01]
 **Success Criteria** (what must be TRUE):
   1. Platform renders one canonical full-page loading component from shared infrastructure.
   2. Loading overlay appears only after configured short delay for pending actions.
   3. Every loading start has guaranteed stop/cleanup behavior, including error paths.
-**Plans**: 3 plans
+**Plans**: 5 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Build loading lifecycle engine + provider contract with cleanup/concurrency tests.
-- [ ] 01-02-PLAN.md — Build canonical full-page loading screen and spinner adapter behavior.
-- [ ] 01-03-PLAN.md — Integrate loading foundation into app root and replace baseline fallback wiring.
+- [x] 01-01-PLAN.md — Build loading lifecycle engine + provider contract with cleanup/concurrency tests.
+- [x] 01-02-PLAN.md — Build canonical full-page loading screen and spinner adapter behavior.
+- [x] 01-03-PLAN.md — Integrate loading foundation into app root and replace baseline fallback wiring.
+- [x] 01-04-PLAN.md — Align canonical loading visual contract (spinner/style/background variants) with UAT findings.
+- [x] 01-05-PLAN.md — Remove BusFlow legacy loader path and route startup loading into shared lifecycle manager.
 
 ### Phase 2: Messaging + Route/Auth Integration
 **Goal**: Standardize loading copy and ensure route/auth transitions use unified loading behavior.
@@ -100,7 +102,7 @@ Phases execute in numeric order: 2 → 2.1 → 2.2 → 3 → 3.1 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Loading Core Foundation | 3/3 | Complete    | 2026-02-26 |
+| 1. Loading Core Foundation | 5/5 | Complete    | 2026-02-27 |
 | 2. Messaging + Route/Auth Integration | 0/3 | Not started | - |
 | 3. Platform Action Coverage Rollout | 0/3 | Not started | - |
 | 4. Accessibility + Consistency Cleanup | 0/2 | Not started | - |

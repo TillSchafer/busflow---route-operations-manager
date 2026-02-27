@@ -17,7 +17,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Flow Coverage
 
 - [x] **FLOW-01**: Route-based/lazy view transitions show the shared loading screen consistently.
-- [ ] **FLOW-02**: Initial auth/session/account hydration shows the shared loading screen consistently.
+- [x] **FLOW-02**: Initial auth/session/account hydration shows the shared loading screen consistently.
 - [ ] **FLOW-03**: Critical mutation actions (save, delete, invite, import, profile security actions) trigger the shared loading screen consistently.
 - [ ] **FLOW-04**: Concurrent async actions are handled correctly so loading visibility remains accurate until all active operations are complete.
 
@@ -28,7 +28,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Quality & Consistency
 
-- [ ] **QUAL-01**: Legacy divergent loading variants/texts (e.g., `Lade Ansicht`, `Lade BusFlow`) are removed or fully mapped into the unified system.
+- [x] **QUAL-01**: Legacy divergent loading variants/texts (e.g., `Lade Ansicht`, `Lade BusFlow`) are removed or fully mapped into the unified system.
 - [ ] **QUAL-02**: Loading orchestration logic has automated tests for delay behavior and cleanup behavior.
 - [ ] **QUAL-03**: A documented async flow inventory confirms no loading-prone user flow is left uncovered.
 
@@ -63,12 +63,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LOAD-03 | Phase 2 | Complete |
 | LOAD-04 | Phase 1 | Complete |
 | FLOW-01 | Phase 2 | Complete |
-| FLOW-02 | Phase 2 | Pending |
+| FLOW-02 | Phase 2 | Complete |
 | FLOW-03 | Phase 3 | Pending |
 | FLOW-04 | Phase 3 | Pending |
 | A11Y-01 | Phase 4 | Pending |
 | A11Y-02 | Phase 4 | Pending |
-| QUAL-01 | Phase 4 | Pending |
+| QUAL-01 | Phase 4 | Complete |
 | QUAL-02 | Phase 5 | Pending |
 | QUAL-03 | Phase 3 | Pending |
 
