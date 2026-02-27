@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Printer, Settings as SettingsIcon, Leaf, Search, History, Calendar } from 'lucide-react';
+import { Plus, Printer, Settings as SettingsIcon, Search, History, Calendar } from 'lucide-react';
 import BackToOverviewButton from '../../shared/components/BackToOverviewButton';
 import RouteEditor from './components/RouteEditor';
 import RouteList from './components/RouteList';
@@ -58,7 +58,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
   const canManageSettings = canManageRoutes;
 
   const {
-    routes, busTypes, workers, customers, loading, mapDefaultView,
+    routes, busTypes, workers, customers, mapDefaultView,
     setRoutes, setCustomers, setMapDefaultView,
     refreshRoutes, refreshSettingsData,
   } = useBusflowData(activeAccountId);
@@ -423,17 +423,6 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       />
     </div>
   );
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center space-y-4">
-          <Leaf className="w-8 h-8 animate-spin text-emerald-600" />
-          <p className="text-slate-500">Lade BusFlow Daten...</p>
-        </div>
-      </div>
-    );
-  }
 
   if (!activeAccountId) {
     return (
