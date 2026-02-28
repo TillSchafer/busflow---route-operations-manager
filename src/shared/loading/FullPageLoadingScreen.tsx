@@ -9,6 +9,8 @@ import {
   toProgressPercent
 } from './loading-ui';
 
+const FULL_PAGE_LOADING_LAYER_CLASS = 'z-[1600]';
+
 const FullPageLoadingScreen: React.FC = () => {
   const { isActive, shouldReveal, isShortVisible, display } = useLoading();
 
@@ -22,11 +24,12 @@ const FullPageLoadingScreen: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[1600] pointer-events-auto flex items-center justify-center px-4"
+      className={`fixed inset-0 ${FULL_PAGE_LOADING_LAYER_CLASS} pointer-events-auto flex items-center justify-center px-4`}
       role="status"
       aria-live="polite"
       aria-busy="true"
       data-testid="full-page-loading-screen"
+      data-layer="global-loading"
     >
       <div
         className={loadingBackdropClassName(backdropVariant, isShortVisible)}

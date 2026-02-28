@@ -2,6 +2,9 @@ import React from 'react';
 import { Loader2 } from 'lucide-react';
 import { useProgress } from './ProgressProvider';
 
+// Keep progress details readable above the full-page loading overlay during long-running actions.
+const PROGRESS_VIEWPORT_LAYER_CLASS = 'z-[1700]';
+
 const ProgressViewport: React.FC = () => {
   const { activeProgress } = useProgress();
   if (!activeProgress) return null;
@@ -12,7 +15,10 @@ const ProgressViewport: React.FC = () => {
       : 0;
 
   return (
-    <div className="no-print fixed z-[1490] bottom-4 right-4 left-4 md:left-auto md:w-[360px] pointer-events-none">
+    <div
+      className={`no-print fixed ${PROGRESS_VIEWPORT_LAYER_CLASS} bottom-4 right-4 left-4 md:left-auto md:w-[360px] pointer-events-none`}
+      data-layer="progress-viewport"
+    >
       <div className="pointer-events-auto rounded-xl border border-blue-200 bg-white/95 backdrop-blur-sm shadow-lg p-3">
         <div className="flex items-start gap-3">
           <Loader2 className="w-5 h-5 text-[#2663EB] animate-spin mt-0.5" />
@@ -42,4 +48,3 @@ const ProgressViewport: React.FC = () => {
 };
 
 export default ProgressViewport;
-
