@@ -6,6 +6,7 @@ verify_jwt = false
 [functions.platform-provision-account]
 verify_jwt = false
 
+# DECOMMISSION CANDIDATE: no active UI trigger — support flow not yet built
 [functions.platform-send-password-reset]
 verify_jwt = false
 
@@ -16,8 +17,9 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.admin-update-membership-role-v1]
-verify_jwt = false
+verify_jwt = true
 
+# DECOMMISSION CANDIDATE: no active frontend caller — do not add new callers without documented use case
 [functions.admin-update-user-v1]
 verify_jwt = false
 
