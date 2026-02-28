@@ -64,13 +64,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LOAD-04 | Phase 1 | Complete |
 | FLOW-01 | Phase 2 | Complete |
 | FLOW-02 | Phase 2 | Complete |
-| FLOW-03 | Phase 3 | Pending |
-| FLOW-04 | Phase 3 | Pending |
-| A11Y-01 | Phase 4 | Pending |
-| A11Y-02 | Phase 4 | Pending |
+| FLOW-03 | Phase 6 | Pending |
+| FLOW-04 | Phase 6 | Pending |
+| A11Y-01 | Phase 7 | Pending |
+| A11Y-02 | Phase 7 | Pending |
 | QUAL-01 | Phase 4 | Complete |
-| QUAL-02 | Phase 5 | Pending |
-| QUAL-03 | Phase 3 | Pending |
+| QUAL-02 | Phase 8 | Pending |
+| QUAL-03 | Phase 6 | Pending |
 
 **Coverage:**
 - v1 requirements: 13 total
@@ -79,4 +79,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-26*
-*Last updated: 2026-02-26 after roadmap traceability mapping*
+*Last updated: 2026-02-28 after milestone gap-closure phase mapping*

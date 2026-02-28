@@ -17,6 +17,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3: Platform Action Coverage Rollout** - Wire all async action flows to the unified loading orchestration.
 - [ ] **Phase 4: Accessibility + Consistency Cleanup** - Complete accessibility semantics and remove all legacy divergent loading variants.
 - [ ] **Phase 5: Hardening, Tests, and Release Readiness** - Add regression coverage and verify operational stability.
+- [ ] **Phase 6: Action Coverage Gap Closure** - Close audit gaps for critical mutation loading coverage, concurrency behavior, and async flow inventory.
+- [ ] **Phase 7: Accessibility Gap Closure** - Close audit gaps for loading accessibility semantics and reduced-motion compliance.
+- [ ] **Phase 8: Hardening Gap Closure** - Close audit gaps for automated delay/cleanup regression coverage and release quality gates.
 
 ## Phase Details
 
@@ -95,10 +98,56 @@ Plans:
 - [ ] 05-01: Add unit/component tests for loading manager, delay, and cleanup contracts.
 - [ ] 05-02: Run hardening pass across key flows and finalize release checklist.
 
+### Phase 6: Action Coverage Gap Closure
+**Goal**: Close milestone audit blockers for action-path loading rollout and async inventory coverage.
+**Depends on**: Phase 2
+**Requirements**: [FLOW-03, FLOW-04, QUAL-03]
+**Gap Closure:** Closes orphaned requirement gaps from `v1.0-MILESTONE-AUDIT.md`.
+**Success Criteria** (what must be TRUE):
+  1. Save/delete/invite/import/profile-security flows consistently trigger shared action loading.
+  2. Concurrent action loading remains accurate across overlapping operations.
+  3. Async flow inventory exists and tracks all loading-prone user-triggered flows.
+**Plans**: 3 plans
+
+Plans:
+- [ ] 06-01: Implement shared action-loading wrapper and expand domain-specific action message keys.
+- [ ] 06-02: Integrate wrapper across Profile/Admin/Owner/BusFlow mutation handlers.
+- [ ] 06-03: Add async flow inventory artifact and verify progress/loader coexistence behavior.
+
+### Phase 7: Accessibility Gap Closure
+**Goal**: Close milestone audit blockers for accessibility semantics and reduced-motion behavior.
+**Depends on**: Phase 6
+**Requirements**: [A11Y-01, A11Y-02]
+**Gap Closure:** Closes orphaned requirement gaps from `v1.0-MILESTONE-AUDIT.md`.
+**Success Criteria** (what must be TRUE):
+  1. Global loading state exposes `aria-busy` and screenreader-readable status messaging.
+  2. Loading presentation honors reduced-motion preferences.
+  3. Accessibility behavior is verified in key route/action loading scenarios.
+**Plans**: 2 plans
+
+Plans:
+- [ ] 07-01: Implement ARIA and screenreader semantics for global loading state.
+- [ ] 07-02: Implement reduced-motion behavior and add accessibility verification coverage.
+
+### Phase 8: Hardening Gap Closure
+**Goal**: Close milestone audit blockers for automated regression confidence before milestone completion.
+**Depends on**: Phase 7
+**Requirements**: [QUAL-02]
+**Gap Closure:** Closes orphaned requirement gaps from `v1.0-MILESTONE-AUDIT.md`.
+**Success Criteria** (what must be TRUE):
+  1. Automated tests verify delay behavior and cleanup guarantees for action-enabled loading flows.
+  2. Regression coverage includes core route/auth/action loading paths.
+  3. Quality gate (`npm run check` + tests) passes after gap closure changes.
+**Plans**: 2 plans
+
+Plans:
+- [ ] 08-01: Add automated delay/cleanup regression tests for shared loading orchestration.
+- [ ] 08-02: Execute hardening pass and resolve quality-gate issues for release readiness.
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 2 → 2.1 → 2.2 → 3 → 3.1 → 4
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -107,3 +156,6 @@ Phases execute in numeric order: 2 → 2.1 → 2.2 → 3 → 3.1 → 4
 | 3. Platform Action Coverage Rollout | 0/3 | Not started | - |
 | 4. Accessibility + Consistency Cleanup | 0/2 | Not started | - |
 | 5. Hardening, Tests, and Release Readiness | 0/2 | Not started | - |
+| 6. Action Coverage Gap Closure | 0/3 | Not started | - |
+| 7. Accessibility Gap Closure | 0/2 | Not started | - |
+| 8. Hardening Gap Closure | 0/2 | Not started | - |
