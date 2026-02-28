@@ -1,20 +1,24 @@
 import React, { useEffect, useRef } from 'react';
 import { useLoading } from './LoadingProvider';
-import { LOADING_FALLBACK_MESSAGE } from './loading-ui';
 import type { LoadingMessageKey, LoadingToken } from './loading-types';
 
 interface AppLoadingBridgeProps {
   authLoading: boolean;
   message?: string;
+  messageKey?: LoadingMessageKey;
 }
 
-const AppLoadingBridge: React.FC<AppLoadingBridgeProps> = ({ authLoading, message = LOADING_FALLBACK_MESSAGE }) => {
+const AppLoadingBridge: React.FC<AppLoadingBridgeProps> = ({
+  authLoading,
+  message,
+  messageKey = 'auth.bootstrap'
+}) => {
   const { start, stop } = useLoading();
   const tokenRef = useRef<LoadingToken | null>(null);
 
   useEffect(() => {
     if (authLoading && tokenRef.current === null) {
-      tokenRef.current = start({ scope: 'auth', message });
+      tokenRef.current = start({ scope: 'auth', message, messageKey });
       return;
     }
 
@@ -22,7 +26,7 @@ const AppLoadingBridge: React.FC<AppLoadingBridgeProps> = ({ authLoading, messag
       stop(tokenRef.current);
       tokenRef.current = null;
     }
-  }, [authLoading, message, start, stop]);
+  }, [authLoading, message, messageKey, start, stop]);
 
   useEffect(() => {
     return () => {
@@ -42,7 +46,7 @@ interface RouteLoadingFallbackProps {
 }
 
 export const RouteLoadingFallback: React.FC<RouteLoadingFallbackProps> = ({
-  message = LOADING_FALLBACK_MESSAGE,
+  message,
   messageKey = 'route.transition'
 }) => {
   const { start, stop } = useLoading();
