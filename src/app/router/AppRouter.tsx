@@ -240,7 +240,7 @@ const AppRouter: React.FC = () => {
   const ownerPath = user?.isPlatformOwner ? '/owner-bereich' : adminPath;
   const goAdmin = () => navigate(adminPath);
   const goOwner = () => navigate(ownerPath);
-  const suspenseFallback = <RouteLoadingFallback message="Lade..." />;
+  const suspenseFallback = <RouteLoadingFallback />;
 
   if (loading) {
     return (
