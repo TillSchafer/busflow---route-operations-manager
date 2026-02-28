@@ -15,7 +15,7 @@ tags:
     "multi-tenant",
     "route-operations",
   ]
-lastUpdated: "2026-02-26"
+lastUpdated: "2026-02-28"
 ---
 
 # BusFlow TypeScript React Vite Development Guide
@@ -36,6 +36,11 @@ This guide defines best practices for developing and operating BusFlow as a web 
 - **Backend Runtime Extensions**: Supabase Edge Functions
 - **Linting**: ESLint 9 + TypeScript ESLint + React Hooks plugin
 - **Observability**: Vercel Analytics + Vercel Speed Insights
+
+## Agent Tooling
+
+- MCP server usage is available for this agent workflow.
+- Prefer MCP resources and templates when they provide relevant project context.
 
 ## Development Environment Setup
 

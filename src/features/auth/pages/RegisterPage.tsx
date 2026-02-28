@@ -5,6 +5,14 @@ import { supabase } from '../../../shared/lib/supabase';
 import { PublicRegisterApi, PublicRegisterError } from '../../../shared/api/public/registerTrial.api';
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
+const PASSWORD_POLICY_MESSAGE =
+  'Das Passwort muss mindestens 12 Zeichen lang sein und Groß-/Kleinbuchstaben, Zahlen und Sonderzeichen enthalten.';
+const meetsPasswordPolicy = (value: string) =>
+  value.length >= 12 &&
+  /[a-z]/.test(value) &&
+  /[A-Z]/.test(value) &&
+  /\d/.test(value) &&
+  /[^A-Za-z0-9]/.test(value);
 
 const mapRegisterError = (error: unknown): string => {
   if (error instanceof PublicRegisterError) {
@@ -31,6 +39,9 @@ const mapRegisterError = (error: unknown): string => {
     }
     if (message.includes('email rate limit')) {
       return 'Bitte warten Sie kurz, bevor Sie es erneut versuchen.';
+    }
+    if (message.includes('at least 12 characters') || message.includes('should contain at least one character of each')) {
+      return PASSWORD_POLICY_MESSAGE;
     }
 
     return error.message;
@@ -74,8 +85,8 @@ const Register: React.FC = () => {
       return;
     }
 
-    if (password.length < 8) {
-      setErrorText('Das Passwort muss mindestens 8 Zeichen lang sein.');
+    if (!meetsPasswordPolicy(password)) {
+      setErrorText(PASSWORD_POLICY_MESSAGE);
       return;
     }
 
@@ -178,8 +189,8 @@ const Register: React.FC = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white/80 border transition-all"
-              placeholder="Mindestens 8 Zeichen"
-              minLength={8}
+              placeholder="Mindestens 12 Zeichen inkl. Sonderzeichen"
+              minLength={12}
               required
             />
           </div>
@@ -191,7 +202,7 @@ const Register: React.FC = () => {
               value={passwordConfirm}
               onChange={(e) => setPasswordConfirm(e.target.value)}
               className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white/80 border transition-all"
-              minLength={8}
+              minLength={12}
               required
             />
           </div>
