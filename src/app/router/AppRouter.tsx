@@ -245,7 +245,7 @@ const AppRouter: React.FC = () => {
   if (loading) {
     return (
       <>
-        <AppLoadingBridge authLoading={loading} />
+        <AppLoadingBridge authLoading={loading} messageKey="auth.bootstrap" />
         <div className="min-h-screen bg-slate-50" />
       </>
     );
@@ -254,7 +254,7 @@ const AppRouter: React.FC = () => {
   if (!user) {
     return (
       <>
-        <AppLoadingBridge authLoading={loading} />
+        <AppLoadingBridge authLoading={loading} messageKey="auth.bootstrap" />
         <AuthCallbackNormalizer />
         <Suspense fallback={suspenseFallback}>
           <Routes>
@@ -330,7 +330,7 @@ const AppRouter: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
-      <AppLoadingBridge authLoading={loading} />
+      <AppLoadingBridge authLoading={loading} messageKey="auth.bootstrap" />
       <AuthCallbackNormalizer />
       <Suspense fallback={suspenseFallback}>
         <Routes>
