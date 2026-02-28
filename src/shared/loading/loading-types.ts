@@ -1,4 +1,5 @@
 export type LoadingScope = 'route' | 'auth' | 'action' | 'system';
+export type LoadingMessageKey = string;
 
 export type LoadingToken = string;
 
@@ -10,11 +11,13 @@ export interface LoadingProgress {
 export interface LoadingStartOptions {
   scope?: LoadingScope;
   message?: string;
+  messageKey?: LoadingMessageKey;
   progress?: LoadingProgress;
 }
 
 export interface LoadingUpdatePatch {
   message?: string;
+  messageKey?: LoadingMessageKey;
   progress?: LoadingProgress;
 }
 

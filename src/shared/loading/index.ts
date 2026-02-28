@@ -25,3 +25,9 @@ export {
   loadingBackdropClassName,
   loadingContentClassName
 } from './loading-ui';
+export {
+  LOADING_DEFAULT_MESSAGE,
+  loadingMessageRegistry,
+  resolveLoadingMessage,
+  resolveScopedLoadingMessage
+} from './loading-messages';
