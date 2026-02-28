@@ -1,5 +1,6 @@
 export { LoadingEngine } from './loading-engine';
 export { LoadingProvider, useLoading } from './LoadingProvider';
+export { useActionLoading } from './useActionLoading';
 export { default as FullPageLoadingScreen } from './FullPageLoadingScreen';
 export { default as LoadingSpinner } from './LoadingSpinner';
 export { default as AppLoadingBridge, RouteLoadingFallback } from './AppLoadingBridge';
