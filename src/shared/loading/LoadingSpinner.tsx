@@ -1,6 +1,6 @@
 import React from 'react';
 import { Loader2 } from 'lucide-react';
-import Loader15 from '@/components/ui/loader-15';
+import Loader15 from '../components/ui/loader-15';
 
 interface LoadingSpinnerProps {
   className?: string;
