@@ -1,6 +1,7 @@
 import {
   type LoadingDisplayState,
   type LoadingEngineOptions,
+  type LoadingMessageKey,
   type LoadingEngineSnapshot,
   type LoadingProgress,
   type LoadingScope,
@@ -8,20 +9,20 @@ import {
   type LoadingToken,
   type LoadingUpdatePatch
 } from './loading-types';
+import { LOADING_DEFAULT_MESSAGE, resolveLoadingMessage } from './loading-messages';
 
 interface LoadingOperation {
   token: LoadingToken;
   scope: LoadingScope;
   startedAtMs: number;
   message?: string;
+  messageKey?: LoadingMessageKey;
   progress?: LoadingProgress;
 }
 
 const DEFAULT_REVEAL_DELAY_MS = 150;
 const DEFAULT_RAPID_RESUME_WINDOW_MS = 800;
 const DEFAULT_SHORT_VARIANT_THRESHOLD_MS = 850;
-const DEFAULT_MESSAGE = 'Lade...';
-
 const createToken = (): LoadingToken => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -50,7 +51,7 @@ export class LoadingEngine {
     this.revealDelayMs = options.revealDelayMs ?? DEFAULT_REVEAL_DELAY_MS;
     this.rapidResumeWindowMs = options.rapidResumeWindowMs ?? DEFAULT_RAPID_RESUME_WINDOW_MS;
     this.shortVariantThresholdMs = options.shortVariantThresholdMs ?? DEFAULT_SHORT_VARIANT_THRESHOLD_MS;
-    this.defaultMessage = options.defaultMessage ?? DEFAULT_MESSAGE;
+    this.defaultMessage = options.defaultMessage ?? LOADING_DEFAULT_MESSAGE;
     this.now = options.now ?? (() => Date.now());
     this.snapshot = this.buildSnapshot();
   }
@@ -90,6 +91,7 @@ export class LoadingEngine {
       scope: options.scope ?? 'system',
       startedAtMs,
       message: options.message,
+      messageKey: options.messageKey,
       progress: options.progress
     });
 
@@ -209,14 +211,22 @@ export class LoadingEngine {
     if (this.operations.size === 0) {
       return {
         scope: 'system',
-        message: this.defaultMessage
+        message: resolveLoadingMessage({
+          scope: 'system',
+          fallback: this.defaultMessage
+        })
       };
     }
 
     const currentOperation = Array.from(this.operations.values()).sort((a, b) => b.startedAtMs - a.startedAtMs)[0];
     return {
       scope: currentOperation.scope,
-      message: currentOperation.message?.trim() || this.defaultMessage,
+      message: resolveLoadingMessage({
+        scope: currentOperation.scope,
+        message: currentOperation.message,
+        messageKey: currentOperation.messageKey,
+        fallback: this.defaultMessage
+      }),
       progress: currentOperation.progress
     };
   }
