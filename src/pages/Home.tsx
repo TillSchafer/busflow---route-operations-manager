@@ -7,6 +7,7 @@ interface AppCard {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   onClick: () => void;
+  onMouseEnter?: () => void;
 }
 
 interface User {
@@ -67,6 +68,7 @@ const Home: React.FC<Props> = ({ apps, auth, activeAccount, onProfile, onAdmin, 
               <button
                 key={app.id}
                 onClick={app.onClick}
+                onMouseEnter={app.onMouseEnter}
                 className="group text-left bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow w-full max-w-sm"
               >
                 <div className="flex items-center justify-between mb-4">

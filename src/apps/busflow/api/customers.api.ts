@@ -40,7 +40,7 @@ export async function getCustomers(params: CustomerListParams): Promise<Customer
   };
 }
 
-export async function getCustomersForSuggestions(limit = 5000): Promise<Customer[]> {
+export async function getCustomersForSuggestions(limit = 1000): Promise<Customer[]> {
   const result = await getCustomers({ page: 1, pageSize: limit, query: '' });
   return result.items;
 }

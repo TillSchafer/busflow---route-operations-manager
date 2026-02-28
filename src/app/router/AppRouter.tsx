@@ -325,6 +325,7 @@ const AppRouter: React.FC = () => {
       description: 'Routen, Halte, Fahrgastzahlen und Druckansicht verwalten.',
       icon: Bus,
       onClick: () => navigate('/busflow'),
+      onMouseEnter: () => import('../../features/busflow/pages/BusflowAppPage'),
     },
   ];
 

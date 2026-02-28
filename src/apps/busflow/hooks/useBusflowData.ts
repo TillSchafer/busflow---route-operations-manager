@@ -48,13 +48,13 @@ export function useBusflowData(activeAccountId: string | null): BusflowData {
       setLoading(true);
       try {
         await runWithLoading(async () => {
-          const [fetchedRoutes, fetchedBusTypes, fetchedWorkers, fetchedCustomers] = await Promise.all([
+          const [fetchedRoutes, fetchedBusTypes, fetchedWorkers, fetchedCustomers, fetchedMapDefault] = await Promise.all([
             BusFlowApi.getRoutes(),
             BusFlowApi.getBusTypes(),
             BusFlowApi.getWorkers(),
             BusFlowApi.getCustomersForSuggestions(),
+            BusFlowApi.getMapDefaultView(),
           ]);
-          const fetchedMapDefault = await BusFlowApi.getMapDefaultView();
           setRoutes(fetchedRoutes);
           setBusTypes(fetchedBusTypes);
           setWorkers(fetchedWorkers);
