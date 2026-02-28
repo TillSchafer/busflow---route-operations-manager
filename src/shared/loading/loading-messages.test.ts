@@ -22,8 +22,32 @@ describe('loading message resolver', () => {
     ).toBe('Speichere...');
   });
 
+  it('resolves known domain specific action keys', () => {
+    const knownActionKeys = [
+      ['action.profile.email.change', 'Aendere E-Mail...'],
+      ['action.profile.password.reset', 'Sende Passwort-Reset...'],
+      ['action.team.invite.send', 'Sende Einladung...'],
+      ['action.team.invitation.resend', 'Sende Einladung erneut...'],
+      ['action.owner.account.create', 'Lege Firma an...'],
+      ['action.owner.trial.update', 'Aktualisiere Testphase...'],
+      ['action.busflow.route.save', 'Speichere Route...'],
+      ['action.busflow.customer.import.commit', 'Importiere Kontakte...']
+    ] as const;
+
+    for (const [key, expected] of knownActionKeys) {
+      expect(resolveScopedLoadingMessage('action', key)).toBe(expected);
+      expect(
+        resolveLoadingMessage({
+          scope: 'action',
+          messageKey: key
+        })
+      ).toBe(expected);
+    }
+  });
+
   it('falls back to Lade... for unknown keys or blank values', () => {
     expect(resolveScopedLoadingMessage('auth', 'auth.unknown')).toBeNull();
+    expect(resolveScopedLoadingMessage('action', 'action.unknown')).toBeNull();
     expect(
       resolveLoadingMessage({
         scope: 'auth',
