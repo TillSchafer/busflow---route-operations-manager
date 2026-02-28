@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useLoading } from './LoadingProvider';
 import { LOADING_FALLBACK_MESSAGE } from './loading-ui';
-import type { LoadingToken } from './loading-types';
+import type { LoadingMessageKey, LoadingToken } from './loading-types';
 
 interface AppLoadingBridgeProps {
   authLoading: boolean;
@@ -38,17 +38,21 @@ const AppLoadingBridge: React.FC<AppLoadingBridgeProps> = ({ authLoading, messag
 
 interface RouteLoadingFallbackProps {
   message?: string;
+  messageKey?: LoadingMessageKey;
 }
 
-export const RouteLoadingFallback: React.FC<RouteLoadingFallbackProps> = ({ message = LOADING_FALLBACK_MESSAGE }) => {
+export const RouteLoadingFallback: React.FC<RouteLoadingFallbackProps> = ({
+  message = LOADING_FALLBACK_MESSAGE,
+  messageKey = 'route.transition'
+}) => {
   const { start, stop } = useLoading();
 
   useEffect(() => {
-    const token = start({ scope: 'route', message });
+    const token = start({ scope: 'route', message, messageKey });
     return () => {
       stop(token);
     };
-  }, [message, start, stop]);
+  }, [message, messageKey, start, stop]);
 
   return null;
 };
