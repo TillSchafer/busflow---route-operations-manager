@@ -69,6 +69,7 @@ describe('AppRouter loading integration', () => {
 
     expect(screen.getByTestId('full-page-loading-screen')).toBeInTheDocument();
     expect(screen.getByTestId('loading-active-count')).toHaveTextContent('1');
+    expect(screen.getByText('Lade...')).toBeInTheDocument();
 
     rerender(<RouterHost showRouter={false} />);
 
