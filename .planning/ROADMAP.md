@@ -13,7 +13,7 @@ This roadmap upgrades BusFlow’s loading behavior from inconsistent, page-local
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Loading Core Foundation** - Build shared loading engine, lifecycle contract, and delayed reveal behavior. (completed 2026-02-27)
-- [ ] **Phase 2: Messaging + Route/Auth Integration** - Integrate route/auth loading and scoped message system with fallback behavior.
+- [x] **Phase 2: Messaging + Route/Auth Integration** - Integrate route/auth loading and scoped message system with fallback behavior. (completed 2026-02-28)
 - [ ] **Phase 3: Platform Action Coverage Rollout** - Wire all async action flows to the unified loading orchestration.
 - [ ] **Phase 4: Accessibility + Consistency Cleanup** - Complete accessibility semantics and remove all legacy divergent loading variants.
 - [ ] **Phase 5: Hardening, Tests, and Release Readiness** - Add regression coverage and verify operational stability.
@@ -48,9 +48,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: Add scoped loading message registry and fallback policy.
-- [ ] 02-02: Connect AppRouter lazy/route transitions to loading manager.
-- [ ] 02-03: Connect auth/session/account hydration flow to loading manager.
+- [x] 02-01: Add scoped loading message registry and fallback policy.
+- [x] 02-02: Connect AppRouter lazy/route transitions to loading manager.
+- [x] 02-03: Connect auth/session/account hydration flow to loading manager.
 
 ### Phase 3: Platform Action Coverage Rollout
 **Goal**: Ensure all critical user-triggered async actions are covered by the shared loading system.
@@ -103,7 +103,7 @@ Phases execute in numeric order: 2 → 2.1 → 2.2 → 3 → 3.1 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Loading Core Foundation | 5/5 | Complete    | 2026-02-27 |
-| 2. Messaging + Route/Auth Integration | 0/3 | Not started | - |
+| 2. Messaging + Route/Auth Integration | 3/3 | Complete | 2026-02-28 |
 | 3. Platform Action Coverage Rollout | 0/3 | Not started | - |
 | 4. Accessibility + Consistency Cleanup | 0/2 | Not started | - |
 | 5. Hardening, Tests, and Release Readiness | 0/2 | Not started | - |
