@@ -72,32 +72,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PERF-01 | TBA | Pending |
-| PERF-02 | TBA | Pending |
-| PERF-03 | TBA | Pending |
-| RVAL-01 | TBA | Pending |
-| RVAL-02 | TBA | Pending |
-| RVAL-03 | TBA | Pending |
-| SETT-01 | TBA | Pending |
-| SETT-02 | TBA | Pending |
-| SETT-03 | TBA | Pending |
-| LIFE-01 | TBA | Pending |
-| LIFE-02 | TBA | Pending |
-| LIFE-03 | TBA | Pending |
-| LIFE-04 | TBA | Pending |
-| ROLE-01 | TBA | Pending |
-| ROLE-02 | TBA | Pending |
-| ROLE-03 | TBA | Pending |
-| DATA-01 | TBA | Pending |
-| DATA-02 | TBA | Pending |
-| DATA-03 | TBA | Pending |
-| DATA-04 | TBA | Pending |
+| PERF-01 | Phase 14 | Pending |
+| PERF-02 | Phase 14 | Pending |
+| PERF-03 | Phase 14 | Pending |
+| RVAL-01 | Phase 10 | Pending |
+| RVAL-02 | Phase 10 | Pending |
+| RVAL-03 | Phase 10 | Pending |
+| SETT-01 | Phase 11 | Pending |
+| SETT-02 | Phase 11 | Pending |
+| SETT-03 | Phase 11 | Pending |
+| LIFE-01 | Phase 13 | Pending |
+| LIFE-02 | Phase 13 | Pending |
+| LIFE-03 | Phase 13 | Pending |
+| LIFE-04 | Phase 13 | Pending |
+| ROLE-01 | Phase 9 | Pending |
+| ROLE-02 | Phase 9 | Pending |
+| ROLE-03 | Phase 9 | Pending |
+| DATA-01 | Phase 12 | Pending |
+| DATA-02 | Phase 12 | Pending |
+| DATA-03 | Phase 12 | Pending |
+| DATA-04 | Phase 12 | Pending |
 
 **Coverage:**
 - v1 requirements: 20 total
-- Mapped to phases: 0
-- Unmapped: 20 ⚠
+- Mapped to phases: 20
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-01*
-*Last updated: 2026-03-01 after milestone v1.1 scope confirmation*
+*Last updated: 2026-03-01 after roadmap creation for milestone v1.1*

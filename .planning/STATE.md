@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: buspilot-fertigstellung
-status: defining_requirements
-last_updated: "2026-03-01T12:01:23.000Z"
+status: roadmap_created
+last_updated: "2026-03-01T12:27:50Z"
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -18,14 +18,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** Echte Nutzer koennen den bestehenden BusPilot-Kernfluss zuverlaessig testen, weil Performance, Datenkonsistenz und Rollen-/Berechtigungslogik in MVP 1.0 robust finalisiert sind.
-**Current focus:** Milestone v1.1 definition
+**Current focus:** Milestone v1.1 roadmap finalized; next actionable work starts at Phase 9.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 9 (Role Visibility and Enforcement Finalization)
 Plan: -
-Status: Defining requirements
-Last activity: 2026-03-01 — Milestone v1.1 started
+Status: Roadmap created, awaiting phase planning/execution
+Last activity: 2026-03-01 - Roadmap for phases 9-14 created
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -40,7 +40,7 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 9-14 | 0 | 0 | - |
 
 **Recent Trend:**
 - Last 5 plans: -
@@ -55,29 +55,23 @@ Progress: [░░░░░░░░░░] 0%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- Initialization: Unified full-page loading standard selected for all async actions.
-- Initialization: Action-specific messages with fallback `Lade...` selected.
-- Initialization: Delay-based reveal and accessibility defaults selected.
-- Phase 1 Plan 01: Loading lifecycle now uses token ownership with idempotent cleanup semantics.
-- Phase 1 Plan 01: Reveal delay centralized at 150ms with cancellation for fast-completing operations.
-- Phase 1 Plan 02: Canonical full-page loading surface now owns fallback copy and short-variant presentation.
-- Phase 1 Plan 02: Spinner rendering now routes through adapter compatible with `@/components/ui/loader-15`.
-- Phase 1 Plan 03: App shell now routes auth/suspense loading through centralized loading bridge components.
-- Phase 1 Plan 03: Auth provider now renders during hydration so global loading state remains observable.
-- Phase 2 Plan 01: Loading copy now resolves through explicit > messageKey > fallback policy.
-- Phase 2 Plan 02: Route suspense fallback now relies on keyed policy defaults instead of hardcoded copy.
-- Phase 2 Plan 03: Auth bridge defaults to `auth.bootstrap` and has lifecycle regression coverage.
+- Milestone roadmap starts at Phase 9 because previous roadmap ended at Phase 8.
+- v1.1 phases are derived strictly from milestone requirement categories: ROLE, RVAL, SETT, DATA, LIFE, PERF.
+- Brownfield hardening approach retained: no architecture rebuild and no disruption to existing auth/registration + route CRUD concepts.
+- Role contract is sequenced before settings/lifecycle enforcement to avoid permission drift.
+- Data hardening is sequenced before lifecycle finalization to ensure archive/delete referential integrity.
+- Performance optimization and measurement closure is sequenced last to measure stable contracts.
 
 ### Pending Todos
 
-None yet.
+- Plan and execute Phase 9 (`/gsd:plan-phase 9`).
 
 ### Blockers/Concerns
 
-None yet.
+None currently.
 
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Milestone v1.1 initialized (requirements pending)
-Resume file: .planning/REQUIREMENTS.md
+Stopped at: Roadmap created for milestone v1.1 (phases 9-14)
+Resume file: .planning/ROADMAP.md
