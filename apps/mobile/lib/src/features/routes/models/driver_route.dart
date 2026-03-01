@@ -115,7 +115,9 @@ class DriverRoute {
           ? (map['capacity'] as num).toInt()
           : int.tryParse(map['capacity']?.toString() ?? '') ?? 0,
       stops: rawStops,
-      customerName: map['customer_name']?.toString(),
+      customerName: (map['busflow_customers'] is Map)
+          ? (map['busflow_customers'] as Map)['name']?.toString()
+          : null,
       operationalNotes: map['operational_notes']?.toString(),
     );
   }

@@ -48,12 +48,16 @@ class _RouteHomePageState extends ConsumerState<RouteHomePage> {
     final chosen = await showDatePicker(
       context: context,
       locale: const Locale('de', 'DE'),
-      initialDate: selectedDay,
+      initialDate: selectedDay ?? DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
     if (chosen == null) return;
     ref.read(selectedDayProvider.notifier).state = chosen;
+  }
+
+  void _clearDayFilter() {
+    ref.read(selectedDayProvider.notifier).state = null;
   }
 
   Future<void> _logout() async {
@@ -64,7 +68,9 @@ class _RouteHomePageState extends ConsumerState<RouteHomePage> {
   Widget build(BuildContext context) {
     final selectedDay = ref.watch(selectedDayProvider);
     final routesAsync = ref.watch(routesForDayProvider);
-    final selectedDayLabel = DateFormat('dd.MM.yyyy').format(selectedDay);
+    final selectedDayLabel = selectedDay != null
+        ? DateFormat('dd.MM.yyyy').format(selectedDay)
+        : 'Alle Routen';
 
     return Scaffold(
       appBar: AppBar(
@@ -111,6 +117,8 @@ class _RouteHomePageState extends ConsumerState<RouteHomePage> {
                       _SummaryChip(
                         icon: Icons.event_outlined,
                         label: selectedDayLabel,
+                        onTap: _pickDay,
+                        onClear: selectedDay != null ? _clearDayFilter : null,
                       ),
                       _SummaryChip(
                         icon: Icons.alt_route,
@@ -176,33 +184,47 @@ class _SummaryChip extends StatelessWidget {
   const _SummaryChip({
     required this.icon,
     required this.label,
+    this.onTap,
+    this.onClear,
   });
 
   final IconData icon;
   final String label;
+  final VoidCallback? onTap;
+  final VoidCallback? onClear;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: BusPilotTheme.primary),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              color: BusPilotTheme.primary,
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEFF6FF),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: BusPilotTheme.primary),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                color: BusPilotTheme.primary,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
             ),
-          ),
-        ],
+            if (onClear != null) ...[
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: onClear,
+                child: const Icon(Icons.close, size: 14, color: BusPilotTheme.primary),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

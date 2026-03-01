@@ -1,8 +1,9 @@
 import '../models/driver_route.dart';
 
 abstract class RouteRepository {
-  Future<List<DriverRoute>> fetchRoutesForDay(
-    DateTime day, {
+  /// Fetches routes. If [date] is null, all non-archived routes are returned.
+  Future<List<DriverRoute>> fetchRoutes({
+    DateTime? date,
     String? accountId,
   });
 

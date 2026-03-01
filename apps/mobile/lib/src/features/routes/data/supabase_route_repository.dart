@@ -11,28 +11,34 @@ class SupabaseRouteRepository implements RouteRepository {
   final SupabaseClient _client;
 
   @override
-  Future<List<DriverRoute>> fetchRoutesForDay(
-    DateTime day, {
+  Future<List<DriverRoute>> fetchRoutes({
+    DateTime? date,
     String? accountId,
   }) async {
-    final dayKey = DateFormat('yyyy-MM-dd').format(day);
-
     dynamic query = _client
         .from('busflow_routes')
         .select(
           'id,name,date,status,bus_number,driver_name,capacity,'
-          'customer_name,operational_notes,'
+          'operational_notes,'
+          'busflow_customers!busflow_routes_customer_id_fkey(name),'
           'busflow_stops(id,location,arrival_time,departure_time,'
           'actual_arrival_time,actual_departure_time,'
           'lat,lon,sequence_order,boarding,leaving,current_total,notes)',
-        )
-        .eq('date', dayKey);
+        );
+
+    if (date != null) {
+      final dayKey = DateFormat('yyyy-MM-dd').format(date);
+      query = query.eq('date', dayKey);
+    } else {
+      // Show only active/planned routes when no date is selected
+      query = query.neq('status', 'Archiviert');
+    }
 
     if (accountId != null && accountId.trim().isNotEmpty) {
       query = query.eq('account_id', accountId.trim());
     }
 
-    final rows = await query.order('name');
+    final rows = await query.order('date').order('name');
     return (rows as List<dynamic>)
         .map(
           (row) => DriverRoute.fromMap(
@@ -44,10 +50,16 @@ class SupabaseRouteRepository implements RouteRepository {
 
   @override
   Future<void> updateRouteStatus(String routeId, String status) async {
-    await _client
+    final response = await _client
         .from('busflow_routes')
         .update({'status': status})
-        .eq('id', routeId);
+        .eq('id', routeId)
+        .select('id')
+        .maybeSingle();
+
+    if (response == null) {
+      throw Exception('Route nicht gefunden oder keine Berechtigung.');
+    }
   }
 
   @override

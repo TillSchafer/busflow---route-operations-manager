@@ -9,16 +9,17 @@ final routeRepositoryProvider = Provider<RouteRepository>(
   (ref) => SupabaseRouteRepository(),
 );
 
-final selectedDayProvider = StateProvider<DateTime>(
-  (ref) => DateTime.now(),
+/// null = show all non-archived routes; a date = filter by that day
+final selectedDayProvider = StateProvider<DateTime?>(
+  (ref) => null,
 );
 
 final routesForDayProvider = FutureProvider.autoDispose<List<DriverRoute>>(
   (ref) async {
     final day = ref.watch(selectedDayProvider);
     final repo = ref.watch(routeRepositoryProvider);
-    return repo.fetchRoutesForDay(
-      day,
+    return repo.fetchRoutes(
+      date: day,
       accountId: AppConfig.accountId.isEmpty ? null : AppConfig.accountId,
     );
   },
