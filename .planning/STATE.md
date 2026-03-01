@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: buspilot-fertigstellung
 status: roadmap_created
-last_updated: "2026-03-01T12:27:50Z"
+last_updated: "2026-03-01T13:46:00Z"
 progress:
   total_phases: 6
   completed_phases: 0
@@ -24,8 +24,8 @@ See: .planning/PROJECT.md (updated 2026-03-01)
 
 Phase: 9 (Role Visibility and Enforcement Finalization)
 Plan: -
-Status: Roadmap created, awaiting phase planning/execution
-Last activity: 2026-03-01 - Roadmap for phases 9-14 created
+Status: Context gathered, ready to plan
+Last activity: 2026-03-01 - Phase 9 context gathered
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -64,7 +64,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- Plan and execute Phase 9 (`/gsd:plan-phase 9`).
+- Plan Phase 9 (`$gsd-plan-phase 9`).
 
 ### Blockers/Concerns
 
@@ -73,5 +73,5 @@ None currently.
 ## Session Continuity
 
 Last session: 2026-03-01
-Stopped at: Roadmap created for milestone v1.1 (phases 9-14)
-Resume file: .planning/ROADMAP.md
+Stopped at: Phase 9 context gathered
+Resume file: .planning/phases/09-role-visibility-and-enforcement-finalization/09-CONTEXT.md
