@@ -1,56 +1,70 @@
-# Requirements: BusFlow Unified Loading Experience
+# Requirements: BusPilot Route Operations Manager
 
-**Defined:** 2026-02-26
-**Core Value:** Every waiting state feels predictable and trustworthy because users always see a clear, consistent loading experience.
+**Defined:** 2026-03-01
+**Core Value:** Echte Nutzer koennen den bestehenden BusPilot-Kernfluss zuverlaessig testen, weil Performance, Datenkonsistenz und Rollen-/Berechtigungslogik in MVP 1.0 robust finalisiert sind.
 
 ## v1 Requirements
 
-Requirements for initial release. Each maps to roadmap phases.
+Requirements for milestone v1.1. Each requirement maps to exactly one roadmap phase.
 
-### Loading Foundation
+### Performance
 
-- [x] **LOAD-01**: Platform uses one shared full-page loading screen component as the canonical loading UI.
-- [x] **LOAD-02**: Loading screen appears only after a short delay threshold to avoid flicker on fast actions.
-- [x] **LOAD-03**: Loading system supports action-specific messages and uses `Lade...` as fallback text.
-- [x] **LOAD-04**: Loading lifecycle is managed through a centralized start/stop contract that guarantees cleanup on success, error, and cancellation.
+- [ ] **PERF-01**: Baseline- und Nachher-Messwerte fuer Route-List, Route-Detail und Kern-Mutationen sind dokumentiert.
+- [ ] **PERF-02**: Nutzer koennen Route-List und Route-Detail ohne unnoetige Doppel-Requests nutzen.
+- [ ] **PERF-03**: Kritische Mutationen zeigen konsistente Ladezustaende ohne haengenbleibende Loader.
 
-### Flow Coverage
+### Route-Validierung
 
-- [x] **FLOW-01**: Route-based/lazy view transitions show the shared loading screen consistently.
-- [x] **FLOW-02**: Initial auth/session/account hydration shows the shared loading screen consistently.
-- [ ] **FLOW-03**: Critical mutation actions (save, delete, invite, import, profile security actions) trigger the shared loading screen consistently.
-- [ ] **FLOW-04**: Concurrent async actions are handled correctly so loading visibility remains accurate until all active operations are complete.
+- [ ] **RVAL-01**: Nutzer koennen Route nicht speichern, wenn Pflichtfelder fehlen, und sehen feldgenaue Fehler.
+- [ ] **RVAL-02**: Nutzer koennen Route nicht speichern, wenn fachliche Regeln verletzt sind, und sehen verstaendliche Fehlermeldungen.
+- [ ] **RVAL-03**: Der Server erzwingt dieselben Validierungsregeln wie der Client.
 
-### Accessibility
+### User-Settings
 
-- [ ] **A11Y-01**: Loading state exposes accessibility semantics (`aria-busy` and screenreader-readable status text).
-- [ ] **A11Y-02**: Loading UI supports reduced-motion behavior via `prefers-reduced-motion`.
+- [ ] **SETT-01**: Nutzer koennen Profil-Einstellungen speichern und nach Reload korrekt wiedersehen.
+- [ ] **SETT-02**: Nutzer koennen sicherheitsrelevante Settings-Aktionen mit klarer Bestaetigung und Fehlerbehandlung durchfuehren.
+- [ ] **SETT-03**: Nutzer koennen keine Settings ausserhalb ihrer Berechtigung aendern.
 
-### Quality & Consistency
+### Loesch-/Archivierungskonzept
 
-- [x] **QUAL-01**: Legacy divergent loading variants/texts (e.g., `Lade Ansicht`, `Lade BusFlow`) are removed or fully mapped into the unified system.
-- [ ] **QUAL-02**: Loading orchestration logic has automated tests for delay behavior and cleanup behavior.
-- [ ] **QUAL-03**: A documented async flow inventory confirms no loading-prone user flow is left uncovered.
+- [ ] **LIFE-01**: Berechtigte Nutzer koennen Routen archivieren, ohne sie dauerhaft zu loeschen.
+- [ ] **LIFE-02**: Berechtigte Nutzer koennen archivierte Routen gemaess Richtlinie wiederherstellen.
+- [ ] **LIFE-03**: Hard-Delete ist rollenbasiert eingeschraenkt, nachvollziehbar und idempotent.
+- [ ] **LIFE-04**: Archivierte Datensaetze erscheinen nicht in aktiven Standardansichten.
+
+### Rollenmanagement / Sichtbarkeit
+
+- [ ] **ROLE-01**: Nutzer sehen nur Seiten, Daten und Aktionen, die ihrer Rolle entsprechen.
+- [ ] **ROLE-02**: Unerlaubte Aktionen werden serverseitig geblockt, auch bei manipuliertem Client.
+- [ ] **ROLE-03**: Rollen-zu-Aktion-Matrix fuer Kernflows ist dokumentiert und verifiziert.
+
+### Datenbankstruktur
+
+- [ ] **DATA-01**: Das Schema erzwingt notwendige Constraints (FK, Eindeutigkeit, Pflichtfelder) fuer Kernobjekte.
+- [ ] **DATA-02**: Migrationen sind von einer sauberen DB reproduzierbar und in Staging validiert.
+- [ ] **DATA-03**: Kernabfragen nutzen passende Indizes fuer dominante Filter- und Sortierpfade.
+- [ ] **DATA-04**: Das Datenmodell unterstuetzt den Archiv-Lifecycle ohne verwaiste Referenzen.
 
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
 
-### Enhanced Feedback
+### Operations & Scale
 
-- **ENH-01**: Long-running operations show progressive stages (e.g., preparing/importing/finalizing).
-- **ENH-02**: Loading telemetry events are tracked by scope for performance analysis.
-- **ENH-03**: Configurable timeout/escalation UX for unusually long waits.
+- **OBS-01**: Performance-Telemetrie-Dashboard fuer Kernflows mit Alert-Schwellen ist verfuegbar.
+- **LIFE-05**: Bulk-Archivieren/Wiederherstellen fuer operative Bereinigungen ist verfuegbar.
+- **ROLE-04**: Mandantenkonfigurierbare Rollen-Templates sind verfuegbar.
+- **AUTO-01**: Erweiterte Automatisierungen und breitere Realtime-Aktualisierungen sind verfuegbar.
 
 ## Out of Scope
 
-Explicitly excluded. Documented to prevent scope creep.
+Explizit ausgeschlossen, um Scope Creep zu vermeiden.
 
 | Feature | Reason |
 |---------|--------|
-| Full visual redesign of unrelated app areas | Not required to solve loading consistency problem |
-| Business workflow changes (routing/auth/tenant semantics) beyond loading orchestration | This initiative is UX/system consistency hardening, not product logic redesign |
-| Replacing the existing frontend stack/framework | Current stack already supports required solution |
+| Genereller Neuaufbau der Anwendung | Bestehende Architektur und Produktkonzept bleiben erhalten |
+| Grundprinzipien von Anmeldung und Registrierung aendern | Auth-Basis ist gesetzt; Fokus liegt auf Finalisierung statt Neudefinition |
+| Kernfunktion Routen erstellen/loeschen/bearbeiten ersetzen | Soll verbessert und finalisiert werden, nicht neu erfunden |
 
 ## Traceability
 
@@ -58,25 +72,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LOAD-01 | Phase 1 | Complete |
-| LOAD-02 | Phase 1 | Complete |
-| LOAD-03 | Phase 2 | Complete |
-| LOAD-04 | Phase 1 | Complete |
-| FLOW-01 | Phase 2 | Complete |
-| FLOW-02 | Phase 2 | Complete |
-| FLOW-03 | Phase 6 | Pending |
-| FLOW-04 | Phase 6 | Pending |
-| A11Y-01 | Phase 7 | Pending |
-| A11Y-02 | Phase 7 | Pending |
-| QUAL-01 | Phase 4 | Complete |
-| QUAL-02 | Phase 8 | Pending |
-| QUAL-03 | Phase 6 | Pending |
+| PERF-01 | TBA | Pending |
+| PERF-02 | TBA | Pending |
+| PERF-03 | TBA | Pending |
+| RVAL-01 | TBA | Pending |
+| RVAL-02 | TBA | Pending |
+| RVAL-03 | TBA | Pending |
+| SETT-01 | TBA | Pending |
+| SETT-02 | TBA | Pending |
+| SETT-03 | TBA | Pending |
+| LIFE-01 | TBA | Pending |
+| LIFE-02 | TBA | Pending |
+| LIFE-03 | TBA | Pending |
+| LIFE-04 | TBA | Pending |
+| ROLE-01 | TBA | Pending |
+| ROLE-02 | TBA | Pending |
+| ROLE-03 | TBA | Pending |
+| DATA-01 | TBA | Pending |
+| DATA-02 | TBA | Pending |
+| DATA-03 | TBA | Pending |
+| DATA-04 | TBA | Pending |
 
 **Coverage:**
-- v1 requirements: 13 total
-- Mapped to phases: 13
-- Unmapped: 0 ✓
+- v1 requirements: 20 total
+- Mapped to phases: 0
+- Unmapped: 20 ⚠
 
 ---
-*Requirements defined: 2026-02-26*
-*Last updated: 2026-02-28 after milestone gap-closure phase mapping*
+*Requirements defined: 2026-03-01*
+*Last updated: 2026-03-01 after milestone v1.1 scope confirmation*
