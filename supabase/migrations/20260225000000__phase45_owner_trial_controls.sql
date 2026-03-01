@@ -1,5 +1,6 @@
 -- Phase 45: Owner account trial recovery
 -- Sets the platform owner's own account to SUBSCRIBED so no trial banner appears.
+-- Note: Targets the first platform admin by global_role to avoid storing PII in version control.
 
 do $$
 declare
@@ -7,14 +8,15 @@ declare
   v_account_id uuid;
   v_updated integer := 0;
 begin
-  -- Find owner profile by email (idempotent — no-op if already SUBSCRIBED)
+  -- Find the platform owner by global admin role (first admin created, idempotent — no-op if already SUBSCRIBED)
   select id into v_owner_id
   from public.profiles
-  where email = 'till-schaefer@outlook.com'
+  where global_role = 'ADMIN'
+  order by created_at asc
   limit 1;
 
   if v_owner_id is null then
-    raise notice 'Phase45: owner profile not found (till-schaefer@outlook.com) — skipping owner trial recovery';
+    raise notice 'Phase45: no admin profile found — skipping owner trial recovery';
   else
     -- Find their account via ACTIVE membership
     select m.account_id into v_account_id
@@ -24,7 +26,7 @@ begin
     limit 1;
 
     if v_account_id is null then
-      raise notice 'Phase45: no ACTIVE membership found for owner — skipping';
+      raise notice 'Phase45: no ACTIVE membership found for admin owner — skipping';
     else
       update public.platform_accounts
       set

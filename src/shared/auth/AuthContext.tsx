@@ -38,8 +38,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const PLATFORM_OWNER_EMAIL =
-  (import.meta.env.VITE_PLATFORM_OWNER_EMAIL as string | undefined)?.trim().toLowerCase() ||
-  'till-schaefer@outlook.com';
+  (import.meta.env.VITE_PLATFORM_OWNER_EMAIL as string | undefined)?.trim().toLowerCase() ?? '';
 
 const toRole = (value: MembershipRole | undefined): Role => {
   if (value === 'ADMIN' || value === 'DISPATCH' || value === 'VIEWER') {

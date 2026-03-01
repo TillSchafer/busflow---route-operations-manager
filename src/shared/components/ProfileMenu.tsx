@@ -47,8 +47,8 @@ const ProfileMenu: React.FC<Props> = ({ user, variant = 'header', onProfile, onA
         className={buttonClass}
       >
         <div className="w-9 h-9 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold overflow-hidden">
-          {user.avatarUrl ? (
-            <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+          {user.avatarUrl && /^https:\/\//.test(user.avatarUrl) ? (
+            <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
           ) : (
             initials
           )}

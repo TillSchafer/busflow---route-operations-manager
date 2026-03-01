@@ -178,11 +178,21 @@ const AppRouter: React.FC = () => {
 
   const handleProfileAvatarSave = async () => {
     if (isAvatarSubmitting || !user) return;
+    const trimmedUrl = profileAvatarUrlDraft.trim();
+    if (trimmedUrl) {
+      try {
+        const parsed = new URL(trimmedUrl);
+        if (parsed.protocol !== 'https:') throw new Error();
+      } catch {
+        pushToast({ type: 'error', title: 'Ungültige URL', message: 'Profilbild-URL muss mit https:// beginnen.' });
+        return;
+      }
+    }
     setIsAvatarSubmitting(true);
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ avatar_url: profileAvatarUrlDraft || null })
+        .update({ avatar_url: trimmedUrl || null })
         .eq('id', user.id);
       if (error) throw error;
       pushToast({ type: 'success', title: 'Profilbild gespeichert', message: 'Das Profilbild wurde aktualisiert.' });
@@ -353,15 +363,19 @@ const AppRouter: React.FC = () => {
           <Route
             path="/busflow"
             element={
-              <BusflowApp
-                authUser={user}
-                activeAccountId={activeAccountId}
-                onProfile={() => navigate('/profile')}
-                onLogout={handleLogout}
-                onGoHome={() => navigate('/')}
-                onAdmin={goAdmin}
-                onOwner={user.isPlatformOwner ? goOwner : undefined}
-              />
+              activeAccountId ? (
+                <BusflowApp
+                  authUser={user}
+                  activeAccountId={activeAccountId}
+                  onProfile={() => navigate('/profile')}
+                  onLogout={handleLogout}
+                  onGoHome={() => navigate('/')}
+                  onAdmin={goAdmin}
+                  onOwner={user.isPlatformOwner ? goOwner : undefined}
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
             }
           />
           <Route

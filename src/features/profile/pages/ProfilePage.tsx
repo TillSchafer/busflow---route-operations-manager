@@ -82,8 +82,8 @@ const Profile: React.FC<Props> = ({
             {/* Identity */}
             <div className="flex items-center space-x-4">
               <div className="w-14 h-14 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold overflow-hidden shrink-0">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt={name} className="w-full h-full object-cover" />
+                {avatarUrl && /^https:\/\//.test(avatarUrl) ? (
+                  <img src={avatarUrl} alt={name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 ) : (
                   initials
                 )}
