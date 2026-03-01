@@ -1,12 +1,24 @@
-# BusFlow Unified Loading Experience
+# BusPilot Route Operations Manager
 
 ## What This Is
 
-A platform-wide loading standard for the existing BusFlow web application. The goal is to replace inconsistent loading behaviors with one unified full-page loading system that communicates clearly what is happening. This is for end users so they always understand that work is in progress instead of assuming the app is stuck.
+BusPilot ist eine bestehende Web-App zur Routenverwaltung mit Anmeldung/Registrierung, rollenbasierten Bereichen und dem Erstellen, Bearbeiten sowie Loeschen von Routen. Der Fokus liegt jetzt auf der Fertigstellung eines produktionsnahen MVP 1.0, das von echten Nutzerinnen und Nutzern getestet werden kann. Bestehende Kernablaeufe bleiben erhalten und werden gezielt stabilisiert, validiert und launch-ready gemacht.
 
 ## Core Value
 
-Every waiting state feels predictable and trustworthy because users always see a clear, consistent loading experience.
+Echte Nutzer koennen den bestehenden BusPilot-Kernfluss zuverlaessig testen, weil Performance, Datenkonsistenz und Rollen-/Berechtigungslogik in MVP 1.0 robust finalisiert sind.
+
+## Current Milestone: v1.1 BusPilot Fertigstellung
+
+**Goal:** MVP 1.0 so weit finalisieren, dass echte User sicher und aussagekraeftig testen koennen.
+
+**Target features:**
+- Ladezeiten minimieren
+- Route-Erstellung mit klaren Validierungen finalisieren
+- User-Settings finalisieren
+- Loesch-/Archivierungskonzept finalisieren
+- Rollenmanagement und Sichtbarkeiten finalisieren
+- Datenbankstruktur launch-ready ueberarbeiten
 
 ## Requirements
 
@@ -19,40 +31,38 @@ Every waiting state feels predictable and trustworthy because users always see a
 
 ### Active
 
-- [ ] Implement one centralized full-page loading screen system used across the complete platform.
-- [ ] Apply loading coverage to all relevant async actions (route transitions, initial app hydration, data fetching, and user-triggered actions like save/delete/invite/import).
-- [ ] Support action-specific loading text where available and use `Lade...` as global fallback text.
-- [ ] Add short-delay display behavior to avoid flicker on very fast actions.
-- [ ] Add accessibility support (`aria-busy`, screenreader-friendly status text, reduced-motion behavior).
-- [ ] Remove/replace all currently divergent loading screens to ensure visual and behavioral consistency.
+- [ ] Ladezeiten in zentralen Nutzerfluessen messbar reduzieren (Routing, Listenansichten, mutierende Aktionen).
+- [ ] Route-Erstellung mit finalen Validierungen absichern (Pflichtfelder, fachliche Regeln, Fehlerfeedback).
+- [ ] User-Settings vervollstaendigen und konsistent machen (Profil, sicherheitsrelevante Einstellungen, UX-Fluss).
+- [ ] Loesch- und Archivierungsregeln finalisieren (sichtbares Verhalten, Wiederherstellbarkeit falls vorgesehen, Datenkonsistenz).
+- [ ] Rollenmanagement finalisieren (wer sieht/editiert welche Bereiche, Aktionen und Daten).
+- [ ] Datenbankstruktur fuer MVP 1.0 ueberarbeiten und auf Launch-Reife ausrichten (Integritaet, Eindeutigkeit, klare Relationen).
 
 ### Out of Scope
 
-- Full visual redesign of unrelated UI areas — not required to deliver loading consistency.
-- Functional changes to business workflows (routing/auth/tenant logic) beyond loading orchestration — avoid unnecessary risk.
+- Genereller Neuaufbau der Anwendung — bestehende Architektur und Grundkonzept bleiben erhalten.
+- Grundprinzipien von Anmeldung und Registrierung — bleiben funktional unveraendert.
+- Entfernen der BusPilot-App-Kernfunktionalitaet fuer Routen erstellen/loeschen/bearbeiten — bleibt erhalten, nur Verbesserung/Finalisierung.
 
 ## Context
 
-This is a brownfield enhancement on the existing BusFlow codebase with a documented map in `.planning/codebase/`. The app uses React 19 + TypeScript + Vite + React Router + Tailwind + Supabase. Current loading behavior is split across different components and strings, causing user confusion. The target is consistency, clarity, and confidence across all user-visible wait states.
+Dies ist ein Brownfield-Milestone auf dem bestehenden BusPilot-Codebestand mit dokumentierter Codebase-Map in `.planning/codebase/`. Die App nutzt React 19 + TypeScript + Vite + React Router + Tailwind + Supabase. Vorhandene Kernfunktionen (Auth + Routen-CRUD) sind gesetzt; jetzt geht es um Performance-Haertung, Validierungsqualitaet, klare Berechtigungsgrenzen und eine tragfaehige Datenstruktur fuer reale MVP-Tests.
 
 ## Constraints
 
-- **Tech stack**: Must use existing frontend stack and patterns — keep implementation aligned with current architecture.
-- **Behavioral safety**: No breakage of existing URLs/user flows — this is a consistency hardening project.
-- **Coverage scope**: Apply to all loading-prone actions — requested as full platform rollout in v1.
-- **UX clarity**: Show loading only after short delay — prevents noisy flicker while preserving feedback on meaningful waits.
-- **Accessibility**: Must include ARIA status semantics and reduced-motion support — explicit requirement.
+- **Tech stack**: Bestehenden Stack und bestehende Architekturmuster beibehalten — keine disruptive Re-Architektur.
+- **Produktkontinuitaet**: Anmeldung/Registrierung und Routen-CRUD muessen funktional stabil bleiben — nur verbessern/finalisieren.
+- **MVP-Zielbild**: Fokus auf testbare reale Nutzerablaeufe — keine breitflachige Feature-Expansion ohne MVP-Bezug.
+- **Launch-Readiness**: Datenmodell, Rollenlogik und Validierungen muessen konsistent zusammenarbeiten — keine isolierten Einzelfixes ohne End-to-End-Koharenz.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Use a full-page loading screen pattern | User should immediately understand system is working | — Pending |
-| Scope includes all async actions | Remove inconsistency and duplicated behavior fully | — Pending |
-| Allow context-specific loading messages | Better feedback than one generic message for every case | — Pending |
-| Global fallback message is `Lade...` | Safe default when no specific action text exists | — Pending |
-| Show loader after short delay | Avoid flicker on fast operations | — Pending |
-| Include accessibility defaults (`aria-busy`, reduced-motion) | Required for robust user experience | — Pending |
+| Milestone-Fokus auf MVP-Fertigstellung statt Rebuild | Bestehendes System ist nutzbar und soll finalisiert werden | — Pending |
+| Kernablaeufe bleiben erhalten (Auth + Routen-CRUD) | Produktkontinuitaet und geringes Risiko fuer reale Tests | — Pending |
+| Performance, Rollenlogik, Validierung und Datenstruktur sind Prioritaet | Diese Felder blockieren reale Nutzer-Tests am staerksten | — Pending |
+| Loesch-/Archivierungskonzept wird explizit abgeschlossen | Klare Datenlebenszyklus-Regeln sind fuer MVP-Betrieb notwendig | — Pending |
 
 ---
-*Last updated: 2026-02-26 after project initialization questioning*
+*Last updated: 2026-03-01 after starting milestone v1.1 (BusPilot Fertigstellung)*
