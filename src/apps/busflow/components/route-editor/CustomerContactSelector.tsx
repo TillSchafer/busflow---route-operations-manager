@@ -18,6 +18,7 @@ interface Props {
   customerContactName?: string;
   customers: Customer[];
   customerRequiredForStatus: boolean;
+  hasError?: boolean;
   onChange: (patch: CustomerPatch) => void;
 }
 
@@ -32,6 +33,7 @@ const CustomerContactSelector: React.FC<Props> = ({
   customerContactName,
   customers,
   customerRequiredForStatus,
+  hasError,
   onChange,
 }) => {
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
@@ -88,7 +90,7 @@ const CustomerContactSelector: React.FC<Props> = ({
             }}
             onFocus={() => setIsCustomerDropdownOpen(true)}
             onBlur={() => window.setTimeout(() => setIsCustomerDropdownOpen(false), 150)}
-            className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
+            className={`w-full rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all ${hasError ? 'border-red-400 ring-1 ring-red-300' : 'border-slate-300'}`}
             placeholder="z. B. Stadtwerke GmbH"
           />
           {isCustomerDropdownOpen && filteredCustomers.length > 0 && (

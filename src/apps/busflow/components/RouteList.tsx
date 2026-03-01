@@ -10,9 +10,10 @@ interface Props {
   onPrint: (route: Route) => void;
   onDelete: (id: string) => void;
   canManageRoutes?: boolean;
+  label?: string;
 }
 
-const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelete, canManageRoutes = true }) => {
+const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelete, canManageRoutes = true, label }) => {
   const getBusTypeName = (busTypeId?: string) =>
     busTypes.find(busType => busType.id === busTypeId)?.name || '';
 
@@ -87,7 +88,7 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
     <div className="space-y-4">
       <div className="flex justify-between items-end mb-4">
         <h2 className="text-2xl font-bold text-slate-800">Betriebsübersicht</h2>
-        <span className="text-sm text-slate-500 font-medium">{routes.length} Aktive Routen</span>
+        <span className="text-sm text-slate-500 font-medium">{routes.length} {label ?? 'Routen'}</span>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

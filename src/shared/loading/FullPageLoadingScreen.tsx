@@ -41,7 +41,7 @@ const FullPageLoadingScreen: React.FC = () => {
       )}
 
       <div className={loadingContentClassName(backdropVariant, isShortVisible)} data-short-variant={isShortVisible ? 'true' : 'false'}>
-        <LoadingSpinner className="h-9 w-9 text-slate-700" />
+        <LoadingSpinner className="h-6 w-6 text-slate-700" />
         <p className="text-sm font-semibold tracking-tight">{message}</p>
         {progressPercent !== null && (
           <span className="rounded-full border border-slate-300/80 px-2 py-1 text-xs font-semibold text-slate-700">

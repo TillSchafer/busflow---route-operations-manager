@@ -60,6 +60,7 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
   const [invitationToResend, setInvitationToResend] = useState<InvitationItem | null>(null);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
   const [isManagingInvitation, setIsManagingInvitation] = useState(false);
+  const [updatingMembershipId, setUpdatingMembershipId] = useState<string | null>(null);
 
   const accountIsWritable = accountStatus === 'ACTIVE';
 
@@ -134,6 +135,7 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
 
   const handleUpdateMembershipRole = async (membershipId: string, nextRole: MembershipRole) => {
     if (!activeAccountId || !accountIsWritable) return;
+    setUpdatingMembershipId(membershipId);
     try {
       await TeamAdminApi.updateMembershipRole(activeAccountId, membershipId, nextRole);
       pushToast({ type: 'success', title: 'Gespeichert', message: 'Rolle wurde aktualisiert.' });
@@ -148,6 +150,8 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
             ? 'Keine Berechtigung für diese Rollenänderung.'
             : toActionErrorMessage(error, 'Rolle konnte nicht aktualisiert werden.');
       pushToast({ type: 'error', title: 'Aktualisierung fehlgeschlagen', message });
+    } finally {
+      setUpdatingMembershipId(null);
     }
   };
 
@@ -316,33 +320,36 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
         message={`Möchten Sie ${membershipToDelete?.profiles && !Array.isArray(membershipToDelete.profiles)
           ? (membershipToDelete.profiles.full_name || membershipToDelete.profiles.email)
           : 'dieses Mitglied'} wirklich vollständig löschen? Diese Aktion ist irreversibel.`}
-        confirmText={isDeletingUser ? 'Lösche...' : 'User löschen'}
+        confirmText="User löschen"
         cancelText="Abbrechen"
         type="danger"
         onConfirm={handleDeleteUserHard}
         onCancel={() => setMembershipToDelete(null)}
+        isConfirming={isDeletingUser}
       />
 
       <ConfirmDialog
         isOpen={!!invitationToDelete}
         title="Einladung löschen"
         message={`Soll die Einladung an ${invitationToDelete?.email || 'diese E-Mail-Adresse'} widerrufen und ein unbestätigter Account (falls vorhanden) gelöscht werden?`}
-        confirmText={isManagingInvitation ? 'Lösche...' : 'Löschen'}
+        confirmText="Löschen"
         cancelText="Abbrechen"
         type="danger"
         onConfirm={handleDeleteInvitation}
         onCancel={() => setInvitationToDelete(null)}
+        isConfirming={isManagingInvitation}
       />
 
       <ConfirmDialog
         isOpen={!!invitationToResend}
         title="Einladung erneut senden"
         message={`Soll die Einladung an ${invitationToResend?.email || 'diese E-Mail-Adresse'} neu erstellt und erneut per E-Mail versendet werden?`}
-        confirmText={isManagingInvitation ? 'Sende...' : 'Erneut senden'}
+        confirmText="Erneut senden"
         cancelText="Abbrechen"
         type="warning"
         onConfirm={handleResendInvitation}
         onCancel={() => setInvitationToResend(null)}
+        isConfirming={isManagingInvitation}
       />
 
       <AppHeader
@@ -468,7 +475,7 @@ const TeamAdmin: React.FC<Props> = ({ currentUserId, activeAccountId, header }) 
                             value={item.role}
                             onChange={nextRole => handleUpdateMembershipRole(item.id, nextRole)}
                             options={membershipRoleOptions}
-                            disabled={item.status !== 'ACTIVE' || isCurrentUser || !accountIsWritable}
+                            disabled={item.status !== 'ACTIVE' || isCurrentUser || !accountIsWritable || updatingMembershipId === item.id}
                             ariaLabel="Mitgliederrolle waehlen"
                           />
                         </div>

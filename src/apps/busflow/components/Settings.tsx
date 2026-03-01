@@ -9,10 +9,10 @@ import CustomerManagementPanel from './settings/CustomerManagementPanel';
 interface Props {
   busTypes: BusType[];
   workers: Worker[];
-  onAddBusType: (busType: BusType) => void;
-  onRemoveBusType: (id: string) => void;
-  onAddWorker: (worker: Worker) => void;
-  onRemoveWorker: (id: string) => void;
+  onAddBusType: (busType: BusType) => Promise<void>;
+  onRemoveBusType: (id: string) => Promise<void>;
+  onAddWorker: (worker: Worker) => Promise<void>;
+  onRemoveWorker: (id: string) => Promise<void>;
   onAddCustomerContact: (contact: CustomerContactFormPayload) => Promise<void>;
   onRemoveCustomerContact: (contactId: string) => Promise<void>;
   onUpdateCustomerContact: (contactId: string, patch: CustomerContactFormPayload) => Promise<void>;
@@ -28,7 +28,7 @@ interface Props {
     onProgress?: (progress: { current: number; total: number }) => void
   ) => Promise<CustomerImportResult>;
   mapDefaultView: MapDefaultView;
-  onSaveMapDefaultView: (view: MapDefaultView) => void;
+  onSaveMapDefaultView: (view: MapDefaultView) => Promise<void>;
   canManage?: boolean;
 }
 

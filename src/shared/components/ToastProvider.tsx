@@ -5,7 +5,7 @@ export type ToastType = 'success' | 'error' | 'warning' | 'info';
 export interface ToastInput {
   type: ToastType;
   title: string;
-  message: string;
+  message?: string | React.ReactNode;
   durationMs?: number;
 }
 

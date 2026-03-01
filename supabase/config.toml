@@ -17,7 +17,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.admin-update-membership-role-v1]
-verify_jwt = true
+verify_jwt = false
 
 # DECOMMISSION CANDIDATE: no active frontend caller — do not add new callers without documented use case
 [functions.admin-update-user-v1]

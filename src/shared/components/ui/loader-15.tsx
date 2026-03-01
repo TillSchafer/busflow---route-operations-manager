@@ -75,7 +75,7 @@ const StyledWrapper = styled.div`
     stroke-dasharray: 180 800;
     fill: none;
     stroke: url(#gradient);
-    stroke-width: 23;
+    stroke-width: 16;
     stroke-linecap: round;
   }
 
@@ -84,7 +84,7 @@ const StyledWrapper = styled.div`
     stroke-dasharray: 26 54;
     fill: none;
     stroke: url(#gradient);
-    stroke-width: 23;
+    stroke-width: 16;
     stroke-linecap: round;
   }
 

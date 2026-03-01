@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { CustomerContactListItem } from '../types';
+import { useToast } from '../../../shared/components/ToastProvider';
 
 export interface CustomerContactFormPayload {
   companyName: string;
@@ -27,9 +28,9 @@ interface Props {
 }
 
 const CustomerEditDialog: React.FC<Props> = ({ isOpen, mode, customer = null, onClose, onCreate, onSave }) => {
+  const { pushToast } = useToast();
   const [form, setForm] = useState<Partial<CustomerContactFormPayload>>({});
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -65,7 +66,6 @@ const CustomerEditDialog: React.FC<Props> = ({ isOpen, mode, customer = null, on
         metadata: {}
       });
     }
-    setError(null);
   }, [customer, mode, isOpen]);
 
   if (!isOpen) return null;
@@ -74,7 +74,7 @@ const CustomerEditDialog: React.FC<Props> = ({ isOpen, mode, customer = null, on
   const handleSubmit = async () => {
     const companyName = (form.companyName || '').trim();
     if (!companyName) {
-      setError('Firmenname ist erforderlich.');
+      pushToast({ type: 'error', title: 'Pflichtfeld fehlt', message: 'Bitte Firmennamen eingeben.' });
       return;
     }
 
@@ -83,7 +83,6 @@ const CustomerEditDialog: React.FC<Props> = ({ isOpen, mode, customer = null, on
     const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || (form.fullName || '').trim() || undefined;
 
     setIsSaving(true);
-    setError(null);
     try {
       const payload = {
         ...form,
@@ -107,8 +106,8 @@ const CustomerEditDialog: React.FC<Props> = ({ isOpen, mode, customer = null, on
         await onSave(customer.contactId, payload as CustomerContactFormPayload);
       }
       onClose();
-    } catch (e: any) {
-      setError(e?.message || (mode === 'create' ? 'Kontakt konnte nicht erstellt werden.' : 'Kontakt konnte nicht gespeichert werden.'));
+    } catch {
+      pushToast({ type: 'error', title: 'Speichern fehlgeschlagen', message: mode === 'create' ? 'Kontakt konnte nicht erstellt werden.' : 'Kontakt konnte nicht gespeichert werden.' });
     } finally {
       setIsSaving(false);
     }
@@ -208,7 +207,6 @@ const CustomerEditDialog: React.FC<Props> = ({ isOpen, mode, customer = null, on
           </label>
         </div>
         <div className="px-6 pb-6">
-          {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
           <div className="flex items-center justify-end gap-3">
             <button
               type="button"

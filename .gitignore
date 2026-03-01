@@ -24,3 +24,18 @@ dist-ssr
 *.sw?
 .env
 supabase/.temp/
+.tooling/
+
+# Flutter mobile app
+apps/mobile/.dart_tool/
+apps/mobile/.flutter-plugins
+apps/mobile/.flutter-plugins-dependencies
+apps/mobile/.packages
+apps/mobile/build/
+apps/mobile/android/.gradle/
+apps/mobile/android/app/debug/
+apps/mobile/android/app/profile/
+apps/mobile/android/app/release/
+apps/mobile/ios/Flutter/ephemeral/
+apps/mobile/ios/.symlinks/
+apps/mobile/ios/Pods/

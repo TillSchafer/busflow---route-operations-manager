@@ -1,7 +1,8 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Route, Stop, BusType, Worker, Customer, MapDefaultView } from '../types';
-import { Save, Plus, Trash2, AlertCircle, ChevronDown } from 'lucide-react';
+import { Save, Plus, Trash2, ChevronDown, Loader2 } from 'lucide-react';
+import { useToast } from '../../../shared/components/ToastProvider';
 import RouteMap from './RouteMap';
 import CustomerContactSelector from './route-editor/CustomerContactSelector';
 
@@ -11,7 +12,7 @@ import { DROPDOWN_ITEM, DROPDOWN_MENU, DROPDOWN_TRIGGER } from '../../../shared/
 
 interface Props {
   route: Route;
-  onSave: (route: Route) => void;
+  onSave: (route: Route) => Promise<void>;
   onCancel: () => void;
   busTypes: BusType[];
   workers: Worker[];
@@ -42,14 +43,17 @@ const dropdownTriggerButtonClass = `${DROPDOWN_TRIGGER} text-left flex items-cen
 const dropdownMenuClass = `${DROPDOWN_MENU} overflow-hidden`;
 
 const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, workers, customers, mapDefaultView }) => {
+  const { pushToast } = useToast();
   const [formData, setFormData] = useState<Route>({ ...route });
-  const [errors, setErrors] = useState<string[]>([]);
+  const [invalidFields, setInvalidFields] = useState<Set<string>>(new Set());
   const [suggestions, setSuggestions] = useState<Record<string, Array<{ label: string; lat: number; lon: number }>>>({});
   const [activeStopId, setActiveStopId] = useState<string | null>(null);
   const [isBusTypeDropdownOpen, setIsBusTypeDropdownOpen] = useState(false);
   const [isWorkerDropdownOpen, setIsWorkerDropdownOpen] = useState(false);
   const searchTimeouts = useRef<Record<string, number>>({});
   const searchControllers = useRef<Record<string, AbortController>>({});
+
+  const [isSaving, setIsSaving] = useState(false);
 
   // Unsaved Changes Dialog State
   const [initialJson] = useState(JSON.stringify(route));
@@ -96,31 +100,42 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
     [workers, formData.workerId]
   );
 
-  const validate = () => {
-    const newErrors: string[] = [];
-    if (!formData.name) newErrors.push('Der Routenname ist erforderlich.');
-    if (customerRequiredForStatus && !formData.customerId) {
-      newErrors.push('Bitte wählen Sie einen Kunden aus der Liste aus (für Geplant/Aktiv/Archiviert).');
+  const validate = (): { errors: string[]; invalid: Set<string> } => {
+    const errors: string[] = [];
+    const invalid = new Set<string>();
+    if (!formData.name) {
+      errors.push('Der Routenname ist erforderlich.');
+      invalid.add('name');
     }
-    if (formData.capacity < 0) newErrors.push('Die belegten Plätze dürfen nicht negativ sein.');
+    if (customerRequiredForStatus && !formData.customerId) {
+      errors.push('Bitte wählen Sie einen Kunden aus der Liste aus (für Geplant/Aktiv/Archiviert).');
+      invalid.add('customer');
+    }
+    if (formData.capacity < 0) {
+      errors.push('Die belegten Plätze dürfen nicht negativ sein.');
+      invalid.add('capacity');
+    }
     if (selectedBusTypeCapacity > 0 && formData.capacity > selectedBusTypeCapacity) {
-      newErrors.push(`Belegte Plätze (${formData.capacity}) überschreiten die Buskapazität (${selectedBusTypeCapacity}).`);
+      errors.push(`Belegte Plätze (${formData.capacity}) überschreiten die Buskapazität (${selectedBusTypeCapacity}).`);
+      invalid.add('capacity');
     }
 
     updatedStops.forEach((stop, idx) => {
       if (selectedBusTypeCapacity > 0 && stop.currentTotal > selectedBusTypeCapacity) {
-        newErrors.push(`Halt "${stop.location || idx + 1}" überschreitet die Buskapazität (${stop.currentTotal}/${selectedBusTypeCapacity}).`);
+        errors.push(`Halt "${stop.location || idx + 1}" überschreitet die Buskapazität (${stop.currentTotal}/${selectedBusTypeCapacity}).`);
+        invalid.add(`stop-${stop.id}-total`);
       }
       if (stop.currentTotal < 0) {
-        newErrors.push(`Halt "${stop.location || idx + 1}" führt zu negativen Fahrgastzahlen.`);
+        errors.push(`Halt "${stop.location || idx + 1}" führt zu negativen Fahrgastzahlen.`);
+        invalid.add(`stop-${stop.id}-total`);
       }
       if (stop.arrivalTime > stop.departureTime) {
-        newErrors.push(`Halt "${stop.location || idx + 1}" hat eine Ankunftszeit nach der Abfahrtszeit.`);
+        errors.push(`Halt "${stop.location || idx + 1}" hat eine Ankunftszeit nach der Abfahrtszeit.`);
+        invalid.add(`stop-${stop.id}-times`);
       }
     });
 
-    setErrors(newErrors);
-    return newErrors.length === 0;
+    return { errors, invalid };
   };
 
   const handleAddStop = () => {
@@ -198,9 +213,26 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
     }));
   };
 
-  const handleSave = () => {
-    if (validate()) {
-      onSave({ ...formData, stops: updatedStops });
+  const handleSave = async () => {
+    const { errors, invalid } = validate();
+    setInvalidFields(invalid);
+    if (errors.length > 0) {
+      pushToast({
+        type: 'error',
+        title: 'Speichern fehlgeschlagen',
+        message: errors.length === 1
+          ? errors[0]
+          : <ul className="list-disc pl-4 space-y-0.5 mt-1">{errors.map((e, i) => <li key={i}>{e}</li>)}</ul>,
+        durationMs: 6000,
+      });
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await onSave({ ...formData, stops: updatedStops });
+      setInvalidFields(new Set());
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -235,33 +267,23 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
             />
             <button
               onClick={handleCancelWrapper}
-              className="px-4 py-2 text-slate-600 hover:text-slate-800 font-medium transition-colors"
+              disabled={isSaving}
+              className="px-4 py-2 text-slate-600 hover:text-slate-800 font-medium transition-colors disabled:opacity-50"
             >
               Abbrechen
             </button>
             <button
               onClick={handleSave}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold shadow-md shadow-blue-200 flex items-center space-x-2 transition-all"
+              disabled={isSaving}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold shadow-md shadow-blue-200 flex items-center space-x-2 transition-all disabled:opacity-70"
             >
-              <Save className="w-4 h-4" />
-              <span>Speichern</span>
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              <span>{isSaving ? 'Speichern...' : 'Speichern'}</span>
             </button>
           </div>
         </div>
 
         <div className="p-6">
-          {errors.length > 0 && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg space-y-1">
-              <div className="flex items-center text-red-700 font-bold mb-1">
-                <AlertCircle className="w-4 h-4 mr-2" />
-                <span>Validierungsfehler</span>
-              </div>
-              {errors.map((err, i) => (
-                <p key={i} className="text-red-600 text-sm">{err}</p>
-              ))}
-            </div>
-          )}
-
           {/* Primary Meta Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <div className="col-span-1 md:col-span-2">
@@ -269,8 +291,11 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
               <input
                 type="text"
                 value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
-                className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
+                onChange={e => {
+                  setFormData({ ...formData, name: e.target.value });
+                  setInvalidFields(prev => { const s = new Set(prev); s.delete('name'); return s; });
+                }}
+                className={`w-full rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all ${invalidFields.has('name') ? 'border-red-400 ring-1 ring-red-300' : 'border-slate-300'}`}
                 placeholder="Neue Route"
               />
             </div>
@@ -281,12 +306,13 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
               customerContactName={formData.customerContactName}
               customers={customers}
               customerRequiredForStatus={customerRequiredForStatus}
-              onChange={patch =>
-                setFormData(prev => ({
-                  ...prev,
-                  ...patch,
-                }))
-              }
+              hasError={invalidFields.has('customer')}
+              onChange={patch => {
+                setFormData(prev => ({ ...prev, ...patch }));
+                if (patch.customerId) {
+                  setInvalidFields(prev => { const s = new Set(prev); s.delete('customer'); return s; });
+                }
+              }}
             />
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">Datum</label>
@@ -400,8 +426,11 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
               <input
                 type="number"
                 value={formData.capacity}
-                onChange={e => setFormData({ ...formData, capacity: parseInt(e.target.value) || 0 })}
-                className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
+                onChange={e => {
+                  setFormData({ ...formData, capacity: parseInt(e.target.value) || 0 });
+                  setInvalidFields(prev => { const s = new Set(prev); s.delete('capacity'); return s; });
+                }}
+                className={`w-full rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all ${invalidFields.has('capacity') ? 'border-red-400 ring-1 ring-red-300' : 'border-slate-300'}`}
               />
               {selectedBusTypeCapacity > 0 && (
                 <p className="text-xs text-slate-500 mt-1">
@@ -570,16 +599,22 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                       <input
                         type="time"
                         value={stop.arrivalTime}
-                        onChange={e => handleUpdateStop(stop.id, { arrivalTime: e.target.value })}
-                        className="w-full border-transparent bg-transparent focus:ring-0 p-1 text-slate-800"
+                        onChange={e => {
+                          handleUpdateStop(stop.id, { arrivalTime: e.target.value });
+                          setInvalidFields(prev => { const s = new Set(prev); s.delete(`stop-${stop.id}-times`); return s; });
+                        }}
+                        className={`w-full focus:ring-0 p-1 text-slate-800 ${invalidFields.has(`stop-${stop.id}-times`) ? 'border border-red-400 rounded bg-transparent' : 'border-transparent bg-transparent'}`}
                       />
                     </td>
                     <td className="px-4 py-3">
                       <input
                         type="time"
                         value={stop.departureTime}
-                        onChange={e => handleUpdateStop(stop.id, { departureTime: e.target.value })}
-                        className="w-full border-transparent bg-transparent focus:ring-0 p-1 text-slate-800 font-semibold"
+                        onChange={e => {
+                          handleUpdateStop(stop.id, { departureTime: e.target.value });
+                          setInvalidFields(prev => { const s = new Set(prev); s.delete(`stop-${stop.id}-times`); return s; });
+                        }}
+                        className={`w-full focus:ring-0 p-1 text-slate-800 font-semibold ${invalidFields.has(`stop-${stop.id}-times`) ? 'border border-red-400 rounded bg-transparent' : 'border-transparent bg-transparent'}`}
                       />
                     </td>
                     <td className="px-4 py-3">
@@ -602,8 +637,11 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                       <input
                         type="number"
                         value={stop.currentTotal}
-                        onChange={e => handleUpdateStop(stop.id, { currentTotal: parseInt(e.target.value) || 0 })}
-                        className={`w-full border-transparent bg-transparent focus:ring-0 p-1 text-center font-bold ${selectedBusTypeCapacity > 0 && stop.currentTotal > selectedBusTypeCapacity ? 'text-red-600' : 'text-slate-700'}`}
+                        onChange={e => {
+                          handleUpdateStop(stop.id, { currentTotal: parseInt(e.target.value) || 0 });
+                          setInvalidFields(prev => { const s = new Set(prev); s.delete(`stop-${stop.id}-total`); return s; });
+                        }}
+                        className={`w-full focus:ring-0 p-1 text-center font-bold ${invalidFields.has(`stop-${stop.id}-total`) ? 'border border-red-400 rounded bg-transparent' : 'border-transparent bg-transparent'} ${selectedBusTypeCapacity > 0 && stop.currentTotal > selectedBusTypeCapacity ? 'text-red-600' : 'text-slate-700'}`}
                       />
                     </td>
                     <td className="px-4 py-3">

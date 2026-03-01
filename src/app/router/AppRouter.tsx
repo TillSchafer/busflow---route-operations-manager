@@ -21,8 +21,6 @@ const BusflowApp = lazy(() => import('../../features/busflow/pages/BusflowAppPag
 const LoginScreen: React.FC<{
   email: string;
   password: string;
-  loginError: string;
-  resetMessage: string;
   isLoggingIn: boolean;
   isSendingReset: boolean;
   onEmailChange: (value: string) => void;
@@ -32,8 +30,6 @@ const LoginScreen: React.FC<{
 }> = ({
   email,
   password,
-  loginError,
-  resetMessage,
   isLoggingIn,
   isSendingReset,
   onEmailChange,
@@ -68,8 +64,6 @@ const LoginScreen: React.FC<{
           minLength={6}
         />
       </div>
-      {loginError && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{loginError}</p>}
-      {resetMessage && <p className="text-sm text-emerald-700 bg-emerald-50 p-2 rounded">{resetMessage}</p>}
 
       <button
         type="submit"
@@ -107,8 +101,6 @@ const AppRouter: React.FC = () => {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
-  const [resetMessage, setResetMessage] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState(false);
 
@@ -130,7 +122,6 @@ const AppRouter: React.FC = () => {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoginError('');
     setIsLoggingIn(true);
 
     try {
@@ -141,7 +132,7 @@ const AppRouter: React.FC = () => {
       if (error) throw error;
     } catch (error: unknown) {
       const fallbackMessage = 'Anmeldung fehlgeschlagen.';
-      setLoginError(error instanceof Error ? error.message || fallbackMessage : fallbackMessage);
+      pushToast({ type: 'error', title: 'Anmelden fehlgeschlagen', message: error instanceof Error ? error.message || fallbackMessage : fallbackMessage });
     } finally {
       setIsLoggingIn(false);
     }
@@ -150,12 +141,11 @@ const AppRouter: React.FC = () => {
   const handleForgotPassword = async () => {
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) {
-      setLoginError('Bitte zuerst Ihre E-Mail-Adresse eingeben.');
+      pushToast({ type: 'error', title: 'Anmelden fehlgeschlagen', message: 'Bitte zuerst Ihre E-Mail-Adresse eingeben.' });
       return;
     }
 
     setIsSendingReset(true);
-    setResetMessage('');
 
     try {
       const redirectTo =
@@ -167,7 +157,7 @@ const AppRouter: React.FC = () => {
       // Neutral response on purpose to avoid account enumeration.
     } finally {
       setIsSendingReset(false);
-      setResetMessage('Wenn ein passendes Konto existiert, wurde ein Reset-Link per E-Mail versendet.');
+      pushToast({ type: 'success', title: 'Reset-Link gesendet', message: 'Wenn ein passendes Konto existiert, wurde ein Reset-Link per E-Mail versendet.' });
     }
   };
 
@@ -277,14 +267,9 @@ const AppRouter: React.FC = () => {
                 <LoginScreen
                   email={email}
                   password={password}
-                  loginError={loginError}
-                  resetMessage={resetMessage}
                   isLoggingIn={isLoggingIn}
                   isSendingReset={isSendingReset}
-                  onEmailChange={value => {
-                    setEmail(value);
-                    setResetMessage('');
-                  }}
+                  onEmailChange={setEmail}
                   onPasswordChange={setPassword}
                   onSubmit={handleAuth}
                   onForgotPassword={handleForgotPassword}

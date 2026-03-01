@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import ModalShell from '../ui/dialog/ModalShell';
 
 interface Props {
@@ -13,6 +13,7 @@ interface Props {
     type?: 'danger' | 'warning' | 'info';
     confirmButtonClassName?: string;
     cancelButtonClassName?: string;
+    isConfirming?: boolean;
 }
 
 const ConfirmDialog: React.FC<Props> = ({
@@ -25,7 +26,8 @@ const ConfirmDialog: React.FC<Props> = ({
     cancelText = 'Abbrechen',
     type = 'warning',
     confirmButtonClassName,
-    cancelButtonClassName
+    cancelButtonClassName,
+    isConfirming = false,
 }) => {
     return (
         <ModalShell isOpen={isOpen} className="max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
@@ -43,14 +45,17 @@ const ConfirmDialog: React.FC<Props> = ({
                     <div className="flex justify-end space-x-3">
                         <button
                             onClick={onCancel}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${cancelButtonClassName || 'text-slate-600 hover:bg-slate-100'}`}
+                            disabled={isConfirming}
+                            className={`px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 ${cancelButtonClassName || 'text-slate-600 hover:bg-slate-100'}`}
                         >
                             {cancelText}
                         </button>
                         <button
                             onClick={onConfirm}
-                            className={`px-4 py-2 text-white rounded-lg font-bold shadow-sm transition-colors ${confirmButtonClassName || (type === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-600 hover:bg-amber-700')}`}
+                            disabled={isConfirming}
+                            className={`px-4 py-2 text-white rounded-lg font-bold shadow-sm transition-colors disabled:opacity-70 flex items-center gap-2 ${confirmButtonClassName || (type === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-600 hover:bg-amber-700')}`}
                         >
+                            {isConfirming && <Loader2 className="w-4 h-4 animate-spin" />}
                             {confirmText}
                         </button>
                     </div>

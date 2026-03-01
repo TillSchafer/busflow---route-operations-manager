@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { BusType } from '../../types';
-import { Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
 
 interface Props {
   busTypes: BusType[];
-  onAddBusType: (busType: BusType) => void;
-  onRemoveBusType: (id: string) => void;
+  onAddBusType: (busType: BusType) => Promise<void>;
+  onRemoveBusType: (id: string) => Promise<void>;
   canManage?: boolean;
 }
 
@@ -13,19 +13,35 @@ const BusTypePanel: React.FC<Props> = ({ busTypes, onAddBusType, onRemoveBusType
   const [busTypeName, setBusTypeName] = useState('');
   const [busTypeCapacity, setBusTypeCapacity] = useState(50);
   const [busTypeNotes, setBusTypeNotes] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
-  const handleAddBusType = () => {
-    if (!canManage) return;
-    if (!busTypeName.trim()) return;
-    onAddBusType({
-      id: Date.now().toString(),
-      name: busTypeName.trim(),
-      capacity: Number(busTypeCapacity) || 0,
-      notes: busTypeNotes.trim() || undefined
-    });
-    setBusTypeName('');
-    setBusTypeCapacity(50);
-    setBusTypeNotes('');
+  const handleAddBusType = async () => {
+    if (!canManage || !busTypeName.trim() || isAdding) return;
+    setIsAdding(true);
+    try {
+      await onAddBusType({
+        id: Date.now().toString(),
+        name: busTypeName.trim(),
+        capacity: Number(busTypeCapacity) || 0,
+        notes: busTypeNotes.trim() || undefined
+      });
+      setBusTypeName('');
+      setBusTypeCapacity(50);
+      setBusTypeNotes('');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const handleRemoveBusType = async (id: string) => {
+    if (!canManage || removingId) return;
+    setRemovingId(id);
+    try {
+      await onRemoveBusType(id);
+    } finally {
+      setRemovingId(null);
+    }
   };
 
   return (
@@ -40,7 +56,7 @@ const BusTypePanel: React.FC<Props> = ({ busTypes, onAddBusType, onRemoveBusType
             type="text"
             value={busTypeName}
             onChange={e => setBusTypeName(e.target.value)}
-            disabled={!canManage}
+            disabled={!canManage || isAdding}
             className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
             placeholder="z. B. Stadtbus 40"
           />
@@ -51,18 +67,18 @@ const BusTypePanel: React.FC<Props> = ({ busTypes, onAddBusType, onRemoveBusType
             type="number"
             value={busTypeCapacity}
             onChange={e => setBusTypeCapacity(parseInt(e.target.value, 10) || 0)}
-            disabled={!canManage}
+            disabled={!canManage || isAdding}
             className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
           />
         </div>
         <div className="flex items-end">
           <button
             onClick={handleAddBusType}
-            disabled={!canManage}
-            className="w-full bg-[#2663EB] hover:bg-[#1f54c7] text-white px-4 py-2.5 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
+            disabled={!canManage || isAdding}
+            className="w-full bg-[#2663EB] hover:bg-[#1f54c7] text-white px-4 py-2.5 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors disabled:opacity-70"
           >
-            <Plus className="w-4 h-4" />
-            <span>Bustyp hinzufügen</span>
+            {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            <span>{isAdding ? 'Speichern...' : 'Bustyp hinzufügen'}</span>
           </button>
         </div>
         <div className="md:col-span-4">
@@ -71,7 +87,7 @@ const BusTypePanel: React.FC<Props> = ({ busTypes, onAddBusType, onRemoveBusType
             type="text"
             value={busTypeNotes}
             onChange={e => setBusTypeNotes(e.target.value)}
-            disabled={!canManage}
+            disabled={!canManage || isAdding}
             className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
             placeholder="Optionale Notizen"
           />
@@ -90,12 +106,16 @@ const BusTypePanel: React.FC<Props> = ({ busTypes, onAddBusType, onRemoveBusType
               {busType.notes && <p className="text-xs text-slate-400">{busType.notes}</p>}
             </div>
             <button
-              onClick={() => onRemoveBusType(busType.id)}
-              disabled={!canManage}
-              className={`transition-colors p-2 ${canManage ? 'text-slate-400 hover:text-red-600' : 'text-slate-300 cursor-not-allowed'}`}
+              onClick={() => handleRemoveBusType(busType.id)}
+              disabled={!canManage || !!removingId}
+              className={`transition-colors p-2 ${canManage && !removingId ? 'text-slate-400 hover:text-red-600' : 'text-slate-300 cursor-not-allowed'}`}
               title="Bustyp entfernen"
             >
-              <Trash2 className="w-4 h-4" />
+              {removingId === busType.id ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
             </button>
           </div>
         ))}

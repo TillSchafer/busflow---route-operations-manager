@@ -7,6 +7,17 @@ BusFlow is a React + Vite app with Supabase auth, database, RLS, and realtime sy
 - Vite
 - Supabase (`@supabase/supabase-js`)
 - Tailwind utility classes
+- Flutter (mobile app in `apps/mobile`)
+
+## Mobile App (Android + iOS)
+- Neuer Mobile-Client liegt in `apps/mobile` (Flutter).
+- Ziel: Mitarbeiter-App mit Login, Tagesrouten, Kartenansicht und GPS-Position.
+- Setup:
+  1. `cd apps/mobile`
+  2. `flutter create --platforms=android,ios .`
+  3. `flutter pub get`
+  4. `flutter run --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...`
+- Details: `apps/mobile/README.md`
 
 ## Quality Gates
 - `npm run typecheck` -> TypeScript compile check without emit

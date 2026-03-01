@@ -1,28 +1,44 @@
 import React, { useState } from 'react';
 import { Worker } from '../../types';
-import { Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
 
 interface Props {
   workers: Worker[];
-  onAddWorker: (worker: Worker) => void;
-  onRemoveWorker: (id: string) => void;
+  onAddWorker: (worker: Worker) => Promise<void>;
+  onRemoveWorker: (id: string) => Promise<void>;
   canManage?: boolean;
 }
 
 const WorkerPanel: React.FC<Props> = ({ workers, onAddWorker, onRemoveWorker, canManage = true }) => {
   const [workerName, setWorkerName] = useState('');
   const [workerRole, setWorkerRole] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
-  const handleAddWorker = () => {
-    if (!canManage) return;
-    if (!workerName.trim()) return;
-    onAddWorker({
-      id: Date.now().toString(),
-      name: workerName.trim(),
-      role: workerRole.trim() || undefined
-    });
-    setWorkerName('');
-    setWorkerRole('');
+  const handleAddWorker = async () => {
+    if (!canManage || !workerName.trim() || isAdding) return;
+    setIsAdding(true);
+    try {
+      await onAddWorker({
+        id: Date.now().toString(),
+        name: workerName.trim(),
+        role: workerRole.trim() || undefined
+      });
+      setWorkerName('');
+      setWorkerRole('');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const handleRemoveWorker = async (id: string) => {
+    if (!canManage || removingId) return;
+    setRemovingId(id);
+    try {
+      await onRemoveWorker(id);
+    } finally {
+      setRemovingId(null);
+    }
   };
 
   return (
@@ -37,7 +53,7 @@ const WorkerPanel: React.FC<Props> = ({ workers, onAddWorker, onRemoveWorker, ca
             type="text"
             value={workerName}
             onChange={e => setWorkerName(e.target.value)}
-            disabled={!canManage}
+            disabled={!canManage || isAdding}
             className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
             placeholder="z. B. Alex Schmidt"
           />
@@ -48,7 +64,7 @@ const WorkerPanel: React.FC<Props> = ({ workers, onAddWorker, onRemoveWorker, ca
             type="text"
             value={workerRole}
             onChange={e => setWorkerRole(e.target.value)}
-            disabled={!canManage}
+            disabled={!canManage || isAdding}
             className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all"
             placeholder="Fahrer"
           />
@@ -56,11 +72,11 @@ const WorkerPanel: React.FC<Props> = ({ workers, onAddWorker, onRemoveWorker, ca
         <div className="flex items-end">
           <button
             onClick={handleAddWorker}
-            disabled={!canManage}
-            className="w-full bg-[#2663EB] hover:bg-[#1f54c7] text-white px-4 py-2.5 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors"
+            disabled={!canManage || isAdding}
+            className="w-full bg-[#2663EB] hover:bg-[#1f54c7] text-white px-4 py-2.5 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors disabled:opacity-70"
           >
-            <Plus className="w-4 h-4" />
-            <span>Mitarbeiter hinzufügen</span>
+            {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            <span>{isAdding ? 'Speichern...' : 'Mitarbeiter hinzufügen'}</span>
           </button>
         </div>
       </div>
@@ -76,12 +92,16 @@ const WorkerPanel: React.FC<Props> = ({ workers, onAddWorker, onRemoveWorker, ca
               {worker.role && <p className="text-xs text-slate-500">{worker.role}</p>}
             </div>
             <button
-              onClick={() => onRemoveWorker(worker.id)}
-              disabled={!canManage}
-              className={`transition-colors p-2 ${canManage ? 'text-slate-400 hover:text-red-600' : 'text-slate-300 cursor-not-allowed'}`}
+              onClick={() => handleRemoveWorker(worker.id)}
+              disabled={!canManage || !!removingId}
+              className={`transition-colors p-2 ${canManage && !removingId ? 'text-slate-400 hover:text-red-600' : 'text-slate-300 cursor-not-allowed'}`}
               title="Mitarbeiter entfernen"
             >
-              <Trash2 className="w-4 h-4" />
+              {removingId === worker.id ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
             </button>
           </div>
         ))}

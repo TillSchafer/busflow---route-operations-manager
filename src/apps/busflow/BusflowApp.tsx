@@ -51,7 +51,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
   const [currentRoute, setCurrentRoute] = useState<Route | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [routeIdToDelete, setRouteIdToDelete] = useState<string | null>(null);
-  const [editConflictMessage, setEditConflictMessage] = useState<string | null>(null);
+  const [isDeletingRoute, setIsDeletingRoute] = useState(false);
   const [isNewRouteDraft, setIsNewRouteDraft] = useState(false);
 
   const canManageRoutes = authUser?.role === 'ADMIN' || authUser?.role === 'DISPATCH';
@@ -91,7 +91,6 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       busTypeId: undefined,
       workerId: undefined,
     };
-    setEditConflictMessage(null);
     setIsNewRouteDraft(true);
     setCurrentRoute(newRouteDraft);
     setView('EDITOR');
@@ -102,7 +101,6 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       pushToast({ type: 'error', title: 'Keine Berechtigung', message: 'Sie haben nur Leserechte.' });
       return;
     }
-    setEditConflictMessage(null);
     setIsNewRouteDraft(false);
     setCurrentRoute(route);
     setView('EDITOR');
@@ -121,7 +119,6 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       return;
     }
     try {
-      setEditConflictMessage(null);
       if (isNewRouteDraft) {
         const { id: _draftId, updatedAt: _draftUpdatedAt, ...createPayload } = updatedRoute;
         const created = await BusFlowApi.createRoute(createPayload);
@@ -142,13 +139,17 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
         const fetched = await BusFlowApi.getRoutes();
         setRoutes(fetched);
         const latestRoute = fetched.find(r => r.id === updatedRoute.id) || null;
+        pushToast({
+          type: 'warning',
+          title: 'Konflikt erkannt',
+          message: 'Route wurde von einem anderen Benutzer geändert. Aktuellste Daten wurden geladen.',
+          durationMs: 7000,
+        });
         if (latestRoute) {
           setCurrentRoute(latestRoute);
-          setEditConflictMessage('Die Route wurde von einem anderen Benutzer geändert. Die neuesten Daten wurden geladen.');
           setView('EDITOR');
           return;
         }
-        setEditConflictMessage(null);
         setView('LIST');
         return;
       }
@@ -185,6 +186,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
 
   const handleConfirmDeleteRoute = async () => {
     if (!routeIdToDelete) return;
+    setIsDeletingRoute(true);
     try {
       await BusFlowApi.deleteRoute(routeIdToDelete);
       setRoutes(prev => prev.filter(r => r.id !== routeIdToDelete));
@@ -199,6 +201,8 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       }
       console.error(error);
       pushToast({ type: 'error', title: 'Löschen fehlgeschlagen', message: 'Die Route konnte nicht gelöscht werden.' });
+    } finally {
+      setIsDeletingRoute(false);
     }
   };
 
@@ -448,6 +452,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
         confirmButtonClassName="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg font-bold shadow-sm transition-colors"
         onConfirm={handleConfirmDeleteRoute}
         onCancel={() => setRouteIdToDelete(null)}
+        isConfirming={isDeletingRoute}
       />
       <AppHeader
         title="BusPilot Routenplanung"
@@ -506,7 +511,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
                     </button>
                   </div>
                   {activeSection.length > 0 ? (
-                    <RouteList routes={activeSection} busTypes={busTypes} onEdit={handleEditRoute} onPrint={handlePrintRoute} onDelete={handleDeleteRoute} canManageRoutes={canManageRoutes} />
+                    <RouteList routes={activeSection} busTypes={busTypes} onEdit={handleEditRoute} onPrint={handlePrintRoute} onDelete={handleDeleteRoute} canManageRoutes={canManageRoutes} label="Aktive Routen" />
                   ) : (
                     <div className="text-center py-10 bg-slate-50 rounded-lg border border-dashed border-slate-300">
                       <p className="text-slate-500">Keine aktiven Routen.</p>
@@ -521,7 +526,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
                     <span className="bg-slate-100 text-slate-600 text-xs font-semibold px-2 py-0.5 rounded-full">{otherSection.length}</span>
                   </div>
                   {otherSection.length > 0 ? (
-                    <RouteList routes={otherSection} busTypes={busTypes} onEdit={handleEditRoute} onPrint={handlePrintRoute} onDelete={handleDeleteRoute} canManageRoutes={canManageRoutes} />
+                    <RouteList routes={otherSection} busTypes={busTypes} onEdit={handleEditRoute} onPrint={handlePrintRoute} onDelete={handleDeleteRoute} canManageRoutes={canManageRoutes} label="Routen" />
                   ) : (
                     <div className="text-center py-6">
                       <p className="text-slate-400 text-sm">Keine weiteren Routen.</p>
@@ -536,11 +541,6 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
         {view === 'EDITOR' && currentRoute && (
           <div className="space-y-6">
             <BackToOverviewButton onClick={() => setView('LIST')} />
-            {editConflictMessage && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-                <p className="text-sm text-amber-900 font-medium">{editConflictMessage}</p>
-              </div>
-            )}
             <RouteEditor
               key={`${currentRoute.id}-${currentRoute.updatedAt || ''}`}
               route={currentRoute}

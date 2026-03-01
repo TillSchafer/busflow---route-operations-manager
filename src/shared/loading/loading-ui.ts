@@ -45,14 +45,14 @@ export const loadingContentClassName = (variant: LoadingBackdropVariant, isShort
   if (isShortVariant) {
     return [
       'relative flex flex-col items-center gap-2 text-center',
-      'rounded-2xl border border-white/55 bg-white/72 px-8 py-6',
+      'rounded-xl border border-white/55 bg-white/72 px-5 py-4',
       'shadow-sm backdrop-blur-md transition-all duration-200 text-slate-700'
     ].join(' ');
   }
 
   return [
     'relative flex flex-col items-center gap-3 text-center',
-    'rounded-2xl border border-white/70 bg-white/86 px-9 py-7',
+      'rounded-xl border border-white/70 bg-white/86 px-6 py-5',
     'shadow-lg backdrop-blur-xl transition-all duration-250 text-slate-800'
   ].join(' ');
 };

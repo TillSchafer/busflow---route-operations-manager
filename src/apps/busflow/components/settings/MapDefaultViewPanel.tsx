@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { MapDefaultView } from '../../types';
+import { Loader2 } from 'lucide-react';
 import { useToast } from '../../../../shared/components/ToastProvider';
 import { DROPDOWN_HELPER_TEXT, DROPDOWN_ITEM, DROPDOWN_MENU } from '../../../../shared/components/form/dropdownStyles';
 
 interface Props {
   mapDefaultView: MapDefaultView;
-  onSaveMapDefaultView: (view: MapDefaultView) => void;
+  onSaveMapDefaultView: (view: MapDefaultView) => Promise<void>;
   canManage?: boolean;
 }
 
@@ -29,6 +30,7 @@ const MapDefaultViewPanel: React.FC<Props> = ({ mapDefaultView, onSaveMapDefault
   const [mapZoomPercent, setMapZoomPercent] = useState<number>(zoomToPercent(mapDefaultView.zoom || 6));
   const [mapSuggestions, setMapSuggestions] = useState<Array<{ label: string; lat: number; lon: number }>>([]);
   const [mapSuggestionsOpen, setMapSuggestionsOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const searchTimeoutRef = useRef<number | null>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
 
@@ -75,8 +77,8 @@ const MapDefaultViewPanel: React.FC<Props> = ({ mapDefaultView, onSaveMapDefault
     }, 250);
   };
 
-  const handleSaveMapDefault = () => {
-    if (!canManage) return;
+  const handleSaveMapDefault = async () => {
+    if (!canManage || isSaving) return;
     if (!Number.isFinite(mapLat) || !Number.isFinite(mapLon)) {
       pushToast({
         type: 'error',
@@ -85,12 +87,17 @@ const MapDefaultViewPanel: React.FC<Props> = ({ mapDefaultView, onSaveMapDefault
       });
       return;
     }
-    onSaveMapDefaultView({
-      address: mapAddress.trim(),
-      lat: mapLat,
-      lon: mapLon,
-      zoom: percentToZoom(mapZoomPercent)
-    });
+    setIsSaving(true);
+    try {
+      await onSaveMapDefaultView({
+        address: mapAddress.trim(),
+        lat: mapLat,
+        lon: mapLon,
+        zoom: percentToZoom(mapZoomPercent)
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -157,10 +164,11 @@ const MapDefaultViewPanel: React.FC<Props> = ({ mapDefaultView, onSaveMapDefault
         <div className="md:col-span-4">
           <button
             onClick={handleSaveMapDefault}
-            disabled={!canManage}
-            className="bg-[#2663EB] hover:bg-[#1f54c7] text-white px-4 py-2.5 rounded-lg font-semibold transition-colors"
+            disabled={!canManage || isSaving}
+            className="bg-[#2663EB] hover:bg-[#1f54c7] text-white px-4 py-2.5 rounded-lg font-semibold transition-colors disabled:opacity-70 flex items-center gap-2"
           >
-            Karten-Standard speichern
+            {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+            {isSaving ? 'Speichern...' : 'Karten-Standard speichern'}
           </button>
         </div>
       </div>

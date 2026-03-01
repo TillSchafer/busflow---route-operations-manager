@@ -49,7 +49,7 @@ const ToastViewport: React.FC = () => {
               <div className="mt-0.5">{styles.icon}</div>
               <div className="flex-1 min-w-0">
                 <p className={`text-sm font-bold ${styles.title}`}>{toast.title}</p>
-                <p className="text-sm text-slate-700 mt-0.5">{toast.message}</p>
+                {toast.message != null && <div className="text-sm text-slate-700 mt-0.5">{toast.message}</div>}
               </div>
               <button
                 type="button"
