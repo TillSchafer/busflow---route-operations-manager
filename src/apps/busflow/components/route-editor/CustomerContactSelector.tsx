@@ -118,7 +118,7 @@ const CustomerContactSelector: React.FC<Props> = ({
           )}
         </div>
         {hasUnlinkedCustomerText && (
-          <p className="text-xs text-amber-600 mt-1">Für Geplant/Aktiv/Archiviert muss ein Kunde aus der Liste gewählt werden.</p>
+          <p className="text-xs text-amber-600 mt-1">Für Geplant/Aktiv/Durchgeführt/Archiviert muss ein Kunde aus der Liste gewählt werden.</p>
         )}
       </div>
       <div>

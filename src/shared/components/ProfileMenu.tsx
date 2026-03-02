@@ -56,7 +56,7 @@ const ProfileMenu: React.FC<Props> = ({ user, variant = 'header', onProfile, onA
         <div className={`text-xs leading-tight ${isHome ? 'text-left' : ''}`}>
           <p className={`${isHome ? 'text-slate-900' : 'text-white'} font-semibold`}>{user.name}</p>
           <p className={`${isHome ? 'text-slate-500' : 'text-slate-300'}`}>
-            {user.role === 'ADMIN' ? 'Admin' : user.role === 'DISPATCH' ? 'Disposition' : 'Nur Lesen'}
+            {user.role === 'ADMIN' ? 'Admin' : user.role === 'DISPATCH' ? 'Disposition' : 'Fahrer'}
           </p>
         </div>
       </button>

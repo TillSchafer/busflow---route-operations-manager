@@ -54,6 +54,23 @@ describe('useRouteFiltering', () => {
     expect(result.current.otherSection).toHaveLength(0);
   });
 
+  it('puts planned routes into the top section', () => {
+    const withPlanned: Route[] = [
+      ...routes,
+      {
+        ...routes[1],
+        id: 'r3',
+        name: 'Tagestour',
+        status: 'Geplant',
+        date: '2026-02-21',
+      },
+    ];
+
+    const { result } = renderHook(() => useRouteFiltering(withPlanned, busTypes, ''));
+    expect(result.current.activeSection.map(route => route.id)).toEqual(['r3', 'r1']);
+    expect(result.current.otherSection.map(route => route.id)).toEqual(['r2']);
+  });
+
   it('filters by driver name', () => {
     const { result } = renderHook(() => useRouteFiltering(routes, busTypes, 'chris'));
     expect(result.current.filteredRoutes).toHaveLength(1);
@@ -107,8 +124,8 @@ describe('useRouteFiltering', () => {
     expect(result.current.filteredRoutes[0].id).toBe('r1');
   });
 
-  it('sorts active routes descending by date', () => {
-    const withSecondActive: Route[] = [
+  it('sorts top-section routes (active + planned) descending by date', () => {
+    const withTopRoutes: Route[] = [
       ...routes,
       {
         ...routes[1],
@@ -117,10 +134,17 @@ describe('useRouteFiltering', () => {
         status: 'Aktiv',
         date: '2026-02-21',
       },
+      {
+        ...routes[1],
+        id: 'r4',
+        name: 'Früh',
+        status: 'Geplant',
+        date: '2026-02-19',
+      },
     ];
 
-    const { result } = renderHook(() => useRouteFiltering(withSecondActive, busTypes, ''));
-    expect(result.current.activeSection.map(route => route.id)).toEqual(['r3', 'r1']);
+    const { result } = renderHook(() => useRouteFiltering(withTopRoutes, busTypes, ''));
+    expect(result.current.activeSection.map(route => route.id)).toEqual(['r3', 'r1', 'r4']);
   });
 
   it('is case-insensitive', () => {

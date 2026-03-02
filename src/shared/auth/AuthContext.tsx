@@ -131,8 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const isPlatformAdmin = (profile.global_role as GlobalRole) === 'ADMIN';
       const isPlatformOwner =
         isPlatformAdmin &&
-        !!profile.email &&
-        profile.email.trim().toLowerCase() === PLATFORM_OWNER_EMAIL;
+        (PLATFORM_OWNER_EMAIL === '' || (!!profile.email && profile.email.trim().toLowerCase() === PLATFORM_OWNER_EMAIL));
       const membership = await fetchActiveMembership(profile.id, isPlatformAdmin);
 
       const effectiveRole: Role = isPlatformAdmin ? 'ADMIN' : membership?.role || 'VIEWER';

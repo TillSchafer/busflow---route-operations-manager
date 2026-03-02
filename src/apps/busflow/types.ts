@@ -27,9 +27,9 @@ export interface Route {
   customerContactName?: string;
   capacity: number;
   stops: Stop[];
-  status: 'Aktiv' | 'Geplant' | 'Entwurf' | 'Archiviert';
+  status: 'Aktiv' | 'Geplant' | 'Entwurf' | 'Durchgeführt' | 'Durchgefuehrt' | 'Archiviert';
   busTypeId?: string;
-  workerId?: string;
+  assignedUserId?: string;
   operationalNotes?: string;
   kmStartBetrieb?: string;
   kmStartCustomer?: string;
@@ -53,10 +53,12 @@ export interface BusType {
   notes?: string;
 }
 
-export interface Worker {
-  id: string;
-  name: string;
-  role?: string;
+/** A member of the account who can be assigned as a driver. */
+export interface AccountMember {
+  id: string;        // profiles.id (= auth user id)
+  fullName: string;  // profiles.full_name or email fallback
+  email: string;
+  role: string;      // account_memberships.role
 }
 
 export interface Customer {

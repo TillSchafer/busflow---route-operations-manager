@@ -1,5 +1,5 @@
-import { useState, useEffect, Dispatch, SetStateAction } from 'react';
-import { BusType, Customer, MapDefaultView, Route, Worker } from '../types';
+import { useState, useEffect, useCallback, Dispatch, SetStateAction } from 'react';
+import { AccountMember, BusType, Customer, MapDefaultView, Route } from '../types';
 import { BusFlowApi } from '../api';
 import { useLoading } from '../../../shared/loading';
 
@@ -8,13 +8,13 @@ const DEFAULT_MAP_VIEW: MapDefaultView = { address: 'Deutschland', lat: 51.1657,
 export interface BusflowData {
   routes: Route[];
   busTypes: BusType[];
-  workers: Worker[];
+  accountMembers: AccountMember[];
   customers: Customer[];
   loading: boolean;
   mapDefaultView: MapDefaultView;
   setRoutes: Dispatch<SetStateAction<Route[]>>;
   setBusTypes: Dispatch<SetStateAction<BusType[]>>;
-  setWorkers: Dispatch<SetStateAction<Worker[]>>;
+  setAccountMembers: Dispatch<SetStateAction<AccountMember[]>>;
   setCustomers: Dispatch<SetStateAction<Customer[]>>;
   setMapDefaultView: Dispatch<SetStateAction<MapDefaultView>>;
   refreshRoutes: () => Promise<void>;
@@ -25,7 +25,7 @@ export function useBusflowData(activeAccountId: string | null): BusflowData {
   const { runWithLoading } = useLoading();
   const [routes, setRoutes] = useState<Route[]>([]);
   const [busTypes, setBusTypes] = useState<BusType[]>([]);
-  const [workers, setWorkers] = useState<Worker[]>([]);
+  const [accountMembers, setAccountMembers] = useState<AccountMember[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [mapDefaultView, setMapDefaultView] = useState<MapDefaultView>(DEFAULT_MAP_VIEW);
@@ -38,7 +38,7 @@ export function useBusflowData(activeAccountId: string | null): BusflowData {
     if (!activeAccountId) {
       setRoutes([]);
       setBusTypes([]);
-      setWorkers([]);
+      setAccountMembers([]);
       setCustomers([]);
       setLoading(false);
       return;
@@ -48,16 +48,16 @@ export function useBusflowData(activeAccountId: string | null): BusflowData {
       setLoading(true);
       try {
         await runWithLoading(async () => {
-          const [fetchedRoutes, fetchedBusTypes, fetchedWorkers, fetchedCustomers, fetchedMapDefault] = await Promise.all([
+          const [fetchedRoutes, fetchedBusTypes, fetchedMembers, fetchedCustomers, fetchedMapDefault] = await Promise.all([
             BusFlowApi.getRoutes(),
             BusFlowApi.getBusTypes(),
-            BusFlowApi.getWorkers(),
+            BusFlowApi.getAccountMembers(),
             BusFlowApi.getCustomersForSuggestions(),
             BusFlowApi.getMapDefaultView(),
           ]);
           setRoutes(fetchedRoutes);
           setBusTypes(fetchedBusTypes);
-          setWorkers(fetchedWorkers);
+          setAccountMembers(fetchedMembers);
           setCustomers(fetchedCustomers);
           if (fetchedMapDefault) setMapDefaultView(fetchedMapDefault);
         }, { scope: 'route' });
@@ -71,27 +71,27 @@ export function useBusflowData(activeAccountId: string | null): BusflowData {
     loadData();
   }, [activeAccountId, runWithLoading]);
 
-  const refreshRoutes = async () => {
+  const refreshRoutes = useCallback(async () => {
     const fetched = await BusFlowApi.getRoutes();
     setRoutes(fetched);
-  };
+  }, []);
 
-  const refreshSettingsData = async () => {
-    const [fetchedBusTypes, fetchedWorkers, fetchedCustomers] = await Promise.all([
+  const refreshSettingsData = useCallback(async () => {
+    const [fetchedBusTypes, fetchedMembers, fetchedCustomers] = await Promise.all([
       BusFlowApi.getBusTypes(),
-      BusFlowApi.getWorkers(),
+      BusFlowApi.getAccountMembers(),
       BusFlowApi.getCustomersForSuggestions(),
     ]);
     const fetchedMapDefault = await BusFlowApi.getMapDefaultView();
     setBusTypes(fetchedBusTypes);
-    setWorkers(fetchedWorkers);
+    setAccountMembers(fetchedMembers);
     setCustomers(fetchedCustomers);
     if (fetchedMapDefault) setMapDefaultView(fetchedMapDefault);
-  };
+  }, []);
 
   return {
-    routes, busTypes, workers, customers, loading, mapDefaultView,
-    setRoutes, setBusTypes, setWorkers, setCustomers, setMapDefaultView,
+    routes, busTypes, accountMembers, customers, loading, mapDefaultView,
+    setRoutes, setBusTypes, setAccountMembers, setCustomers, setMapDefaultView,
     refreshRoutes, refreshSettingsData,
   };
 }

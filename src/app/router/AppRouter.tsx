@@ -21,6 +21,7 @@ const BusflowApp = lazy(() => import('../../features/busflow/pages/BusflowAppPag
 const LoginScreen: React.FC<{
   email: string;
   password: string;
+  authMessage: { type: 'error' | 'info'; text: string } | null;
   isLoggingIn: boolean;
   isSendingReset: boolean;
   onEmailChange: (value: string) => void;
@@ -30,6 +31,7 @@ const LoginScreen: React.FC<{
 }> = ({
   email,
   password,
+  authMessage,
   isLoggingIn,
   isSendingReset,
   onEmailChange,
@@ -81,6 +83,17 @@ const LoginScreen: React.FC<{
       >
         {isSendingReset ? 'Sende Reset-Link...' : 'Passwort vergessen?'}
       </button>
+
+      {authMessage && (
+        <p
+          role="alert"
+          className={`text-sm font-semibold ${
+            authMessage.type === 'error' ? 'text-red-600' : 'text-emerald-700'
+          }`}
+        >
+          {authMessage.text}
+        </p>
+      )}
     </form>
 
     <div className="mt-4 text-sm text-slate-600">
@@ -103,6 +116,7 @@ const AppRouter: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState(false);
+  const [authMessage, setAuthMessage] = useState<{ type: 'error' | 'info'; text: string } | null>(null);
 
   const [profileEmailDraft, setProfileEmailDraft] = useState('');
   const [profileAvatarUrlDraft, setProfileAvatarUrlDraft] = useState('');
@@ -122,6 +136,7 @@ const AppRouter: React.FC = () => {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthMessage(null);
     setIsLoggingIn(true);
 
     try {
@@ -132,7 +147,9 @@ const AppRouter: React.FC = () => {
       if (error) throw error;
     } catch (error: unknown) {
       const fallbackMessage = 'Anmeldung fehlgeschlagen.';
-      pushToast({ type: 'error', title: 'Anmelden fehlgeschlagen', message: error instanceof Error ? error.message || fallbackMessage : fallbackMessage });
+      const message = error instanceof Error ? error.message || fallbackMessage : fallbackMessage;
+      setAuthMessage({ type: 'error', text: message });
+      pushToast({ type: 'error', title: 'Anmelden fehlgeschlagen', message });
     } finally {
       setIsLoggingIn(false);
     }
@@ -141,10 +158,13 @@ const AppRouter: React.FC = () => {
   const handleForgotPassword = async () => {
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) {
-      pushToast({ type: 'error', title: 'Anmelden fehlgeschlagen', message: 'Bitte zuerst Ihre E-Mail-Adresse eingeben.' });
+      const message = 'Bitte zuerst Ihre E-Mail-Adresse eingeben.';
+      setAuthMessage({ type: 'error', text: message });
+      pushToast({ type: 'error', title: 'Anmelden fehlgeschlagen', message });
       return;
     }
 
+    setAuthMessage(null);
     setIsSendingReset(true);
 
     try {
@@ -157,7 +177,9 @@ const AppRouter: React.FC = () => {
       // Neutral response on purpose to avoid account enumeration.
     } finally {
       setIsSendingReset(false);
-      pushToast({ type: 'success', title: 'Reset-Link gesendet', message: 'Wenn ein passendes Konto existiert, wurde ein Reset-Link per E-Mail versendet.' });
+      const message = 'Wenn ein passendes Konto existiert, wurde ein Reset-Link per E-Mail versendet.';
+      setAuthMessage({ type: 'info', text: message });
+      pushToast({ type: 'success', title: 'Reset-Link gesendet', message });
     }
   };
 
@@ -267,6 +289,7 @@ const AppRouter: React.FC = () => {
                 <LoginScreen
                   email={email}
                   password={password}
+                  authMessage={authMessage}
                   isLoggingIn={isLoggingIn}
                   isSendingReset={isSendingReset}
                   onEmailChange={setEmail}

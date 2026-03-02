@@ -71,7 +71,7 @@ export type DbRoute = {
   busflow_stops?: DbStop[];
   status?: string | null;
   bus_type_id?: string | null;
-  worker_id?: string | null;
+  assigned_user_id?: string | null;
   operational_notes?: string | null;
   km_start_betrieb?: string | null;
   km_start_customer?: string | null;
@@ -143,7 +143,7 @@ export const mapRouteFromDb = (route: DbRoute): RouteType => {
       .map(mapStopFromDb),
     status: (route.status || 'Entwurf') as RouteType['status'],
     busTypeId: route.bus_type_id || undefined,
-    workerId: route.worker_id || undefined,
+    assignedUserId: route.assigned_user_id || undefined,
     operationalNotes: route.operational_notes || '',
     kmStartBetrieb: route.km_start_betrieb || '',
     kmStartCustomer: route.km_start_customer || '',

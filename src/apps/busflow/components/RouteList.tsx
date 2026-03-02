@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { BusType, Route } from '../types';
-import { Calendar, User, Bus as BusIcon, Printer, Edit, Trash2, Users, Download } from 'lucide-react';
+import { Calendar, User, Bus as BusIcon, Printer, Edit, Trash2, Users, Download, CheckCircle2 } from 'lucide-react';
 
 interface Props {
   routes: Route[];
@@ -9,11 +9,17 @@ interface Props {
   onEdit: (route: Route) => void;
   onPrint: (route: Route) => void;
   onDelete: (id: string) => void;
+  onComplete?: (route: Route) => void;
   canManageRoutes?: boolean;
   label?: string;
 }
 
-const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelete, canManageRoutes = true, label }) => {
+const COMPLETABLE_STATUSES = ['Geplant', 'Aktiv'];
+
+const RouteList: React.FC<Props> = ({
+  routes, busTypes, onEdit, onPrint, onDelete, onComplete,
+  canManageRoutes = true, label,
+}) => {
   const getBusTypeName = (busTypeId?: string) =>
     busTypes.find(busType => busType.id === busTypeId)?.name || '';
 
@@ -22,16 +28,12 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
 
   const getMaxLoad = (route: Route) => {
     const directMax = Math.max(0, ...route.stops.map(s => Number(s.currentTotal) || 0));
-
-    // Fallback for legacy/partial data where currentTotal may be missing:
-    // derive running occupancy from boarding/leaving values.
     let running = 0;
     let derivedMax = 0;
     route.stops.forEach(stop => {
       running += (Number(stop.boarding) || 0) - (Number(stop.leaving) || 0);
       derivedMax = Math.max(derivedMax, running);
     });
-
     return Math.max(directMax, derivedMax, 0);
   };
 
@@ -50,19 +52,12 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
       s.currentTotal,
       `"${s.notes || ''}"`
     ]);
-
-    const csvContent = [
-      [
-        `"Route: ${route.name}"`,
-        `"Datum: ${route.date}"`,
-        `"Fahrer: ${route.driverName}"`,
-        `"Bustyp: ${getBusTypeName(route.busTypeId)}"`
-      ],
+  const csvContent = [
+      [`"Ablaufplan: ${route.name}"`, `"Datum: ${route.date}"`, `"Fahrer: ${route.driverName}"`, `"Bustyp: ${getBusTypeName(route.busTypeId)}"`],
       [],
       headers,
       ...rows
     ].map(e => e.join(",")).join("\n");
-
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -79,7 +74,7 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
     return (
       <div className="flex flex-col items-center justify-center py-20 text-slate-400">
         <BusIcon className="w-16 h-16 mb-4 opacity-20" />
-        <p className="text-lg">Keine Routen gefunden. Erstellen Sie Ihre erste Route, um zu starten.</p>
+        <p className="text-lg">Keine Ablaufpläne gefunden. Erstellen Sie Ihren ersten Ablaufplan, um zu starten.</p>
       </div>
     );
   }
@@ -88,7 +83,7 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
     <div className="space-y-4">
       <div className="flex justify-between items-end mb-4">
         <h2 className="text-2xl font-bold text-slate-800">Betriebsübersicht</h2>
-        <span className="text-sm text-slate-500 font-medium">{routes.length} {label ?? 'Routen'}</span>
+        <span className="text-sm text-slate-500 font-medium">{routes.length} {label ?? 'Ablaufpläne'}</span>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -98,24 +93,39 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
           const loadPercentage = Math.round((occupiedSeats / busCapacity) * 100);
           const remainingSeats = Math.max(0, busCapacity - occupiedSeats);
 
+          // Blinking dot: only when a driver actively started the route (assigned + active)
+          const isActiveRoute = route.status === 'Aktiv' && !!route.assignedUserId;
+
           return (
             <div key={route.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
               <div className="p-5">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900 line-clamp-1">{route.name || 'Unbenannte Route'}</h3>
+                    <h3 className="text-lg font-bold text-slate-900 line-clamp-1">{route.name || 'Unbenannter Ablaufplan'}</h3>
                     <div className="flex items-center text-slate-500 text-sm mt-1">
                       <Calendar className="w-3.5 h-3.5 mr-1" />
                       {route.date}
                     </div>
                   </div>
-                  <span className={`px-2 py-1 rounded text-xs font-semibold ${route.status === 'Aktiv' ? 'bg-green-100 text-green-700' :
-                    route.status === 'Geplant' ? 'bg-blue-100 text-blue-700' :
+
+                  {/* Status badge — blinking red dot for active routes */}
+                  <div className="flex items-center space-x-1.5">
+                    {isActiveRoute && (
+                      <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+                      </span>
+                    )}
+                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                      route.status === 'Aktiv' ? 'bg-green-100 text-green-700' :
+                      route.status === 'Geplant' ? 'bg-blue-100 text-blue-700' :
+                      route.status === 'Durchgeführt' || route.status === 'Durchgefuehrt' ? 'bg-indigo-100 text-indigo-700' :
                       route.status === 'Archiviert' ? 'bg-slate-100 text-slate-600' :
-                        'bg-amber-100 text-amber-700'
+                      'bg-amber-100 text-amber-700'
                     }`}>
-                    {route.status}
-                  </span>
+                      {route.status}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="space-y-2 mb-6">
@@ -133,7 +143,7 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
                   </div>
                 </div>
 
-                <div className="mb-6">
+                <div className="mb-4">
                   <div className="flex justify-between text-xs font-semibold text-slate-500 mb-1">
                     <span>MAXIMALE AUSLASTUNG</span>
                     <span>{loadPercentage}% ({occupiedSeats}/{busCapacity}, {remainingSeats} frei)</span>
@@ -149,22 +159,37 @@ const RouteList: React.FC<Props> = ({ routes, busTypes, onEdit, onPrint, onDelet
                 <div className="flex flex-col space-y-2 border-t border-slate-100 pt-4">
                   <div className="flex items-center justify-between">
                     <div className="flex space-x-1">
-                      <button
-                        disabled={!canManageRoutes}
-                        onClick={() => onEdit(route)}
-                        className={`p-2 transition-colors rounded-lg ${canManageRoutes ? 'text-slate-600 hover:text-blue-600 hover:bg-blue-50' : 'text-slate-300 cursor-not-allowed'}`}
-                        title="Route bearbeiten"
-                      >
-                        <Edit className="w-5 h-5" />
-                      </button>
-                      <button
-                        disabled={!canManageRoutes}
-                        onClick={() => onDelete(route.id)}
-                        className={`p-2 transition-colors rounded-lg ${canManageRoutes ? 'text-slate-600 hover:text-red-600 hover:bg-red-50' : 'text-slate-300 cursor-not-allowed'}`}
-                        title="Route löschen"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                      {onComplete && !canManageRoutes ? (
+                        COMPLETABLE_STATUSES.includes(route.status) ? (
+                          <button
+                            onClick={() => onComplete(route)}
+                            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors"
+                            title="Fahrt beenden"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Fahrt beenden</span>
+                          </button>
+                        ) : null
+                      ) : (
+                        <>
+                          <button
+                            disabled={!canManageRoutes}
+                            onClick={() => onEdit(route)}
+                            className={`p-2 transition-colors rounded-lg ${canManageRoutes ? 'text-slate-600 hover:text-blue-600 hover:bg-blue-50' : 'text-slate-300 cursor-not-allowed'}`}
+                            title="Ablaufplan bearbeiten"
+                          >
+                            <Edit className="w-5 h-5" />
+                          </button>
+                          <button
+                            disabled={!canManageRoutes}
+                            onClick={() => onDelete(route.id)}
+                            className={`p-2 transition-colors rounded-lg ${canManageRoutes ? 'text-slate-600 hover:text-red-600 hover:bg-red-50' : 'text-slate-300 cursor-not-allowed'}`}
+                            title="Ablaufplan löschen"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </>
+                      )}
                     </div>
                     <div className="flex space-x-2">
                       <button

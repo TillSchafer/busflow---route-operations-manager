@@ -1,4 +1,4 @@
-import { BusType, MapDefaultView, Worker } from '../types';
+import { AccountMember, BusType, MapDefaultView } from '../types';
 import { createCodeError, getPostgrestCode, requireActiveAccountId, supabase, toMapDefaultView } from './shared';
 
 export async function getBusTypes() {
@@ -51,54 +51,29 @@ export async function deleteBusType(id: string) {
   }
 }
 
-export async function getWorkers() {
+/** Returns all active members of the current account, sorted by name. */
+export async function getAccountMembers(): Promise<AccountMember[]> {
   const accountId = requireActiveAccountId();
   const { data, error } = await supabase
-    .from('busflow_workers')
-    .select('*')
+    .from('account_memberships')
+    .select('user_id, role, profiles!inner(id, full_name, email)')
     .eq('account_id', accountId)
-    .order('name');
+    .eq('status', 'ACTIVE');
 
   if (error) throw error;
-  return data as Worker[];
-}
 
-export async function createWorker(worker: Omit<Worker, 'id'>) {
-  const accountId = requireActiveAccountId();
-  const { data, error } = await supabase
-    .from('busflow_workers')
-    .insert({
-      account_id: accountId,
-      name: worker.name,
-      role: worker.role
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data as Worker;
-}
-
-export async function deleteWorker(id: string) {
-  const accountId = requireActiveAccountId();
-  const { data, error } = await supabase
-    .from('busflow_workers')
-    .delete()
-    .eq('account_id', accountId)
-    .eq('id', id)
-    .select('id')
-    .maybeSingle();
-
-  if (error) {
-    if (getPostgrestCode(error) === '23503') {
-      throw createCodeError('WORKER_IN_USE', 'WORKER_IN_USE');
-    }
-    throw error;
-  }
-
-  if (!data) {
-    throw createCodeError('WORKER_NOT_FOUND', 'WORKER_NOT_FOUND');
-  }
+  return ((data ?? []) as unknown as Array<{
+    user_id: string;
+    role: string;
+    profiles: { id: string; full_name: string | null; email: string };
+  }>)
+    .map(row => ({
+      id: row.profiles.id,
+      fullName: row.profiles.full_name?.trim() || row.profiles.email,
+      email: row.profiles.email,
+      role: row.role,
+    }))
+    .sort((a, b) => a.fullName.localeCompare(b.fullName));
 }
 
 export async function getMapDefaultView(): Promise<MapDefaultView | null> {

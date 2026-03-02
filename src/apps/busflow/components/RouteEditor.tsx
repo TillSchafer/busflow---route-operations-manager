@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Route, Stop, BusType, Worker, Customer, MapDefaultView } from '../types';
+import { Route, Stop, BusType, AccountMember, Customer, MapDefaultView } from '../types';
 import { Save, Plus, Trash2, ChevronDown, Loader2 } from 'lucide-react';
 import { useToast } from '../../../shared/components/ToastProvider';
 import RouteMap from './RouteMap';
@@ -15,7 +15,7 @@ interface Props {
   onSave: (route: Route) => Promise<void>;
   onCancel: () => void;
   busTypes: BusType[];
-  workers: Worker[];
+  accountMembers: AccountMember[];
   customers: Customer[];
   mapDefaultView?: MapDefaultView;
 }
@@ -35,21 +35,20 @@ const isAbortError = (error: unknown): boolean =>
 const routeStatusOptions: Array<AppSelectOption<Route['status']>> = [
   { value: 'Entwurf', label: 'Entwurf' },
   { value: 'Geplant', label: 'Geplant' },
-  { value: 'Aktiv', label: 'Aktiv' },
   { value: 'Archiviert', label: 'Archiviert' },
 ];
 
 const dropdownTriggerButtonClass = `${DROPDOWN_TRIGGER} text-left flex items-center justify-between`;
 const dropdownMenuClass = `${DROPDOWN_MENU} overflow-hidden`;
 
-const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, workers, customers, mapDefaultView }) => {
+const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, accountMembers, customers, mapDefaultView }) => {
   const { pushToast } = useToast();
   const [formData, setFormData] = useState<Route>({ ...route });
   const [invalidFields, setInvalidFields] = useState<Set<string>>(new Set());
   const [suggestions, setSuggestions] = useState<Record<string, Array<{ label: string; lat: number; lon: number }>>>({});
   const [activeStopId, setActiveStopId] = useState<string | null>(null);
   const [isBusTypeDropdownOpen, setIsBusTypeDropdownOpen] = useState(false);
-  const [isWorkerDropdownOpen, setIsWorkerDropdownOpen] = useState(false);
+  const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
   const searchTimeouts = useRef<Record<string, number>>({});
   const searchControllers = useRef<Record<string, AbortController>>({});
 
@@ -96,19 +95,19 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
   );
 
   const selectedWorker = useMemo(
-    () => workers.find(worker => worker.id === formData.workerId),
-    [workers, formData.workerId]
+    () => accountMembers.find(m => m.id === formData.assignedUserId),
+    [accountMembers, formData.assignedUserId]
   );
 
   const validate = (): { errors: string[]; invalid: Set<string> } => {
     const errors: string[] = [];
     const invalid = new Set<string>();
     if (!formData.name) {
-      errors.push('Der Routenname ist erforderlich.');
+      errors.push('Der Ablaufplan-Name ist erforderlich.');
       invalid.add('name');
     }
     if (customerRequiredForStatus && !formData.customerId) {
-      errors.push('Bitte wählen Sie einen Kunden aus der Liste aus (für Geplant/Aktiv/Archiviert).');
+      errors.push('Bitte wählen Sie einen Kunden aus der Liste aus (für Geplant/Aktiv/Durchgeführt/Archiviert).');
       invalid.add('customer');
     }
     if (formData.capacity < 0) {
@@ -254,7 +253,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
       <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-slate-200">
         <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50 gap-4">
           <div>
-            <h2 className="text-xl font-bold text-slate-800">Routendetails bearbeiten</h2>
+            <h2 className="text-xl font-bold text-slate-800">Ablaufplan bearbeiten</h2>
             <p className="text-sm text-slate-500">Zeitplan, Halte und Fahrgastkapazität konfigurieren.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -263,7 +262,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
               onChange={nextStatus => setFormData({ ...formData, status: nextStatus })}
               options={routeStatusOptions}
               className="min-w-[11rem] font-medium"
-              ariaLabel="Routenstatus waehlen"
+              ariaLabel="Ablaufplan-Status waehlen"
             />
             <button
               onClick={handleCancelWrapper}
@@ -287,7 +286,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
           {/* Primary Meta Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <div className="col-span-1 md:col-span-2">
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Routenname</label>
+              <label className="block text-sm font-semibold text-slate-700 mb-1">Ablaufplan-Name</label>
               <input
                 type="text"
                 value={formData.name}
@@ -296,7 +295,7 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
                   setInvalidFields(prev => { const s = new Set(prev); s.delete('name'); return s; });
                 }}
                 className={`w-full rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all ${invalidFields.has('name') ? 'border-red-400 ring-1 ring-red-300' : 'border-slate-300'}`}
-                placeholder="Neue Route"
+                placeholder="Neuer Ablaufplan"
               />
             </div>
             <CustomerContactSelector
@@ -373,48 +372,40 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setIsWorkerDropdownOpen(prev => !prev)}
-                  onBlur={() => window.setTimeout(() => setIsWorkerDropdownOpen(false), 150)}
+                  onClick={() => setIsMemberDropdownOpen(prev => !prev)}
+                  onBlur={() => window.setTimeout(() => setIsMemberDropdownOpen(false), 150)}
                   className={dropdownTriggerButtonClass}
                 >
                   <span className={selectedWorker ? 'text-slate-800' : 'text-slate-400'}>
-                    {selectedWorker ? `${selectedWorker.name}${selectedWorker.role ? ` (${selectedWorker.role})` : ''}` : 'Fahrer auswählen'}
+                    {selectedWorker ? selectedWorker.fullName : 'Fahrer auswählen'}
                   </span>
-                  <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isWorkerDropdownOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isMemberDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
-                {isWorkerDropdownOpen && (
+                {isMemberDropdownOpen && (
                   <div className={dropdownMenuClass}>
                     <button
                       type="button"
                       onMouseDown={e => e.preventDefault()}
                       onClick={() => {
-                        setFormData({
-                          ...formData,
-                          workerId: undefined,
-                          driverName: ''
-                        });
-                        setIsWorkerDropdownOpen(false);
+                        setFormData({ ...formData, assignedUserId: undefined, driverName: '' });
+                        setIsMemberDropdownOpen(false);
                       }}
                       className={DROPDOWN_ITEM}
                     >
                       Fahrer auswählen
                     </button>
-                    {workers.map(worker => (
+                    {accountMembers.map(member => (
                       <button
-                        key={worker.id}
+                        key={member.id}
                         type="button"
                         onMouseDown={e => e.preventDefault()}
                         onClick={() => {
-                          setFormData({
-                            ...formData,
-                            workerId: worker.id,
-                            driverName: worker.name
-                          });
-                          setIsWorkerDropdownOpen(false);
+                          setFormData({ ...formData, assignedUserId: member.id, driverName: member.fullName });
+                          setIsMemberDropdownOpen(false);
                         }}
                         className={DROPDOWN_ITEM}
                       >
-                        {worker.name}{worker.role ? ` (${worker.role})` : ''}
+                        {member.fullName}
                       </button>
                     ))}
                   </div>
@@ -520,13 +511,13 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, worke
             </div>
           </div>
 
-          {/* Routenkarte */}
+          {/* Ablaufplan-Karte */}
           <div className="mb-8 p-6 bg-slate-50 rounded-xl border border-slate-100">
             <div className="flex items-center space-x-2 mb-2">
-              <h3 className="text-md font-bold text-slate-800">Routenkarte</h3>
+              <h3 className="text-md font-bold text-slate-800">Ablaufplan-Karte</h3>
             </div>
             <p className="text-sm text-slate-500 mb-4">
-              Wählen Sie eine Adresse aus den Vorschlägen, um die Route zu berechnen.
+              Wählen Sie eine Adresse aus den Vorschlägen, um den Ablaufplan zu berechnen.
             </p>
             <RouteMap
               stops={updatedStops}

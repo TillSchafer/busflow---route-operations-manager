@@ -38,7 +38,7 @@ export async function createRoute(route: Omit<RouteType, 'id'>) {
       operational_notes: route.operationalNotes,
       capacity: route.capacity,
       bus_type_id: route.busTypeId,
-      worker_id: route.workerId,
+      assigned_user_id: route.assignedUserId ?? null,
       km_start_betrieb: route.kmStartBetrieb,
       km_start_customer: route.kmStartCustomer,
       km_end_customer: route.kmEndCustomer,
@@ -72,7 +72,7 @@ export async function saveRouteWithStops(route: RouteType, expectedUpdatedAt?: s
       operationalNotes: route.operationalNotes,
       capacity: route.capacity,
       busTypeId: route.busTypeId,
-      workerId: route.workerId,
+      assignedUserId: route.assignedUserId,
       kmStartBetrieb: route.kmStartBetrieb,
       kmStartCustomer: route.kmStartCustomer,
       kmEndCustomer: route.kmEndCustomer,
@@ -110,11 +110,8 @@ export async function saveRouteWithStops(route: RouteType, expectedUpdatedAt?: s
   if (data?.ok === false && data?.code === 'ACCOUNT_MISMATCH') {
     throw createCodeError('ACCOUNT_MISMATCH', 'ACCOUNT_MISMATCH');
   }
-  if (data?.ok === false && data?.code === 'WORKER_NOT_FOUND') {
-    throw createCodeError('WORKER_NOT_FOUND', 'WORKER_NOT_FOUND');
-  }
-  if (data?.ok === false && data?.code === 'WORKER_ACCOUNT_MISMATCH') {
-    throw createCodeError('WORKER_ACCOUNT_MISMATCH', 'WORKER_ACCOUNT_MISMATCH');
+  if (data?.ok === false && data?.code === 'ASSIGNED_USER_NOT_FOUND') {
+    throw createCodeError('ASSIGNED_USER_NOT_FOUND', 'ASSIGNED_USER_NOT_FOUND');
   }
   if (data?.ok === false && data?.code === 'BUS_TYPE_NOT_FOUND') {
     throw createCodeError('BUS_TYPE_NOT_FOUND', 'BUS_TYPE_NOT_FOUND');
@@ -124,6 +121,44 @@ export async function saveRouteWithStops(route: RouteType, expectedUpdatedAt?: s
   }
 
   return data;
+}
+
+export async function completeRoute(
+  routeId: string,
+  completionData: {
+    kmEndBetrieb: string;
+    timeReturnCustomer: string;
+    timeReturnBetrieb: string;
+    operationalNotes: string;
+    stopActualArrivals: Record<string, string>;
+  }
+) {
+  const accountId = requireActiveAccountId();
+
+  const { error: routeError } = await supabase
+    .from('busflow_routes')
+    .update({
+      status: 'Durchgeführt',
+      km_end_betrieb: completionData.kmEndBetrieb || null,
+      time_return_customer: completionData.timeReturnCustomer || null,
+      time_return_betrieb: completionData.timeReturnBetrieb || null,
+      operational_notes: completionData.operationalNotes || null,
+    })
+    .eq('id', routeId)
+    .eq('account_id', accountId);
+
+  if (routeError) throw routeError;
+
+  for (const [stopId, actualArrivalTime] of Object.entries(completionData.stopActualArrivals)) {
+    if (!actualArrivalTime) continue;
+    const { error: stopError } = await supabase
+      .from('busflow_stops')
+      .update({ actual_arrival_time: actualArrivalTime })
+      .eq('id', stopId)
+      .eq('account_id', accountId);
+
+    if (stopError) throw stopError;
+  }
 }
 
 export async function deleteRoute(id: string) {

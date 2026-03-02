@@ -72,8 +72,15 @@ class DriverRoute {
     required this.driverName,
     required this.capacity,
     required this.stops,
+    this.busTypeName,
     this.customerName,
     this.operationalNotes,
+    this.kmStartBetrieb,
+    this.kmStartCustomer,
+    this.kmEndCustomer,
+    this.kmEndBetrieb,
+    this.timeReturnCustomer,
+    this.timeReturnBetrieb,
   });
 
   final String id;
@@ -84,8 +91,15 @@ class DriverRoute {
   final String driverName;
   final int capacity;
   final List<RouteStop> stops;
+  final String? busTypeName;
   final String? customerName;
   final String? operationalNotes;
+  final String? kmStartBetrieb;
+  final String? kmStartCustomer;
+  final String? kmEndCustomer;
+  final String? kmEndBetrieb;
+  final String? timeReturnCustomer;
+  final String? timeReturnBetrieb;
 
   bool get hasGeoStops => stops.any((stop) => stop.lat != null && stop.lon != null);
 
@@ -99,6 +113,7 @@ class DriverRoute {
   factory DriverRoute.fromMap(Map<String, dynamic> map) {
     final parsedDate = DateTime.tryParse(map['date']?.toString() ?? '');
     final rawName = map['name']?.toString() ?? '';
+    final rawBusType = map['busflow_bus_types'];
     final rawStops = (map['busflow_stops'] as List<dynamic>? ?? const <dynamic>[])
         .map((value) => RouteStop.fromMap(Map<String, dynamic>.from(value as Map)))
         .toList()
@@ -106,7 +121,7 @@ class DriverRoute {
 
     return DriverRoute(
       id: map['id']?.toString() ?? '',
-      name: rawName.trim().isNotEmpty ? rawName : 'Unbenannte Route',
+      name: rawName.trim().isNotEmpty ? rawName : 'Unbenannter Ablaufplan',
       date: parsedDate ?? DateTime.now(),
       status: map['status']?.toString() ?? 'Entwurf',
       busNumber: map['bus_number']?.toString() ?? '',
@@ -115,10 +130,21 @@ class DriverRoute {
           ? (map['capacity'] as num).toInt()
           : int.tryParse(map['capacity']?.toString() ?? '') ?? 0,
       stops: rawStops,
+      busTypeName: rawBusType is Map
+          ? rawBusType['name']?.toString()
+          : (rawBusType is List && rawBusType.isNotEmpty && rawBusType.first is Map)
+              ? (rawBusType.first as Map)['name']?.toString()
+              : null,
       customerName: (map['busflow_customers'] is Map)
           ? (map['busflow_customers'] as Map)['name']?.toString()
           : null,
       operationalNotes: map['operational_notes']?.toString(),
+      kmStartBetrieb: map['km_start_betrieb']?.toString(),
+      kmStartCustomer: map['km_start_customer']?.toString(),
+      kmEndCustomer: map['km_end_customer']?.toString(),
+      kmEndBetrieb: map['km_end_betrieb']?.toString(),
+      timeReturnCustomer: map['time_return_customer']?.toString(),
+      timeReturnBetrieb: map['time_return_betrieb']?.toString(),
     );
   }
 }

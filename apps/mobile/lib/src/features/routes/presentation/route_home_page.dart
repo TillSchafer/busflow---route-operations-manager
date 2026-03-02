@@ -68,15 +68,20 @@ class _RouteHomePageState extends ConsumerState<RouteHomePage> {
   Widget build(BuildContext context) {
     final selectedDay = ref.watch(selectedDayProvider);
     final routesAsync = ref.watch(routesForDayProvider);
+    final profileAsync = ref.watch(currentUserProfileProvider);
     final selectedDayLabel = selectedDay != null
         ? DateFormat('dd.MM.yyyy').format(selectedDay)
-        : 'Alle Routen';
+        : 'Alle Ablaufpläne';
+
+    final profile = profileAsync.valueOrNull;
+    final isDispatcher = profile?.isDispatcher ?? true;
+    final appBarTitle = isDispatcher ? 'BusPilot Disponent' : 'BusPilot Fahrer';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'BusPilot Fahrer-App',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        title: Text(
+          appBarTitle,
+          style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         actions: [
           IconButton(
@@ -85,7 +90,10 @@ class _RouteHomePageState extends ConsumerState<RouteHomePage> {
             icon: const Icon(Icons.event_outlined),
           ),
           IconButton(
-            onPressed: () => ref.invalidate(routesForDayProvider),
+            onPressed: () {
+              ref.invalidate(routesForDayProvider);
+              ref.invalidate(currentUserProfileProvider);
+            },
             tooltip: 'Neu laden',
             icon: const Icon(Icons.refresh),
           ),
@@ -100,6 +108,7 @@ class _RouteHomePageState extends ConsumerState<RouteHomePage> {
         child: RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(routesForDayProvider);
+            ref.invalidate(currentUserProfileProvider);
             await _loadLocation();
           },
           child: ListView(
@@ -114,6 +123,20 @@ class _RouteHomePageState extends ConsumerState<RouteHomePage> {
                     runSpacing: 10,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
+                      // Role indicator
+                      profileAsync.when(
+                        data: (p) => _SummaryChip(
+                          icon: p.isDispatcher
+                              ? Icons.admin_panel_settings_outlined
+                              : Icons.person_outlined,
+                          label: p.isDispatcher ? 'Disponent' : p.displayName,
+                        ),
+                        loading: () => const _SummaryChip(
+                          icon: Icons.person_outline,
+                          label: '...',
+                        ),
+                        error: (_, __) => const SizedBox.shrink(),
+                      ),
                       _SummaryChip(
                         icon: Icons.event_outlined,
                         label: selectedDayLabel,
@@ -124,7 +147,7 @@ class _RouteHomePageState extends ConsumerState<RouteHomePage> {
                         icon: Icons.alt_route,
                         label: routesAsync.when(
                           data: (routes) =>
-                              '${routes.length} Route${routes.length == 1 ? '' : 'n'}',
+                              '${routes.length} Ablaufplan${routes.length == 1 ? '' : 'e'}',
                           loading: () => '...',
                           error: (_, __) => '-',
                         ),
@@ -146,12 +169,14 @@ class _RouteHomePageState extends ConsumerState<RouteHomePage> {
                 loading: () => const _LoadingCard(),
                 error: (err, _) => _ErrorCard(message: err.toString()),
                 data: (routes) {
-                  if (routes.isEmpty) return const _EmptyStateCard();
+                  if (routes.isEmpty) {
+                    return _EmptyStateCard(isDriverView: !isDispatcher);
+                  }
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Routen',
+                        'Ablaufpläne',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
@@ -160,11 +185,16 @@ class _RouteHomePageState extends ConsumerState<RouteHomePage> {
                           padding: const EdgeInsets.only(bottom: 10),
                           child: _RouteCard(
                             route: route,
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => RouteDetailPage(route: route),
-                              ),
-                            ),
+                            onTap: () async {
+                              final changed = await Navigator.of(context).push<bool>(
+                                MaterialPageRoute(
+                                  builder: (_) => RouteDetailPage(route: route),
+                                ),
+                              );
+                              if (changed == true) {
+                                ref.invalidate(routesForDayProvider);
+                              }
+                            },
                           ),
                         ),
                       ),
@@ -258,7 +288,7 @@ class _ErrorCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Routen konnten nicht geladen werden',
+              'Ablaufpläne konnten nicht geladen werden',
               style: TextStyle(
                 color: BusPilotTheme.danger,
                 fontWeight: FontWeight.w700,
@@ -274,10 +304,16 @@ class _ErrorCard extends StatelessWidget {
 }
 
 class _EmptyStateCard extends StatelessWidget {
-  const _EmptyStateCard();
+  const _EmptyStateCard({this.isDriverView = false});
+
+  final bool isDriverView;
 
   @override
   Widget build(BuildContext context) {
+    final message = isDriverView
+        ? 'Keine dir zugewiesenen Ablaufpläne für diesen Zeitraum.'
+        : 'Kein Ablaufplan für den ausgewählten Tag vorhanden.';
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -286,7 +322,7 @@ class _EmptyStateCard extends StatelessWidget {
             const Icon(Icons.inbox_outlined, size: 28, color: BusPilotTheme.textMuted),
             const SizedBox(height: 8),
             Text(
-              'Keine Route für den ausgewählten Tag vorhanden.',
+              message,
               style: Theme.of(context).textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
@@ -371,7 +407,8 @@ class _RouteCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        'Bus: ${route.busNumber.isNotEmpty ? route.busNumber : '-'}'
+                        'Bustyp: ${route.busTypeName != null && route.busTypeName!.trim().isNotEmpty ? route.busTypeName : '-'}'
+                        '${route.busNumber.isNotEmpty ? '  ·  Bus-Nr.: ${route.busNumber}' : ''}'
                         '  ·  ${route.stops.length} Halte'
                         '  ·  ${route.capacity} Plätze',
                         style: Theme.of(context).textTheme.bodyMedium,
@@ -415,6 +452,12 @@ _StatusStyle _statusStyle(String status) {
       return const _StatusStyle(
         background: Color(0xFFE2E8F0),
         foreground: Color(0xFF334155),
+      );
+    case 'Durchgeführt':
+    case 'Durchgefuehrt':
+      return const _StatusStyle(
+        background: Color(0xFFE0E7FF),
+        foreground: Color(0xFF3730A3),
       );
     default:
       return const _StatusStyle(

@@ -12,12 +12,14 @@ class StopTile extends StatelessWidget {
     required this.index,
     required this.edit,
     required this.onEditChanged,
+    this.readOnly = false,
   });
 
   final RouteStop stop;
   final int index;
   final StopEdit edit;
   final ValueChanged<StopEdit> onEditChanged;
+  final bool readOnly;
 
   String get _displayArrival =>
       edit.actualArrivalTime ?? stop.actualArrivalTime ?? '—';
@@ -157,12 +159,14 @@ class StopTile extends StatelessWidget {
                 _ActualTimeButton(
                   label: 'Ist-Ankunft',
                   time: _displayArrival,
+                  enabled: !readOnly,
                   onTap: () => _pickTime(context, isArrival: true),
                 ),
                 const SizedBox(width: 10),
                 _ActualTimeButton(
                   label: 'Ist-Abfahrt',
                   time: _displayDeparture,
+                  enabled: !readOnly,
                   onTap: () => _pickTime(context, isArrival: false),
                 ),
               ],
@@ -177,6 +181,7 @@ class StopTile extends StatelessWidget {
                   child: _CounterField(
                     label: 'Einstieg',
                     value: _displayBoarding,
+                    enabled: !readOnly,
                     onChanged: (v) => onEditChanged(edit.copyWith(boarding: v)),
                   ),
                 ),
@@ -185,6 +190,7 @@ class StopTile extends StatelessWidget {
                   child: _CounterField(
                     label: 'Ausstieg',
                     value: _displayLeaving,
+                    enabled: !readOnly,
                     onChanged: (v) => onEditChanged(edit.copyWith(leaving: v)),
                   ),
                 ),
@@ -193,6 +199,7 @@ class StopTile extends StatelessWidget {
                   child: _CounterField(
                     label: 'Gesamt',
                     value: _displayTotal,
+                    enabled: !readOnly,
                     onChanged: (v) => onEditChanged(edit.copyWith(currentTotal: v)),
                   ),
                 ),
@@ -267,18 +274,20 @@ class _ActualTimeButton extends StatelessWidget {
     required this.label,
     required this.time,
     required this.onTap,
+    this.enabled = true,
   });
 
   final String label;
   final String time;
   final VoidCallback onTap;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     final hasValue = time != '—';
     return Expanded(
       child: GestureDetector(
-        onTap: onTap,
+        onTap: enabled ? onTap : null,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
@@ -297,7 +306,9 @@ class _ActualTimeButton extends StatelessWidget {
                 label,
                 style: TextStyle(
                   fontSize: 10,
-                  color: hasValue ? BusPilotTheme.primary : BusPilotTheme.textMuted,
+                  color: enabled
+                      ? (hasValue ? BusPilotTheme.primary : BusPilotTheme.textMuted)
+                      : BusPilotTheme.textMuted,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -310,8 +321,8 @@ class _ActualTimeButton extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
-                        color: hasValue
-                            ? BusPilotTheme.primary
+                        color: enabled
+                            ? (hasValue ? BusPilotTheme.primary : BusPilotTheme.textMuted)
                             : BusPilotTheme.textMuted,
                       ),
                     ),
@@ -319,7 +330,9 @@ class _ActualTimeButton extends StatelessWidget {
                   Icon(
                     Icons.access_time,
                     size: 14,
-                    color: hasValue ? BusPilotTheme.primary : BusPilotTheme.textMuted,
+                    color: enabled
+                        ? (hasValue ? BusPilotTheme.primary : BusPilotTheme.textMuted)
+                        : BusPilotTheme.textMuted,
                   ),
                 ],
               ),
@@ -336,11 +349,13 @@ class _CounterField extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.enabled = true,
   });
 
   final String label;
   final int value;
   final ValueChanged<int> onChanged;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -356,7 +371,7 @@ class _CounterField extends StatelessWidget {
           children: [
             _CounterButton(
               icon: Icons.remove,
-              onTap: value > 0 ? () => onChanged(value - 1) : null,
+              onTap: enabled && value > 0 ? () => onChanged(value - 1) : null,
             ),
             Expanded(
               child: Center(
@@ -372,7 +387,7 @@ class _CounterField extends StatelessWidget {
             ),
             _CounterButton(
               icon: Icons.add,
-              onTap: () => onChanged(value + 1),
+              onTap: enabled ? () => onChanged(value + 1) : null,
             ),
           ],
         ),

@@ -1,4 +1,5 @@
 import {
+  completeRoute,
   createRoute,
   deleteRoute,
   getRoutes,
@@ -6,12 +7,10 @@ import {
 } from './routes.api';
 import {
   createBusType,
-  createWorker,
   deleteBusType,
-  deleteWorker,
+  getAccountMembers,
   getBusTypes,
   getMapDefaultView,
-  getWorkers,
   upsertMapDefaultView
 } from './settings.api';
 import {
@@ -40,13 +39,12 @@ export const BusFlowApi = {
   getRoutes,
   createRoute,
   saveRouteWithStops,
+  completeRoute,
   deleteRoute,
   getBusTypes,
   createBusType,
   deleteBusType,
-  getWorkers,
-  createWorker,
-  deleteWorker,
+  getAccountMembers,
   getCustomers,
   getCustomersForSuggestions,
   getCustomerContactsList,

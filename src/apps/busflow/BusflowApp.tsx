@@ -3,6 +3,7 @@ import { Plus, Printer, Settings as SettingsIcon, Search, History, Calendar } fr
 import BackToOverviewButton from '../../shared/components/BackToOverviewButton';
 import RouteEditor from './components/RouteEditor';
 import RouteList from './components/RouteList';
+import RouteCompletionFlow, { CompletionData } from './components/RouteCompletionFlow';
 import PrintPreview from './components/PrintPreview';
 import Settings from './components/Settings';
 import { CustomerContactFormPayload } from './components/CustomerEditDialog';
@@ -18,7 +19,6 @@ import {
   CustomerContactListResult,
   MapDefaultView,
   Route,
-  Worker
 } from './types';
 import { BusFlowApi } from './api';
 import { useToast } from '../../shared/components/ToastProvider';
@@ -28,6 +28,7 @@ import { useRouteFiltering } from './hooks/useRouteFiltering';
 import { getErrorCode, getErrorMessage } from '../../shared/lib/error-mapping';
 
 interface User {
+  id: string;
   name: string;
   role: 'ADMIN' | 'DISPATCH' | 'VIEWER';
   avatarUrl?: string;
@@ -53,19 +54,27 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
   const [routeIdToDelete, setRouteIdToDelete] = useState<string | null>(null);
   const [isDeletingRoute, setIsDeletingRoute] = useState(false);
   const [isNewRouteDraft, setIsNewRouteDraft] = useState(false);
+  const [completionRoute, setCompletionRoute] = useState<Route | null>(null);
 
+  // ADMIN and DISPATCH can manage/edit routes; VIEWER (Fahrer) can only operate their own
   const canManageRoutes = authUser?.role === 'ADMIN' || authUser?.role === 'DISPATCH';
   const canManageSettings = canManageRoutes;
+  const isDriver = authUser?.role === 'VIEWER';
 
   const {
-    routes, busTypes, workers, customers, mapDefaultView,
+    routes, busTypes, accountMembers, customers, mapDefaultView,
     setRoutes, setCustomers, setMapDefaultView,
     refreshRoutes, refreshSettingsData,
   } = useBusflowData(activeAccountId);
 
   useRealtimeSync({ activeAccountId, refreshRoutes, refreshSettingsData });
 
-  const { filteredRoutes, activeSection, otherSection, isSearching } = useRouteFiltering(routes, busTypes, searchQuery);
+  // Drivers only see routes assigned to them; Admins/Dispatch see all
+  const visibleRoutes = isDriver
+    ? routes.filter(r => r.assignedUserId === authUser?.id)
+    : routes;
+
+  const { filteredRoutes, activeSection, otherSection, isSearching } = useRouteFiltering(visibleRoutes, busTypes, searchQuery);
 
   // --- Route handlers ---
 
@@ -89,7 +98,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       status: 'Entwurf',
       operationalNotes: '',
       busTypeId: undefined,
-      workerId: undefined,
+      assignedUserId: undefined,
     };
     setIsNewRouteDraft(true);
     setCurrentRoute(newRouteDraft);
@@ -118,21 +127,32 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       pushToast({ type: 'error', title: 'Keine Berechtigung', message: 'Sie haben nur Leserechte.' });
       return;
     }
+
+    const existingRoute = routes.find(route => route.id === updatedRoute.id);
+    const assignmentChanged = existingRoute?.assignedUserId !== updatedRoute.assignedUserId;
+    const shouldNormalizeToPlanned =
+      updatedRoute.status === 'Aktiv' &&
+      (!!updatedRoute.assignedUserId || isNewRouteDraft) &&
+      (assignmentChanged || isNewRouteDraft);
+    const routeToSave = shouldNormalizeToPlanned
+      ? { ...updatedRoute, status: 'Geplant' as const }
+      : updatedRoute;
+
     try {
       if (isNewRouteDraft) {
-        const { id: _draftId, updatedAt: _draftUpdatedAt, ...createPayload } = updatedRoute;
+        const { id: _draftId, updatedAt: _draftUpdatedAt, ...createPayload } = routeToSave;
         const created = await BusFlowApi.createRoute(createPayload);
         await BusFlowApi.saveRouteWithStops(
-          { ...updatedRoute, id: created.id, updatedAt: created.updatedAt },
+          { ...routeToSave, id: created.id, updatedAt: created.updatedAt },
           created.updatedAt
         );
       } else {
-        await BusFlowApi.saveRouteWithStops(updatedRoute, updatedRoute.updatedAt);
+        await BusFlowApi.saveRouteWithStops(routeToSave, routeToSave.updatedAt);
       }
       await refreshRoutes();
       setIsNewRouteDraft(false);
       setView('LIST');
-      pushToast({ type: 'success', title: 'Gespeichert', message: 'Routenänderungen wurden gespeichert.' });
+      pushToast({ type: 'success', title: 'Gespeichert', message: 'Ablaufplan-Änderungen wurden gespeichert.' });
     } catch (error) {
       console.error(error);
       if (getErrorCode(error) === 'ROUTE_CONFLICT') {
@@ -142,7 +162,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
         pushToast({
           type: 'warning',
           title: 'Konflikt erkannt',
-          message: 'Route wurde von einem anderen Benutzer geändert. Aktuellste Daten wurden geladen.',
+          message: 'Ablaufplan wurde von einem anderen Benutzer geändert. Aktuellste Daten wurden geladen.',
           durationMs: 7000,
         });
         if (latestRoute) {
@@ -154,7 +174,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
         return;
       }
       const errorToasts: Record<string, { title: string; message: string }> = {
-        ROUTE_NOT_FOUND: { title: 'Nicht gefunden', message: 'Diese Route wurde bereits gelöscht.' },
+        ROUTE_NOT_FOUND: { title: 'Nicht gefunden', message: 'Dieser Ablaufplan wurde bereits gelöscht.' },
         CUSTOMER_REQUIRED: { title: 'Kunde erforderlich', message: 'Bitte wählen Sie einen Kunden aus der Liste aus.' },
         CUSTOMER_CONTACT_MISMATCH: { title: 'Kontakt passt nicht', message: 'Der ausgewählte Kontakt gehört nicht zum gewählten Kunden.' },
         CONTACT_NOT_FOUND: { title: 'Kontakt nicht gefunden', message: 'Bitte wählen Sie die Kontaktperson erneut aus.' },
@@ -176,6 +196,24 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
     }
   };
 
+  const handleOpenCompletion = (route: Route) => {
+    setCompletionRoute(route);
+  };
+
+  const handleCompleteRoute = async (data: CompletionData) => {
+    if (!completionRoute) return;
+    try {
+      await BusFlowApi.completeRoute(completionRoute.id, data);
+      await refreshRoutes();
+      setCompletionRoute(null);
+      pushToast({ type: 'success', title: 'Fahrt beendet', message: 'Die Fahrt wurde erfolgreich abgeschlossen.' });
+    } catch (error) {
+      console.error(error);
+      pushToast({ type: 'error', title: 'Fehler beim Speichern', message: 'Die Fahrt konnte nicht gespeichert werden. Bitte versuche es erneut.' });
+      throw error;
+    }
+  };
+
   const handleDeleteRoute = (id: string) => {
     if (!canManageRoutes) {
       pushToast({ type: 'error', title: 'Keine Berechtigung', message: 'Sie haben nur Leserechte.' });
@@ -191,16 +229,16 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       await BusFlowApi.deleteRoute(routeIdToDelete);
       setRoutes(prev => prev.filter(r => r.id !== routeIdToDelete));
       setRouteIdToDelete(null);
-      pushToast({ type: 'success', title: 'Gelöscht', message: 'Die Route wurde gelöscht.' });
+      pushToast({ type: 'success', title: 'Gelöscht', message: 'Der Ablaufplan wurde gelöscht.' });
     } catch (error) {
       if (getErrorCode(error) === 'ROUTE_NOT_FOUND') {
         setRouteIdToDelete(null);
         await refreshRoutes();
-        pushToast({ type: 'error', title: 'Nicht gefunden', message: 'Diese Route wurde bereits gelöscht.' });
+        pushToast({ type: 'error', title: 'Nicht gefunden', message: 'Dieser Ablaufplan wurde bereits gelöscht.' });
         return;
       }
       console.error(error);
-      pushToast({ type: 'error', title: 'Löschen fehlgeschlagen', message: 'Die Route konnte nicht gelöscht werden.' });
+      pushToast({ type: 'error', title: 'Löschen fehlgeschlagen', message: 'Der Ablaufplan konnte nicht gelöscht werden.' });
     } finally {
       setIsDeletingRoute(false);
     }
@@ -236,7 +274,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
     } catch (error) {
       const code = getErrorCode(error);
       if (code === 'BUS_TYPE_IN_USE') {
-        pushToast({ type: 'error', title: 'Löschen nicht möglich', message: 'Bustyp kann nicht gelöscht werden, da noch Routen zugeordnet sind.' });
+        pushToast({ type: 'error', title: 'Löschen nicht möglich', message: 'Bustyp kann nicht gelöscht werden, da noch Ablaufpläne zugeordnet sind.' });
         return;
       }
       if (code === 'BUS_TYPE_NOT_FOUND') {
@@ -245,38 +283,6 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
         return;
       }
       pushToast({ type: 'error', title: 'Löschen fehlgeschlagen', message: 'Bustyp konnte nicht gelöscht werden.' });
-    }
-  };
-
-  const handleAddWorker = async (worker: Worker) => {
-    if (!requireSettings()) return;
-    try {
-      await BusFlowApi.createWorker({ name: worker.name, role: worker.role });
-      await refreshSettingsData();
-      pushToast({ type: 'success', title: 'Gespeichert', message: 'Mitarbeiter wurde gespeichert.' });
-    } catch {
-      pushToast({ type: 'error', title: 'Speichern fehlgeschlagen', message: 'Mitarbeiter konnte nicht gespeichert werden.' });
-    }
-  };
-
-  const handleRemoveWorker = async (id: string) => {
-    if (!requireSettings()) return;
-    try {
-      await BusFlowApi.deleteWorker(id);
-      await refreshSettingsData();
-      pushToast({ type: 'success', title: 'Gelöscht', message: 'Mitarbeiter wurde entfernt.' });
-    } catch (error) {
-      const code = getErrorCode(error);
-      if (code === 'WORKER_IN_USE') {
-        pushToast({ type: 'error', title: 'Löschen nicht möglich', message: 'Mitarbeiter kann nicht gelöscht werden, da noch Routen zugeordnet sind.' });
-        return;
-      }
-      if (code === 'WORKER_NOT_FOUND') {
-        pushToast({ type: 'error', title: 'Nicht gefunden', message: 'Der Mitarbeiter wurde bereits gelöscht.' });
-        await refreshSettingsData();
-        return;
-      }
-      pushToast({ type: 'error', title: 'Löschen fehlgeschlagen', message: 'Mitarbeiter konnte nicht gelöscht werden.' });
     }
   };
 
@@ -301,7 +307,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       pushToast({ type: 'success', title: 'Gelöscht', message: 'Kontakt wurde entfernt.' });
     } catch (error) {
       if (getErrorCode(error) === 'CONTACT_IN_USE') {
-        pushToast({ type: 'error', title: 'Löschen nicht möglich', message: 'Kontakt kann nicht gelöscht werden, da noch Routen zugeordnet sind.' });
+        pushToast({ type: 'error', title: 'Löschen nicht möglich', message: 'Kontakt kann nicht gelöscht werden, da noch Ablaufpläne zugeordnet sind.' });
         return;
       }
       if (getErrorCode(error) === 'CONTACT_NOT_FOUND') {
@@ -383,7 +389,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
         deleted += 1;
       } catch (error) {
         const errorCode = getErrorCode(error);
-        failed.push({ id: item.id, name: item.name, companyName: item.companyName, code: errorCode || 'UNKNOWN', reason: errorCode === 'CONTACT_IN_USE' ? 'Kontakt ist noch in Routen verknüpft.' : getErrorMessage(error) || 'Unbekannter Fehler beim Löschen.' });
+        failed.push({ id: item.id, name: item.name, companyName: item.companyName, code: errorCode || 'UNKNOWN', reason: errorCode === 'CONTACT_IN_USE' ? 'Kontakt ist noch in Ablaufplänen verknüpft.' : getErrorMessage(error) || 'Unbekannter Fehler beim Löschen.' });
       }
       processed += 1;
       onProgress?.({ current: processed, total: items.length });
@@ -441,10 +447,17 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
 
   return (
     <div className="min-h-screen flex flex-col">
+      {completionRoute && (
+        <RouteCompletionFlow
+          route={completionRoute}
+          onComplete={handleCompleteRoute}
+          onCancel={() => setCompletionRoute(null)}
+        />
+      )}
       <ConfirmDialog
         isOpen={!!routeIdToDelete}
-        title="Fahrt löschen"
-        message="Möchtest du diese Fahrt wirklich löschen?"
+        title="Ablaufplan löschen"
+        message="Möchtest du diesen Ablaufplan wirklich löschen?"
         confirmText="Löschen"
         cancelText="Nein"
         type="danger"
@@ -454,8 +467,9 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
         onCancel={() => setRouteIdToDelete(null)}
         isConfirming={isDeletingRoute}
       />
+
       <AppHeader
-        title="BusPilot Routenplanung"
+        title="BusPilot Ablaufplanung"
         user={view === 'EDITOR' ? null : authUser}
         onHome={onGoHome}
         onProfile={onProfile}
@@ -485,10 +499,18 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
                   <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">{filteredRoutes.length}</span>
                 </div>
                 {filteredRoutes.length > 0 ? (
-                  <RouteList routes={filteredRoutes} busTypes={busTypes} onEdit={handleEditRoute} onPrint={handlePrintRoute} onDelete={handleDeleteRoute} canManageRoutes={canManageRoutes} />
+                  <RouteList
+                    routes={filteredRoutes}
+                    busTypes={busTypes}
+                    onEdit={handleEditRoute}
+                    onPrint={handlePrintRoute}
+                    onDelete={handleDeleteRoute}
+                    onComplete={isDriver ? handleOpenCompletion : undefined}
+                    canManageRoutes={canManageRoutes}
+                  />
                 ) : (
                   <div className="text-center py-10 bg-slate-50 rounded-lg border border-dashed border-slate-300">
-                    <p className="text-slate-500">Keine Routen gefunden für "{searchQuery}".</p>
+                    <p className="text-slate-500">Keine Ablaufpläne gefunden für "{searchQuery}".</p>
                   </div>
                 )}
               </div>
@@ -498,23 +520,33 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
                   <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                     <div className="flex items-center space-x-2">
                       <Calendar className="w-5 h-5 text-emerald-600" />
-                      <h2 className="text-xl font-bold text-slate-800">Aktive Routen</h2>
+                      <h2 className="text-xl font-bold text-slate-800">Aktive und geplante Ablaufpläne</h2>
                       <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-0.5 rounded-full">{activeSection.length}</span>
                     </div>
-                    <button
-                      disabled={!canManageRoutes}
-                      onClick={handleCreateNew}
-                      className={`flex items-center space-x-1 px-4 py-1.5 rounded-md whitespace-nowrap shadow-sm ${canManageRoutes ? 'bg-blue-600 hover:bg-blue-500 text-white transition-colors' : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`}
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Route erstellen</span>
-                    </button>
+                    {canManageRoutes && (
+                      <button
+                        onClick={handleCreateNew}
+                        className="flex items-center space-x-1 px-4 py-1.5 rounded-md whitespace-nowrap shadow-sm bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Ablaufplan erstellen</span>
+                      </button>
+                    )}
                   </div>
                   {activeSection.length > 0 ? (
-                    <RouteList routes={activeSection} busTypes={busTypes} onEdit={handleEditRoute} onPrint={handlePrintRoute} onDelete={handleDeleteRoute} canManageRoutes={canManageRoutes} label="Aktive Routen" />
+                    <RouteList
+                      routes={activeSection}
+                      busTypes={busTypes}
+                      onEdit={handleEditRoute}
+                      onPrint={handlePrintRoute}
+                      onDelete={handleDeleteRoute}
+                      onComplete={isDriver ? handleOpenCompletion : undefined}
+                      canManageRoutes={canManageRoutes}
+                      label="Aktive/Geplante Ablaufpläne"
+                    />
                   ) : (
                     <div className="text-center py-10 bg-slate-50 rounded-lg border border-dashed border-slate-300">
-                      <p className="text-slate-500">Keine aktiven Routen.</p>
+                      <p className="text-slate-500">Keine aktiven oder geplanten Ablaufpläne.</p>
                     </div>
                   )}
                 </div>
@@ -522,14 +554,23 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
                 <div className="space-y-4 opacity-75 hover:opacity-100 transition-opacity">
                   <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
                     <History className="w-5 h-5 text-slate-500" />
-                    <h2 className="text-xl font-bold text-slate-700">Andere (Geplant, Entwurf, Archiv)</h2>
+                    <h2 className="text-xl font-bold text-slate-700">Andere (Entwurf, Durchgeführt, Archiv)</h2>
                     <span className="bg-slate-100 text-slate-600 text-xs font-semibold px-2 py-0.5 rounded-full">{otherSection.length}</span>
                   </div>
                   {otherSection.length > 0 ? (
-                    <RouteList routes={otherSection} busTypes={busTypes} onEdit={handleEditRoute} onPrint={handlePrintRoute} onDelete={handleDeleteRoute} canManageRoutes={canManageRoutes} label="Routen" />
+                    <RouteList
+                      routes={otherSection}
+                      busTypes={busTypes}
+                      onEdit={handleEditRoute}
+                      onPrint={handlePrintRoute}
+                      onDelete={handleDeleteRoute}
+                      onComplete={isDriver ? handleOpenCompletion : undefined}
+                      canManageRoutes={canManageRoutes}
+                      label="Ablaufpläne"
+                    />
                   ) : (
                     <div className="text-center py-6">
-                      <p className="text-slate-400 text-sm">Keine weiteren Routen.</p>
+                      <p className="text-slate-400 text-sm">Keine weiteren Ablaufpläne.</p>
                     </div>
                   )}
                 </div>
@@ -547,7 +588,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
               onSave={handleSaveRoute}
               onCancel={() => setView('LIST')}
               busTypes={busTypes}
-              workers={workers}
+              accountMembers={accountMembers}
               customers={customers}
               mapDefaultView={mapDefaultView}
             />
@@ -559,11 +600,8 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
             <BackToOverviewButton onClick={() => setView('LIST')} />
             <Settings
               busTypes={busTypes}
-              workers={workers}
               onAddBusType={handleAddBusType}
               onRemoveBusType={handleRemoveBusType}
-              onAddWorker={handleAddWorker}
-              onRemoveWorker={handleRemoveWorker}
               onAddCustomerContact={handleAddCustomerContact}
               onRemoveCustomerContact={handleRemoveCustomerContact}
               onUpdateCustomerContact={handleUpdateCustomerContact}

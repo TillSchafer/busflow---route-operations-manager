@@ -57,12 +57,16 @@ export function useRouteFiltering(routes: Route[], busTypes: BusType[], searchQu
   }, [routes, busTypes, searchQuery]);
 
   const activeSection = useMemo(
-    () => filteredRoutes.filter(r => r.status === 'Aktiv').sort((a, b) => b.date.localeCompare(a.date)),
+    () => filteredRoutes
+      .filter(r => r.status === 'Aktiv' || r.status === 'Geplant')
+      .sort((a, b) => b.date.localeCompare(a.date)),
     [filteredRoutes]
   );
 
   const otherSection = useMemo(
-    () => filteredRoutes.filter(r => r.status !== 'Aktiv').sort((a, b) => b.date.localeCompare(a.date)),
+    () => filteredRoutes
+      .filter(r => r.status !== 'Aktiv' && r.status !== 'Geplant')
+      .sort((a, b) => b.date.localeCompare(a.date)),
     [filteredRoutes]
   );
 

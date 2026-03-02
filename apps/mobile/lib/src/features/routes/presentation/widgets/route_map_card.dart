@@ -31,7 +31,7 @@ class RouteMapCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Route auf Karte',
+              'Ablaufplan auf Karte',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 4),
@@ -143,7 +143,7 @@ class RouteMapCard extends StatelessWidget {
             const SizedBox(height: 6),
             if (route.stops.isEmpty)
               Text(
-                'Für diese Route sind keine Stopps hinterlegt.',
+                'Für diesen Ablaufplan sind keine Stopps hinterlegt.',
                 style: Theme.of(context).textTheme.bodyMedium,
               )
             else

@@ -31,13 +31,13 @@ const isInvitationExpired = (value?: string) => {
 };
 
 const invitationRoleOptions: Array<AppSelectOption<InvitationRole>> = [
-  { value: 'VIEWER', label: 'Nur Lesen (Standard)' },
+  { value: 'VIEWER', label: 'Fahrer (Standard)' },
   { value: 'DISPATCH', label: 'Disposition' },
   { value: 'ADMIN', label: 'Admin' },
 ];
 
 const membershipRoleOptions: Array<AppSelectOption<MembershipRole>> = [
-  { value: 'VIEWER', label: 'Nur Lesen' },
+  { value: 'VIEWER', label: 'Fahrer' },
   { value: 'DISPATCH', label: 'Disposition' },
   { value: 'ADMIN', label: 'Admin' },
 ];
