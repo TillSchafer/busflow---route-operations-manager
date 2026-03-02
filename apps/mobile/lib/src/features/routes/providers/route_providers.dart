@@ -28,7 +28,7 @@ final selectedDayProvider = StateProvider<DateTime?>(
 /// Returns routes filtered by role:
 /// - DISPATCH / ADMIN → all routes
 /// - VIEWER           → only routes assigned to the user id
-final routesForDayProvider = FutureProvider.autoDispose<List<DriverRoute>>(
+final routesForDayProvider = FutureProvider<List<DriverRoute>>(
   (ref) async {
     final day = ref.watch(selectedDayProvider);
     final repo = ref.watch(routeRepositoryProvider);

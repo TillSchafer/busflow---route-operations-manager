@@ -321,8 +321,6 @@ class _RouteDetailPageState extends ConsumerState<RouteDetailPage> {
         );
       },
     );
-    kmStartBetriebCtrl.dispose();
-    kmStartCustomerCtrl.dispose();
     return result;
   }
 
@@ -582,11 +580,6 @@ class _RouteDetailPageState extends ConsumerState<RouteDetailPage> {
         );
       },
     );
-    kmEndCustomerCtrl.dispose();
-    kmEndBetriebCtrl.dispose();
-    timeReturnCustomerCtrl.dispose();
-    timeReturnBetriebCtrl.dispose();
-    commentCtrl.dispose();
     return result;
   }
 
