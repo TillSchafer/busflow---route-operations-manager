@@ -25,6 +25,19 @@ final selectedDayProvider = StateProvider<DateTime?>(
   (ref) => null,
 );
 
+/// Always fetches routes for today — used by the HomeTab welcome screen.
+final todayRoutesProvider = FutureProvider<List<DriverRoute>>((ref) async {
+  final today = DateTime.now();
+  final repo = ref.watch(routeRepositoryProvider);
+  final profile = await ref.watch(currentUserProfileProvider.future);
+  final assignedUserId = profile.isDispatcher ? null : profile.id;
+  return repo.fetchRoutes(
+    date: today,
+    accountId: AppConfig.accountId.isEmpty ? null : AppConfig.accountId,
+    assignedUserId: assignedUserId,
+  );
+});
+
 /// Returns routes filtered by role:
 /// - DISPATCH / ADMIN → all routes
 /// - VIEWER           → only routes assigned to the user id

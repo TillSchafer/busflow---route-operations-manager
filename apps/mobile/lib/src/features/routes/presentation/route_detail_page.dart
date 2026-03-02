@@ -583,6 +583,59 @@ class _RouteDetailPageState extends ConsumerState<RouteDetailPage> {
     return result;
   }
 
+  Future<void> _changeStatus() async {
+    const statuses = ['Entwurf', 'Geplant', 'Aktiv', 'Durchgeführt', 'Archiviert'];
+    final chosen = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Status ändern'),
+        children: [
+          for (final s in statuses)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(ctx).pop(s),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      _status == s ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                      size: 20,
+                      color: _status == s ? BusPilotTheme.primary : BusPilotTheme.textMuted,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      s,
+                      style: TextStyle(
+                        fontWeight: _status == s ? FontWeight.w700 : FontWeight.normal,
+                        color: _status == s ? BusPilotTheme.primary : BusPilotTheme.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (chosen == null || chosen == _status) return;
+
+    setState(() => _isUpdatingStatus = true);
+    try {
+      final repo = ref.read(routeRepositoryProvider);
+      await repo.updateRouteStatus(widget.route.id, chosen);
+      if (!mounted) return;
+      setState(() => _status = chosen);
+      ref.invalidate(routesForDayProvider);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_friendlyErrorMessage(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _isUpdatingStatus = false);
+    }
+  }
+
   Future<void> _deleteRoute() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -712,12 +765,18 @@ class _RouteDetailPageState extends ConsumerState<RouteDetailPage> {
               ),
             ),
           ),
-          if (canManageAllRoutes)
+          if (canManageAllRoutes) ...[
+            IconButton(
+              onPressed: _isUpdatingStatus ? null : _changeStatus,
+              tooltip: 'Status ändern',
+              icon: const Icon(Icons.edit_outlined),
+            ),
             IconButton(
               onPressed: _isUpdatingStatus ? null : _deleteRoute,
               tooltip: 'Ablaufplan löschen',
               icon: const Icon(Icons.delete_outline),
             ),
+          ],
         ],
       ),
       body: SafeArea(
@@ -728,7 +787,7 @@ class _RouteDetailPageState extends ConsumerState<RouteDetailPage> {
             _RouteInfoCard(route: route, operationalNotes: operationalNotes),
             const SizedBox(height: 12),
             // Status action
-            if (_status == 'Geplant' || _status == 'Entwurf')
+            if (_status == 'Geplant')
               _ActionButton(
                 label: 'Ablaufplan starten',
                 icon: Icons.play_arrow_rounded,

@@ -13,7 +13,7 @@ class BusPilotMobileApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'BusPilot Mobile',
+      title: 'BusPilot Driver',
       theme: BusPilotTheme.lightTheme,
       debugShowCheckedModeBanner: false,
       localizationsDelegates: const [
