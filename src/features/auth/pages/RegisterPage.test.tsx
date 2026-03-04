@@ -61,7 +61,7 @@ describe('RegisterPage', () => {
     expect(mockSeedTrialRegistration).not.toHaveBeenCalled();
   });
 
-  it('navigiert nach erfolgreicher Registrierung zur Accept-Invite-Seite', async () => {
+  it('navigiert nach erfolgreicher Registrierung direkt zur Code-Eingabe mit Auto-Start', async () => {
     renderPage();
 
     await userEvent.type(screen.getByPlaceholderText('Max Mustermann'), 'Test User');
@@ -78,7 +78,7 @@ describe('RegisterPage', () => {
       });
     });
 
-    expect(mockNavigate).toHaveBeenCalledWith('/auth/accept-invite?email=user%40example.com');
+    expect(mockNavigate).toHaveBeenCalledWith('/auth/accept-invite?email=user%40example.com&autostart=1');
   });
 
   it('zeigt Fehlermeldung bei fehlgeschlagener Registrierung', async () => {

@@ -4,7 +4,6 @@ import { corsHeaders, json, normalizeEmail, isValidEmail } from '../_shared/util
 import {
   deleteGhostUserIfSafe,
   getInvitationTargetState,
-  retryInviteUserByEmail,
   resolveExistingPendingInvitationForEmail,
 } from '../_shared/inviteAuth.ts';
 
@@ -36,7 +35,6 @@ const MAX_EMAIL_LENGTH = 254;
 const MAX_COMPANY_LENGTH = 140;
 const TRIAL_DAYS = 14;
 const SELF_REGISTER_SOURCE = 'self_register_trial';
-const INVITE_REDIRECT_PATH = '/auth/accept-invite';
 
 const SIGNUP_RESULT_CODES = {
   INVALID_INPUT: 'INVALID_INPUT',
@@ -93,12 +91,6 @@ const hashWithSalt = async (value: string, salt: string) => {
 const trimTo = (value: string | undefined, maxLength: number) => (value || '').trim().slice(0, maxLength);
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-const normalizePathname = (pathname: string) => {
-  if (!pathname) return '/';
-  const normalized = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
-  return normalized || '/';
-};
 
 const createUniqueAccount = async (
   adminClient: ReturnType<typeof createClient>,
@@ -169,9 +161,10 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
   const ipHashSalt = Deno.env.get('SELF_SIGNUP_IP_HASH_SALT')?.trim();
 
-  if (!supabaseUrl || !serviceRoleKey) {
+  if (!supabaseUrl || !serviceRoleKey || !anonKey) {
     return json(500, { ok: false, code: 'MISSING_SUPABASE_ENV' });
   }
 
@@ -186,32 +179,6 @@ serve(async (req) => {
   if (!ipHashSalt) {
     return json(500, { ok: false, code: 'MISSING_SELF_SIGNUP_IP_HASH_SALT' });
   }
-
-  const redirectTo = Deno.env.get('APP_INVITE_REDIRECT_URL')?.trim();
-  if (!redirectTo) {
-    return json(500, {
-      ok: false,
-      code: 'MISSING_INVITE_REDIRECT_URL',
-      message: 'APP_INVITE_REDIRECT_URL is required and must point to /auth/accept-invite.',
-    });
-  }
-
-  try {
-    const parsed = new URL(redirectTo);
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-      return json(500, { ok: false, code: 'INVALID_INVITE_REDIRECT_URL' });
-    }
-    if (normalizePathname(parsed.pathname) !== INVITE_REDIRECT_PATH) {
-      return json(500, {
-        ok: false,
-        code: 'INVALID_INVITE_REDIRECT_PATH',
-        message: `APP_INVITE_REDIRECT_URL must use path ${INVITE_REDIRECT_PATH}.`,
-      });
-    }
-  } catch {
-    return json(500, { ok: false, code: 'INVALID_INVITE_REDIRECT_URL' });
-  }
-  const inviteBaseUrl = new URL(redirectTo).origin;
 
   let body: PublicRegisterTrialRequest;
   try {
@@ -231,6 +198,7 @@ serve(async (req) => {
   const ipHash = await hashWithSalt(ipAddress, ipHashSalt);
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
+  const anonClient = createClient(supabaseUrl, anonKey);
 
   const logAttempt = async (resultCode: string, emailNorm?: string | null) => {
     const { error } = await adminClient
@@ -401,7 +369,7 @@ serve(async (req) => {
     }
   }
 
-  // Reuse an existing self-registration invitation: refresh metadata and resend invite link email.
+  // Reuse an existing self-registration invitation: refresh metadata and send a fresh OTP code.
   if (reusablePending) {
     const { data: existingAccount, error: accountError } = await adminClient
       .from('platform_accounts')
@@ -417,6 +385,7 @@ serve(async (req) => {
       }, email);
     }
 
+    const otpRequestedAt = new Date().toISOString();
     await adminClient
       .from('account_invitations')
       .update({
@@ -424,37 +393,29 @@ serve(async (req) => {
           source: SELF_REGISTER_SOURCE,
           requested_full_name: fullName,
           resend_requested_at: new Date().toISOString(),
+          otp_last_requested_at: otpRequestedAt,
         },
       })
       .eq('id', reusablePending.id)
       .eq('status', 'PENDING');
 
-    const acceptInviteUrl = `${inviteBaseUrl}${INVITE_REDIRECT_PATH}?email=${encodeURIComponent(email)}`;
-    const retryResult = await retryInviteUserByEmail(adminClient, {
+    const { error: otpError } = await anonClient.auth.signInWithOtp({
       email,
-      redirectTo: redirectTo as string,
-      data: {
-        accept_invite_url: acceptInviteUrl,
-        invited_account_id: existingAccount.id,
-        invited_role: 'ADMIN',
-        invitation_id: reusablePending.id,
-        source: SELF_REGISTER_SOURCE,
-      },
-      maxRetries: 2,
+      options: { shouldCreateUser: false },
     });
 
-    if (!retryResult.emailSent) {
+    if (otpError) {
       return respond(500, {
         ok: false,
         code: SIGNUP_RESULT_CODES.REGISTRATION_SEED_FAILED,
-        message: retryResult.inviteErrorMessage || 'Registrierungs-Einladung konnte nicht versendet werden.',
+        message: otpError.message || 'Bestätigungscode konnte nicht versendet werden.',
       }, email);
     }
 
     return respond(200, {
       ok: true,
       code: SIGNUP_RESULT_CODES.REGISTRATION_REUSED_PENDING,
-      message: 'Wir haben Ihnen einen neuen Einladungslink per E-Mail gesendet.',
+      message: 'Wir haben Ihnen einen Bestätigungscode per E-Mail gesendet.',
       accountId: existingAccount.id,
       accountSlug: existingAccount.slug,
       reusedPending: true,
@@ -496,6 +457,7 @@ serve(async (req) => {
         requested_full_name: fullName,
         trial_started_at: trialStartedAt,
         trial_ends_at: trialEndsAt,
+        otp_last_requested_at: new Date().toISOString(),
       },
     })
     .select('id')
@@ -511,21 +473,12 @@ serve(async (req) => {
     }, email);
   }
 
-  const acceptInviteUrl = `${inviteBaseUrl}${INVITE_REDIRECT_PATH}?email=${encodeURIComponent(email)}`;
-  const retryResult = await retryInviteUserByEmail(adminClient, {
+  const { error: otpError } = await anonClient.auth.signInWithOtp({
     email,
-    redirectTo: redirectTo as string,
-    data: {
-      accept_invite_url: acceptInviteUrl,
-      invited_account_id: account.id,
-      invited_role: 'ADMIN',
-      invitation_id: invitation.id,
-      source: SELF_REGISTER_SOURCE,
-    },
-    maxRetries: 2,
+    options: { shouldCreateUser: false },
   });
 
-  if (!retryResult.emailSent) {
+  if (otpError) {
     // Roll back account and invitation to allow a clean retry
     await adminClient.from('account_invitations').update({ status: 'REVOKED' }).eq('id', invitation.id);
     await adminClient.from('platform_accounts').delete().eq('id', account.id);
@@ -533,14 +486,14 @@ serve(async (req) => {
     return respond(500, {
       ok: false,
       code: SIGNUP_RESULT_CODES.REGISTRATION_SEED_FAILED,
-      message: retryResult.inviteErrorMessage || 'Registrierungs-Einladung konnte nicht gesendet werden. Bitte versuchen Sie es erneut.',
+      message: otpError.message || 'Bestätigungscode konnte nicht gesendet werden. Bitte versuchen Sie es erneut.',
     }, email);
   }
 
   return respond(200, {
     ok: true,
     code: SIGNUP_RESULT_CODES.REGISTRATION_SEEDED,
-    message: 'Wir haben Ihnen einen Einladungslink per E-Mail gesendet.',
+    message: 'Wir haben Ihnen einen Bestätigungscode per E-Mail gesendet.',
     accountId: account.id,
     accountSlug: account.slug,
     reusedPending: false,

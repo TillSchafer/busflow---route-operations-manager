@@ -69,7 +69,7 @@ const Register: React.FC = () => {
         email: normalizedEmail,
         honeypot: website,
       });
-      navigate(`/auth/accept-invite?email=${encodeURIComponent(normalizedEmail)}`);
+      navigate(`/auth/accept-invite?email=${encodeURIComponent(normalizedEmail)}&autostart=1`);
     } catch (error) {
       setFormError(mapRegisterError(error));
     } finally {

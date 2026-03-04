@@ -88,6 +88,8 @@ const AcceptInvite: React.FC = () => {
   const isRecovery = initialAuthPayload.type === 'recovery';
   const urlParams = new URLSearchParams(window.location.search);
   const inviteEmailFromUrl = urlParams.get('email')?.trim().toLowerCase() || '';
+  const shouldAutoStartCode = urlParams.get('autostart') === '1';
+  const didAutoRequestCodeRef = useRef(false);
 
   const [state, setState] = useState<ViewState>(isRecovery ? 'loading' : 'initial');
   const [isRequestingCode, setIsRequestingCode] = useState(false); // Separate flag for re-request spinner
@@ -184,6 +186,14 @@ const AcceptInvite: React.FC = () => {
     setState('code_sent');
   };
 
+  useEffect(() => {
+    if (isRecovery || !shouldAutoStartCode) return;
+    if (!email || state !== 'initial' || didAutoRequestCodeRef.current) return;
+
+    didAutoRequestCodeRef.current = true;
+    void handleRequestCode(false);
+  }, [email, isRecovery, shouldAutoStartCode, state]);
+
   const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
     const normalizedCode = code.replace(/\D/g, '');
@@ -271,7 +281,9 @@ const AcceptInvite: React.FC = () => {
       {state === 'initial' && !isRecovery && (
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
-            Fordern Sie Ihren Bestätigungscode an. Die Einladung ist mit folgender E-Mail verknüpft:
+            {shouldAutoStartCode
+              ? 'Wir senden Ihren Bestätigungscode automatisch. Falls nötig können Sie unten erneut anfordern.'
+              : 'Fordern Sie Ihren Bestätigungscode an. Die Einladung ist mit folgender E-Mail verknüpft:'}
           </p>
           <div>
             <p className="text-sm font-semibold text-slate-900 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">
