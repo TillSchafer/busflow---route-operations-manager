@@ -475,7 +475,7 @@ serve(async (req) => {
 
   const { error: otpError } = await anonClient.auth.signInWithOtp({
     email,
-    options: { shouldCreateUser: false },
+    options: { shouldCreateUser: true },
   });
 
   if (otpError) {
