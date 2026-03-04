@@ -92,6 +92,7 @@ const AcceptInvite: React.FC = () => {
   const didAutoRequestCodeRef = useRef(false);
 
   const [state, setState] = useState<ViewState>(isRecovery ? 'loading' : 'initial');
+  const [sessionChecked, setSessionChecked] = useState(isRecovery); // Skip check for recovery flow
   const [isRequestingCode, setIsRequestingCode] = useState(false); // Separate flag for re-request spinner
 
   const [email] = useState(inviteEmailFromUrl);
@@ -124,11 +125,21 @@ const AcceptInvite: React.FC = () => {
 
   useEffect(() => {
     if (isRecovery) return;
-    if (email) return;
 
-    setErrorText('Ungültiger Einladungslink. Bitte öffnen Sie den Link erneut aus der E-Mail.');
-    setState('error');
-  }, [email, isRecovery]);
+    // Check session BEFORE the email guard: if the user already has an active session
+    // (OTP verified, component remounted due to AuthContext state change, or redirected
+    // here by AppRouter while authenticated without a membership), skip to password step.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setState('needs_password');
+      } else if (!email) {
+        setErrorText('Ungültiger Einladungslink. Bitte öffnen Sie den Link erneut aus der E-Mail.');
+        setState('error');
+      }
+      setSessionChecked(true);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Handle recovery flow: password reset via URL token (type=recovery)
   useEffect(() => {
@@ -187,12 +198,12 @@ const AcceptInvite: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isRecovery || !shouldAutoStartCode) return;
+    if (!sessionChecked || isRecovery || !shouldAutoStartCode) return;
     if (!email || state !== 'initial' || didAutoRequestCodeRef.current) return;
 
     didAutoRequestCodeRef.current = true;
     void handleRequestCode(false);
-  }, [email, isRecovery, shouldAutoStartCode, state]);
+  }, [email, isRecovery, shouldAutoStartCode, state, sessionChecked]);
 
   const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,12 +279,16 @@ const AcceptInvite: React.FC = () => {
       {state === 'error' && (
         <div className="space-y-4">
           <p className="text-sm text-red-700 bg-red-50 p-3 rounded-lg">{errorText}</p>
-          <Link
-            to="/"
+          <button
+            type="button"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              navigate('/');
+            }}
             className="inline-flex items-center justify-center w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors"
           >
             Zur Anmeldung
-          </Link>
+          </button>
         </div>
       )}
 
