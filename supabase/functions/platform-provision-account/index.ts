@@ -182,6 +182,8 @@ serve(async (req) => {
     });
   }
 
+  const acceptInviteUrl = `${new URL(inviteRedirect).origin}${INVITE_REDIRECT_PATH}?email=${encodeURIComponent(adminEmail)}`;
+
   const { data: invitation, error: invitationError } = await adminClient
     .from('account_invitations')
     .insert({
@@ -209,6 +211,7 @@ serve(async (req) => {
       data: {
         invited_account_id: account.id,
         invited_role: 'ADMIN',
+        accept_invite_url: acceptInviteUrl,
       },
       maxRetries: 2,
     });

@@ -200,3 +200,17 @@ export interface MapDefaultView {
   lon: number;
   zoom: number;
 }
+
+export interface MapPageSettings {
+  markerStyle: 'initials' | 'bus' | 'dot';
+  markerSize: 'small' | 'medium' | 'large';
+  showStopMarkers: boolean;
+  autoZoomToDrivers: boolean;
+}
+
+export const DEFAULT_MAP_PAGE_SETTINGS: MapPageSettings = {
+  markerStyle: 'initials',
+  markerSize: 'medium',
+  showStopMarkers: true,
+  autoZoomToDrivers: true,
+};

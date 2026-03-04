@@ -7,7 +7,6 @@ import RouteCompletionFlow, { CompletionData } from './components/RouteCompletio
 import PrintPreview from './components/PrintPreview';
 import Settings from './components/Settings';
 import { CustomerContactFormPayload } from './components/CustomerEditDialog';
-import AppHeader from '../../shared/components/AppHeader';
 import ConfirmDialog from '../../shared/components/ConfirmDialog';
 import {
   BusType,
@@ -446,7 +445,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="flex flex-col">
       {completionRoute && (
         <RouteCompletionFlow
           route={completionRoute}
@@ -468,25 +467,25 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
         isConfirming={isDeletingRoute}
       />
 
-      <AppHeader
-        title="BusPilot Ablaufplanung"
-        user={view === 'EDITOR' ? null : authUser}
-        onHome={onGoHome}
-        onProfile={onProfile}
-        onAdmin={onAdmin}
-        onOwner={onOwner}
-        onLogout={onLogout}
-        searchBar={view === 'LIST' ? SearchInput : undefined}
-        actions={view === 'LIST' && canManageSettings ? (
-          <button
-            onClick={() => setView('SETTINGS')}
-            className="flex items-center space-x-1 px-3 py-1.5 rounded-md transition-colors hover:bg-slate-800"
-          >
-            <SettingsIcon className="w-4 h-4" />
-            <span>Einstellungen</span>
-          </button>
-        ) : undefined}
-      />
+      {view === 'LIST' && (
+        <div className="bg-slate-900 text-white px-4 py-3 no-print flex items-center sticky top-0 z-40">
+          <div className="w-1/4" />
+          <div className="flex-1 flex justify-center px-4">
+            {SearchInput}
+          </div>
+          <div className="w-1/4 flex justify-end">
+            {canManageSettings && (
+              <button
+                onClick={() => setView('SETTINGS')}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md transition-colors hover:bg-slate-800"
+              >
+                <SettingsIcon className="w-4 h-4" />
+                <span className="text-sm">Einstellungen</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       <main className="flex-1 p-4 md:p-8 no-print max-w-7xl mx-auto w-full">
         {view === 'LIST' && (

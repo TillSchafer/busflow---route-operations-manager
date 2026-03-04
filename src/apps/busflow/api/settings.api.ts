@@ -1,4 +1,4 @@
-import { AccountMember, BusType, MapDefaultView } from '../types';
+import { AccountMember, BusType, MapDefaultView, MapPageSettings } from '../types';
 import { createCodeError, getPostgrestCode, requireActiveAccountId, supabase, toMapDefaultView } from './shared';
 
 export async function getBusTypes() {
@@ -91,23 +91,83 @@ export async function getMapDefaultView(): Promise<MapDefaultView | null> {
   return toMapDefaultView(data.value as Partial<MapDefaultView>);
 }
 
+// ── Shared helper: robust write across mixed PostgREST/runtime behaviors ──────
+// 1) Try UPSERT first (POST) to avoid PATCH-only failures seen in some envs.
+// 2) Fall back to UPDATE-then-INSERT for environments where on_conflict parsing
+//    is unstable with column names like "key".
+async function writeAppSetting(accountId: string, settingKey: string, value: unknown): Promise<void> {
+  const payload = { account_id: accountId, key: settingKey, value };
+
+  const { error: upsertErr } = await supabase
+    .from('busflow_app_settings')
+    .upsert(payload, { onConflict: 'account_id,key' });
+
+  if (!upsertErr) return;
+
+  const { data, error: updateErr } = await supabase
+    .from('busflow_app_settings')
+    .update({ value })
+    .eq('account_id', accountId)
+    .eq('key', settingKey)
+    .select('account_id')
+    .maybeSingle();
+
+  if (updateErr) throw updateErr;
+
+  if (!data) {
+    const { error: insertErr } = await supabase
+      .from('busflow_app_settings')
+      .insert(payload);
+    if (insertErr) throw insertErr;
+  }
+}
+
 export async function upsertMapDefaultView(view: MapDefaultView) {
   const accountId = requireActiveAccountId();
-  const { error } = await supabase
+  await writeAppSetting(accountId, 'map_default', {
+    address: view.address, lat: view.lat, lon: view.lon, zoom: view.zoom,
+  });
+}
+
+export async function getMapPageDefaultView(): Promise<MapDefaultView | null> {
+  // Unify with shared route/planner default-view setting.
+  const sharedDefault = await getMapDefaultView();
+  if (sharedDefault) return sharedDefault;
+
+  // Backward compatibility for previously persisted map-page-specific key.
+  const accountId = requireActiveAccountId();
+  const { data, error } = await supabase
     .from('busflow_app_settings')
-    .upsert(
-      {
-        account_id: accountId,
-        key: 'map_default',
-        value: {
-          address: view.address,
-          lat: view.lat,
-          lon: view.lon,
-          zoom: view.zoom
-        }
-      },
-      { onConflict: 'account_id,key' }
-    );
+    .select('value')
+    .eq('account_id', accountId)
+    .eq('key', 'map_page_default')
+    .maybeSingle();
 
   if (error) throw error;
+  if (!data?.value) return null;
+  return toMapDefaultView(data.value as Partial<MapDefaultView>);
+}
+
+export async function upsertMapPageDefaultView(view: MapDefaultView) {
+  // Persist under the shared key so Map Screen and planner use the same default view.
+  await upsertMapDefaultView(view);
+}
+
+export async function getMapPageSettings(): Promise<MapPageSettings | null> {
+  const accountId = requireActiveAccountId();
+  const { data, error } = await supabase
+    .from('busflow_app_settings')
+    .select('value')
+    .eq('account_id', accountId)
+    .eq('key', 'map_page_settings')
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data?.value) return null;
+  return data.value as MapPageSettings;
+}
+
+export async function upsertMapPageSettings(settings: MapPageSettings) {
+  const accountId = requireActiveAccountId();
+  await writeAppSetting(accountId, 'map_page_settings', settings);
 }

@@ -4,17 +4,18 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import RegisterPage from './RegisterPage';
+import { PublicRegisterError } from '../../../shared/api/public/registerTrial.api';
 
-const mockSignUp = vi.fn();
 const mockSeedTrialRegistration = vi.fn();
+const mockNavigate = vi.fn();
 
-vi.mock('../../../shared/lib/supabase', () => ({
-  supabase: {
-    auth: {
-      signUp: (...args: unknown[]) => mockSignUp(...args),
-    },
-  },
-}));
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
 
 vi.mock('../../../shared/api/public/registerTrial.api', () => ({
   PublicRegisterApi: {
@@ -22,11 +23,9 @@ vi.mock('../../../shared/api/public/registerTrial.api', () => ({
   },
   PublicRegisterError: class PublicRegisterError extends Error {
     code?: string;
-    status?: number;
-    constructor(message: string, code?: string, status?: number) {
+    constructor(message: string, code?: string) {
       super(message);
       this.code = code;
-      this.status = status;
     }
   },
 }));
@@ -42,43 +41,33 @@ const renderPage = () =>
     </MemoryRouter>,
   );
 
-const fillBasics = async (container: HTMLElement, password: string) => {
-  await userEvent.type(screen.getByPlaceholderText('Max Mustermann'), 'Test User');
-  await userEvent.type(screen.getByPlaceholderText('Muster Logistik GmbH'), 'Test Company');
-  await userEvent.type(screen.getByPlaceholderText('name@firma.de'), 'USER@Example.com');
-
-  const passwordFields = container.querySelectorAll('input[type="password"]');
-  await userEvent.type(passwordFields[0], password);
-  await userEvent.type(passwordFields[1], password);
-};
-
 describe('RegisterPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSeedTrialRegistration.mockResolvedValue({ ok: true, code: 'REGISTRATION_CREATED' });
-    mockSignUp.mockResolvedValue({ error: null });
+    mockSeedTrialRegistration.mockResolvedValue({ ok: true, code: 'REGISTRATION_SEEDED' });
   });
 
-  it('blockt zu schwache Passwörter vor API-Aufrufen', async () => {
-    const { container } = renderPage();
-    await fillBasics(container, 'Password1');
+  it('zeigt das Formular an', () => {
+    renderPage();
+    expect(screen.getByPlaceholderText('Max Mustermann')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Muster Logistik GmbH')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('name@firma.de')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /weiter/i })).toBeInTheDocument();
+  });
 
-    await userEvent.click(screen.getByRole('button', { name: /jetzt registrieren/i }));
-
-    expect(
-      await screen.findByText(
-        'Das Passwort muss mindestens 12 Zeichen lang sein und Groß-/Kleinbuchstaben, Zahlen und Sonderzeichen enthalten.',
-      ),
-    ).toBeInTheDocument();
+  it('validiert leere Felder vor API-Aufruf', async () => {
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: /weiter/i }));
     expect(mockSeedTrialRegistration).not.toHaveBeenCalled();
-    expect(mockSignUp).not.toHaveBeenCalled();
   });
 
-  it('nutzt den lokalen Accept-Invite Redirect bei erfolgreicher Registrierung', async () => {
-    const { container } = renderPage();
-    await fillBasics(container, 'StrongPass123!');
+  it('navigiert nach erfolgreicher Registrierung zur Accept-Invite-Seite', async () => {
+    renderPage();
 
-    await userEvent.click(screen.getByRole('button', { name: /jetzt registrieren/i }));
+    await userEvent.type(screen.getByPlaceholderText('Max Mustermann'), 'Test User');
+    await userEvent.type(screen.getByPlaceholderText('Muster Logistik GmbH'), 'Test Company');
+    await userEvent.type(screen.getByPlaceholderText('name@firma.de'), 'USER@Example.com');
+    await userEvent.click(screen.getByRole('button', { name: /weiter/i }));
 
     await waitFor(() => {
       expect(mockSeedTrialRegistration).toHaveBeenCalledWith({
@@ -89,18 +78,21 @@ describe('RegisterPage', () => {
       });
     });
 
-    await waitFor(() => {
-      expect(mockSignUp).toHaveBeenCalledWith({
-        email: 'user@example.com',
-        password: 'StrongPass123!',
-        options: expect.objectContaining({
-          emailRedirectTo: expect.stringContaining('/auth/accept-invite'),
-        }),
-      });
-    });
+    expect(mockNavigate).toHaveBeenCalledWith('/auth/accept-invite?email=user%40example.com');
+  });
 
-    expect(
-      await screen.findByText(/bitte prüfen sie ihr e-mail-postfach/i),
-    ).toBeInTheDocument();
+  it('zeigt Fehlermeldung bei fehlgeschlagener Registrierung', async () => {
+    mockSeedTrialRegistration.mockRejectedValue(
+      new PublicRegisterError('Email already registered', 'EMAIL_ALREADY_REGISTERED'),
+    );
+
+    renderPage();
+
+    await userEvent.type(screen.getByPlaceholderText('Max Mustermann'), 'Test User');
+    await userEvent.type(screen.getByPlaceholderText('Muster Logistik GmbH'), 'Test Company');
+    await userEvent.type(screen.getByPlaceholderText('name@firma.de'), 'existing@example.com');
+    await userEvent.click(screen.getByRole('button', { name: /weiter/i }));
+
+    expect(await screen.findByText(/Diese E-Mail ist bereits registriert/i)).toBeInTheDocument();
   });
 });

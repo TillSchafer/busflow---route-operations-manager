@@ -4,6 +4,7 @@ import { corsHeaders, json, normalizeEmail, isValidEmail } from '../_shared/util
 import {
   deleteGhostUserIfSafe,
   getInvitationTargetState,
+  retryInviteUserByEmail,
   resolveExistingPendingInvitationForEmail,
 } from '../_shared/inviteAuth.ts';
 
@@ -24,6 +25,7 @@ type ResultPayload = {
   accountSlug?: string;
   reusedPending?: boolean;
   existingInvitationId?: string;
+  emailSent?: boolean;
 };
 
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
@@ -34,6 +36,7 @@ const MAX_EMAIL_LENGTH = 254;
 const MAX_COMPANY_LENGTH = 140;
 const TRIAL_DAYS = 14;
 const SELF_REGISTER_SOURCE = 'self_register_trial';
+const INVITE_REDIRECT_PATH = '/auth/accept-invite';
 
 const SIGNUP_RESULT_CODES = {
   INVALID_INPUT: 'INVALID_INPUT',
@@ -90,6 +93,12 @@ const hashWithSalt = async (value: string, salt: string) => {
 const trimTo = (value: string | undefined, maxLength: number) => (value || '').trim().slice(0, maxLength);
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const normalizePathname = (pathname: string) => {
+  if (!pathname) return '/';
+  const normalized = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+  return normalized || '/';
+};
 
 const createUniqueAccount = async (
   adminClient: ReturnType<typeof createClient>,
@@ -177,6 +186,32 @@ serve(async (req) => {
   if (!ipHashSalt) {
     return json(500, { ok: false, code: 'MISSING_SELF_SIGNUP_IP_HASH_SALT' });
   }
+
+  const redirectTo = Deno.env.get('APP_INVITE_REDIRECT_URL')?.trim();
+  if (!redirectTo) {
+    return json(500, {
+      ok: false,
+      code: 'MISSING_INVITE_REDIRECT_URL',
+      message: 'APP_INVITE_REDIRECT_URL is required and must point to /auth/accept-invite.',
+    });
+  }
+
+  try {
+    const parsed = new URL(redirectTo);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return json(500, { ok: false, code: 'INVALID_INVITE_REDIRECT_URL' });
+    }
+    if (normalizePathname(parsed.pathname) !== INVITE_REDIRECT_PATH) {
+      return json(500, {
+        ok: false,
+        code: 'INVALID_INVITE_REDIRECT_PATH',
+        message: `APP_INVITE_REDIRECT_URL must use path ${INVITE_REDIRECT_PATH}.`,
+      });
+    }
+  } catch {
+    return json(500, { ok: false, code: 'INVALID_INVITE_REDIRECT_URL' });
+  }
+  const inviteBaseUrl = new URL(redirectTo).origin;
 
   let body: PublicRegisterTrialRequest;
   try {
@@ -302,32 +337,6 @@ serve(async (req) => {
     }, email);
   }
 
-  let deletedGhostUser = false;
-  if (targetState.canDeleteGhostUser) {
-    try {
-      deletedGhostUser = await deleteGhostUserIfSafe(adminClient, targetState);
-    } catch (error) {
-      return respond(500, {
-        ok: false,
-        code: SIGNUP_RESULT_CODES.REGISTRATION_SEED_FAILED,
-        message: error instanceof Error ? error.message : 'Ghost user cleanup failed.',
-      }, email);
-    }
-
-    if (deletedGhostUser) {
-      await sleep(200);
-      targetState = await getInvitationTargetState(adminClient, email);
-    }
-  }
-
-  if (targetState.authUserId || targetState.profileId) {
-    return respond(409, {
-      ok: false,
-      code: SIGNUP_RESULT_CODES.EMAIL_ALREADY_REGISTERED,
-      message: 'Diese E-Mail ist bereits registriert. Bitte anmelden oder Passwort zurücksetzen.',
-    }, email);
-  }
-
   let pendingInvitations;
   try {
     pendingInvitations = await resolveExistingPendingInvitationForEmail(adminClient, email);
@@ -368,32 +377,93 @@ serve(async (req) => {
   }
 
   const reusablePending = freshPending.find((item) => item.source === SELF_REGISTER_SOURCE);
+  if ((targetState.authUserId || targetState.profileId) && !reusablePending) {
+    if (targetState.canDeleteGhostUser) {
+      try {
+        await deleteGhostUserIfSafe(adminClient, targetState);
+        await sleep(200);
+        targetState = await getInvitationTargetState(adminClient, email);
+      } catch (error) {
+        return respond(500, {
+          ok: false,
+          code: SIGNUP_RESULT_CODES.REGISTRATION_SEED_FAILED,
+          message: error instanceof Error ? error.message : 'Ghost user cleanup failed.',
+        }, email);
+      }
+    }
+
+    if (targetState.authUserId || targetState.profileId) {
+      return respond(409, {
+        ok: false,
+        code: SIGNUP_RESULT_CODES.EMAIL_ALREADY_REGISTERED,
+        message: 'Diese E-Mail ist bereits registriert. Bitte anmelden oder Passwort zurücksetzen.',
+      }, email);
+    }
+  }
+
+  // Reuse an existing self-registration invitation: refresh metadata and resend invite link email.
   if (reusablePending) {
-    const { data: existingAccount, error } = await adminClient
+    const { data: existingAccount, error: accountError } = await adminClient
       .from('platform_accounts')
       .select('id, slug')
       .eq('id', reusablePending.account_id)
       .maybeSingle();
 
-    if (error || !existingAccount) {
+    if (accountError || !existingAccount) {
       return respond(500, {
         ok: false,
         code: SIGNUP_RESULT_CODES.REGISTRATION_SEED_FAILED,
-        message: error?.message || 'Existing account for pending registration not found.',
+        message: accountError?.message || 'Existing account for pending registration not found.',
+      }, email);
+    }
+
+    await adminClient
+      .from('account_invitations')
+      .update({
+        meta: {
+          source: SELF_REGISTER_SOURCE,
+          requested_full_name: fullName,
+          resend_requested_at: new Date().toISOString(),
+        },
+      })
+      .eq('id', reusablePending.id)
+      .eq('status', 'PENDING');
+
+    const acceptInviteUrl = `${inviteBaseUrl}${INVITE_REDIRECT_PATH}?email=${encodeURIComponent(email)}`;
+    const retryResult = await retryInviteUserByEmail(adminClient, {
+      email,
+      redirectTo: redirectTo as string,
+      data: {
+        accept_invite_url: acceptInviteUrl,
+        invited_account_id: existingAccount.id,
+        invited_role: 'ADMIN',
+        invitation_id: reusablePending.id,
+        source: SELF_REGISTER_SOURCE,
+      },
+      maxRetries: 2,
+    });
+
+    if (!retryResult.emailSent) {
+      return respond(500, {
+        ok: false,
+        code: SIGNUP_RESULT_CODES.REGISTRATION_SEED_FAILED,
+        message: retryResult.inviteErrorMessage || 'Registrierungs-Einladung konnte nicht versendet werden.',
       }, email);
     }
 
     return respond(200, {
       ok: true,
       code: SIGNUP_RESULT_CODES.REGISTRATION_REUSED_PENDING,
-      message: 'Es besteht bereits eine offene Registrierung. Ein neuer Bestätigungslink kann jetzt versendet werden.',
+      message: 'Wir haben Ihnen einen neuen Einladungslink per E-Mail gesendet.',
       accountId: existingAccount.id,
       accountSlug: existingAccount.slug,
       reusedPending: true,
       existingInvitationId: reusablePending.id,
+      emailSent: true,
     }, email);
   }
 
+  // Create new account and invitation
   const trialStartedAt = new Date().toISOString();
   const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
@@ -441,13 +511,40 @@ serve(async (req) => {
     }, email);
   }
 
+  const acceptInviteUrl = `${inviteBaseUrl}${INVITE_REDIRECT_PATH}?email=${encodeURIComponent(email)}`;
+  const retryResult = await retryInviteUserByEmail(adminClient, {
+    email,
+    redirectTo: redirectTo as string,
+    data: {
+      accept_invite_url: acceptInviteUrl,
+      invited_account_id: account.id,
+      invited_role: 'ADMIN',
+      invitation_id: invitation.id,
+      source: SELF_REGISTER_SOURCE,
+    },
+    maxRetries: 2,
+  });
+
+  if (!retryResult.emailSent) {
+    // Roll back account and invitation to allow a clean retry
+    await adminClient.from('account_invitations').update({ status: 'REVOKED' }).eq('id', invitation.id);
+    await adminClient.from('platform_accounts').delete().eq('id', account.id);
+
+    return respond(500, {
+      ok: false,
+      code: SIGNUP_RESULT_CODES.REGISTRATION_SEED_FAILED,
+      message: retryResult.inviteErrorMessage || 'Registrierungs-Einladung konnte nicht gesendet werden. Bitte versuchen Sie es erneut.',
+    }, email);
+  }
+
   return respond(200, {
     ok: true,
     code: SIGNUP_RESULT_CODES.REGISTRATION_SEEDED,
-    message: 'Registrierung vorbereitet. Bitte E-Mail bestätigen, um fortzufahren.',
+    message: 'Wir haben Ihnen einen Einladungslink per E-Mail gesendet.',
     accountId: account.id,
     accountSlug: account.slug,
     reusedPending: false,
     existingInvitationId: invitation.id,
+    emailSent: true,
   }, email);
 });

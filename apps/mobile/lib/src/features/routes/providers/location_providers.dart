@@ -1,0 +1,105 @@
+import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
+
+import '../data/location_repository.dart';
+import '../models/user_profile.dart';
+
+/// Minimum distance (metres) a driver must move before we send an update.
+const _minDistanceMetres = 20.0;
+
+/// How often to force an update even without movement.
+const _maxIdleSeconds = 30;
+
+final locationRepositoryProvider = Provider<LocationRepository>(
+  (_) => LocationRepository(),
+);
+
+/// Manages GPS tracking for the currently logged-in driver.
+///
+/// Call [start] when the app becomes active, [pause] when backgrounded,
+/// and [stop] on logout / widget dispose.
+class LocationTrackingNotifier extends AsyncNotifier<void> {
+  StreamSubscription<Position>? _positionSub;
+  DateTime? _lastSentAt;
+  UserProfile? _profile;
+
+  @override
+  Future<void> build() async {}
+
+  Future<void> start(UserProfile profile) async {
+    if (profile.accountId == null) return; // can't track without an account
+
+    _profile = profile;
+
+    // Request permission at runtime.
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return; // user refused — no tracking
+    }
+
+    await _positionSub?.cancel();
+    _lastSentAt = null;
+
+    final settings = LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: _minDistanceMetres.toInt(),
+    );
+
+    _positionSub = Geolocator.getPositionStream(locationSettings: settings)
+        .listen(_onPosition);
+  }
+
+  Future<void> pause() async {
+    await _positionSub?.cancel();
+    _positionSub = null;
+    final profile = _profile;
+    if (profile != null) {
+      await ref
+          .read(locationRepositoryProvider)
+          .deactivate(profile.id)
+          .catchError((_) {});
+    }
+  }
+
+  Future<void> stop() async {
+    await pause();
+    _profile = null;
+  }
+
+  Future<void> _onPosition(Position pos) async {
+    final profile = _profile;
+    if (profile == null || profile.accountId == null) return;
+
+    final now = DateTime.now();
+    final sinceLastSent = _lastSentAt == null
+        ? _maxIdleSeconds + 1
+        : now.difference(_lastSentAt!).inSeconds;
+
+    // Send if we moved (stream filter handles distance) OR after idle timeout.
+    if (sinceLastSent < _maxIdleSeconds && _lastSentAt != null) return;
+
+    _lastSentAt = now;
+    await ref
+        .read(locationRepositoryProvider)
+        .upsertLocation(
+          userId: profile.id,
+          accountId: profile.accountId!,
+          fullName: profile.displayName,
+          lat: pos.latitude,
+          lon: pos.longitude,
+          heading: pos.heading,
+          accuracy: pos.accuracy,
+        )
+        .catchError((_) {}); // never crash the stream on network error
+  }
+}
+
+final locationTrackingProvider =
+    AsyncNotifierProvider<LocationTrackingNotifier, void>(
+  LocationTrackingNotifier.new,
+);

@@ -5,11 +5,15 @@ class UserProfile {
     this.fullName,
     this.membershipRole = 'VIEWER',
     this.globalRole = 'USER',
+    this.accountId,
   });
 
   final String id;
   final String email;
   final String? fullName;
+
+  /// The account_id this user is active in (used for location tracking).
+  final String? accountId;
 
   /// account_memberships.role: ADMIN | DISPATCH | VIEWER
   final String membershipRole;

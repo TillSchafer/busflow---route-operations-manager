@@ -1,218 +1,217 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../shared/lib/supabase';
 import AuthScreenShell from '../../../shared/components/auth/AuthScreenShell';
-import {
-  clearAuthParamsFromUrl,
-  getUrlAuthErrorMessage,
-  hydrateSessionFromAuthPayload,
-  readAuthUrlPayload,
-} from '../lib/auth-callback';
+import { hydrateSessionFromAuthPayload, readAuthUrlPayload, clearAuthParamsFromUrl } from '../lib/auth-callback';
 
-type ViewState = 'loading' | 'needs_password' | 'saving' | 'success' | 'error';
+// View states for the invitation onboarding flow.
+// Recovery (password reset) reuses needs_password / saving / success.
+type ViewState =
+  | 'initial'         // Email input + "Code anfordern" button
+  | 'code_sent'       // Code input visible, cooldown running
+  | 'verifying'       // verifyOtp in progress
+  | 'needs_password'  // Password form
+  | 'saving'          // Saving password
+  | 'success'
+  | 'loading'         // Processing recovery URL token
+  | 'error';
 
-const mapClaimError = (code?: string): string => {
-  switch (code) {
-    case 'NO_PENDING_INVITATION':
-      return 'Keine offene Einladung gefunden. Bitte lassen Sie sich erneut einladen.';
-    case 'ACTIVE_MEMBERSHIP_EXISTS':
-      return 'Ihr Konto ist bereits einem anderen aktiven Account zugeordnet.';
-    case 'NOT_AUTHENTICATED':
-      return 'Sitzung abgelaufen. Öffnen Sie den Einladungslink erneut.';
-    case 'PROFILE_MISSING':
-      return 'Profil nicht gefunden. Bitte kontaktieren Sie den Support.';
-    default:
-      return 'Einladung konnte nicht abgeschlossen werden.';
+const CODE_COOLDOWN_SECONDS = 60;
+
+const requestOnboardingCode = async (
+  email: string,
+): Promise<{ ok: boolean; code?: string; message?: string; secondsRemaining?: number }> => {
+  const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, '');
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+
+  if (!supabaseUrl || !anonKey) {
+    return { ok: false, code: 'CONFIG_ERROR', message: 'Konfigurationsfehler.' };
+  }
+
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/request-onboarding-code-v1`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    const body = await response.json().catch(() => null) as {
+      ok?: boolean; code?: string; message?: string; secondsRemaining?: number;
+    } | null;
+
+    return {
+      ok: body?.ok === true,
+      code: body?.code,
+      message: body?.message,
+      secondsRemaining: body?.secondsRemaining,
+    };
+  } catch {
+    return { ok: false, code: 'NETWORK_ERROR', message: 'Netzwerkfehler. Bitte prüfen Sie Ihre Verbindung.' };
   }
 };
 
-const isSignupVerificationType = (value: string | null) =>
-  value === 'signup' || value === 'email' || value === 'magiclink';
-
-const hasActiveMembership = async (userId: string): Promise<boolean> => {
-  const { count, error } = await supabase
-    .from('account_memberships')
-    .select('id', { head: true, count: 'exact' })
-    .eq('user_id', userId)
-    .eq('status', 'ACTIVE');
-
-  if (error) return false;
-  return (count || 0) > 0;
+const mapRequestCodeError = (code?: string, message?: string, secondsRemaining?: number): string => {
+  switch (code) {
+    case 'NO_PENDING_INVITATION':
+      return 'Keine offene Einladung für diese E-Mail-Adresse gefunden. Bitte prüfen Sie die Adresse oder fordern Sie eine neue Einladung an.';
+    case 'RATE_LIMITED':
+      return secondsRemaining
+        ? `Bitte warten Sie noch ${secondsRemaining} Sekunden.`
+        : 'Bitte warten Sie kurz.';
+    case 'INVALID_EMAIL':
+      return 'Bitte geben Sie eine gültige E-Mail-Adresse ein.';
+    default:
+      return message || 'Code konnte nicht gesendet werden. Bitte versuchen Sie es erneut.';
+  }
 };
 
-const hasInvitedMembership = async (userId: string): Promise<boolean> => {
-  const { count, error } = await supabase
-    .from('account_memberships')
-    .select('id', { head: true, count: 'exact' })
-    .eq('user_id', userId)
-    .eq('status', 'INVITED');
+const claimMyInvitation = async (): Promise<void> => {
+  const { data, error } = await supabase.rpc('claim_my_invitation_secure', { p_account_id: null });
+  if (error) throw error;
 
-  if (error) return false;
-  return (count || 0) > 0;
+  const code = data?.code as string | undefined;
+  const ok = Boolean(data?.ok);
+
+  if (!ok && code !== 'ALREADY_ACTIVE' && code !== 'NO_PENDING_INVITATION') {
+    throw new Error(code || 'Einladung konnte nicht abgeschlossen werden.');
+  }
 };
 
 const AcceptInvite: React.FC = () => {
   const navigate = useNavigate();
-  const [state, setState] = useState<ViewState>('loading');
+  const initialAuthPayloadRef = useRef(readAuthUrlPayload());
+  const initialAuthPayload = initialAuthPayloadRef.current;
+  const isRecovery = initialAuthPayload.type === 'recovery';
+  const urlParams = new URLSearchParams(window.location.search);
+  const inviteEmailFromUrl = urlParams.get('email')?.trim().toLowerCase() || '';
+
+  const [state, setState] = useState<ViewState>(isRecovery ? 'loading' : 'initial');
+  const [isRequestingCode, setIsRequestingCode] = useState(false); // Separate flag for re-request spinner
+
+  const [email] = useState(inviteEmailFromUrl);
+
+  const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [errorText, setErrorText] = useState('');
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
-  const authPayload = useMemo(() => readAuthUrlPayload(), []);
-  const isRecoveryFlow = authPayload.type === 'recovery';
-  const isSignupVerificationFlow = !isRecoveryFlow && isSignupVerificationType(authPayload.type);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const completeClaimFlow = useCallback(async (mode: 'invite' | 'signup' | 'recovery') => {
-    if (mode !== 'recovery') {
-      const { data: claimResult, error: claimError } = await supabase.rpc('claim_my_invitation', {
-        p_account_id: null,
-      });
-
-      if (claimError) {
-        throw claimError;
-      }
-
-      const claimCode = claimResult?.code as string | undefined;
-      const claimOk = Boolean(claimResult?.ok);
-
-      if (!claimOk && claimCode !== 'ALREADY_ACTIVE') {
-        if (claimCode === 'NO_PENDING_INVITATION') {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-          const userId = session?.user?.id;
-
-          if (userId) {
-            const activeMembershipExists = await hasActiveMembership(userId);
-            if (activeMembershipExists) {
-              return;
-            }
-          }
-
-          if (mode === 'signup') {
-            throw new Error('Registrierungslink ungültig oder abgelaufen. Bitte Registrierung erneut starten.');
-          }
-
-          throw new Error(mapClaimError(claimCode));
+  const startCooldown = (seconds: number) => {
+    setCooldownSeconds(seconds);
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    cooldownRef.current = setInterval(() => {
+      setCooldownSeconds(prev => {
+        if (prev <= 1) {
+          clearInterval(cooldownRef.current!);
+          return 0;
         }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
-        throw new Error(mapClaimError(claimCode));
-      }
-
-      return;
-    }
-
-    // Recovery flow (password reset): if the admin sent a reactivation email,
-    // the user has a fresh PENDING invitation. Claim it now to activate their membership.
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const userId = session?.user?.id;
-
-    if (!userId || !(await hasInvitedMembership(userId))) {
-      return;
-    }
-
-    const { data: claimResult, error: claimError } = await supabase.rpc('claim_my_invitation', {
-      p_account_id: null,
-    });
-
-    if (claimError) {
-      throw claimError;
-    }
-
-    const claimCode = claimResult?.code as string | undefined;
-    if (!claimResult?.ok && claimCode !== 'ALREADY_ACTIVE') {
-      throw new Error(mapClaimError(claimCode));
-    }
+  useEffect(() => {
+    return () => { if (cooldownRef.current) clearInterval(cooldownRef.current); };
   }, []);
 
   useEffect(() => {
-    const init = async () => {
-      setState('loading');
-      setErrorText('');
+    if (isRecovery) return;
+    if (email) return;
 
-      let latestAuthError: string | null = null;
+    setErrorText('Ungültiger Einladungslink. Bitte öffnen Sie den Link erneut aus der E-Mail.');
+    setState('error');
+  }, [email, isRecovery]);
 
-      let {
-        data: { session },
-      } = await supabase.auth.getSession();
+  // Handle recovery flow: password reset via URL token (type=recovery)
+  useEffect(() => {
+    if (!isRecovery) return;
+    const authPayload = initialAuthPayload;
 
-      // Session-only resume: user navigated to /auth/accept-invite while already
-      // logged in but with no auth params in the URL (e.g. from the "Konto-Zugang
-      // ausstehend" pending page). Try to claim an INVITED membership directly.
-      const hasNoAuthParams =
-        !authPayload.token && !authPayload.tokenHash && !authPayload.code &&
-        !authPayload.accessToken && !authPayload.refreshToken && !authPayload.type &&
-        !authPayload.urlError;
-
-      if (session && hasNoAuthParams) {
-        const userId = session.user.id;
-        if (await hasInvitedMembership(userId)) {
-          try {
-            await completeClaimFlow('invite');
-            setState('success');
-            window.setTimeout(() => navigate('/'), 1200);
-          } catch (error) {
-            setErrorText(error instanceof Error ? error.message : 'Zugang konnte nicht aktiviert werden.');
-            setState('error');
-          }
-          return;
-        }
-        if (await hasActiveMembership(userId)) {
-          navigate('/');
-          return;
-        }
-        setErrorText('Keine offene Einladung gefunden. Bitte lassen Sie sich erneut einladen.');
-        setState('error');
-        return;
-      }
-
-      if (!session) {
-        const hydrated = await hydrateSessionFromAuthPayload(supabase, authPayload);
-        session = hydrated.session;
-        latestAuthError = hydrated.latestAuthError;
-      }
-
-      if (!session) {
-        const urlError = getUrlAuthErrorMessage(authPayload);
-        const inviteTokenPresent = Boolean((authPayload.tokenHash || authPayload.token) && authPayload.type);
-        const fallbackMessage = inviteTokenPresent
-          ? 'Invite-Link ungültig oder abgelaufen. Bitte neue Einladung anfordern.'
-          : 'Keine gültige Einladungssitzung gefunden. Öffnen Sie den Einladungslink aus der E-Mail erneut.';
-        setErrorText(
-          urlError
-            || latestAuthError
-            || fallbackMessage
-        );
-        setState('error');
-        return;
-      }
-
+    const processRecovery = async () => {
+      const { session, latestAuthError } = await hydrateSessionFromAuthPayload(supabase, authPayload);
       clearAuthParamsFromUrl();
-      if (isSignupVerificationFlow) {
-        setState('saving');
-        try {
-          await completeClaimFlow('signup');
-          setState('success');
-          window.setTimeout(() => navigate('/'), 1200);
-        } catch (error) {
-          setErrorText(error instanceof Error ? error.message : 'Registrierung konnte nicht abgeschlossen werden.');
-          setState('error');
-        }
+
+      if (!session) {
+        setErrorText(latestAuthError || 'Passwort-Reset-Link ungültig oder abgelaufen. Bitte fordern Sie einen neuen Link an.');
+        setState('error');
         return;
       }
-
       setState('needs_password');
     };
 
-    init().catch(err => {
-      setErrorText(err instanceof Error ? err.message : 'Einladung konnte nicht verarbeitet werden.');
+    processRecovery().catch(err => {
+      setErrorText(err instanceof Error ? err.message : 'Link konnte nicht verarbeitet werden.');
       setState('error');
     });
-  }, [authPayload, completeClaimFlow, isSignupVerificationFlow, navigate]);
+  }, [isRecovery]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleRequestCode = async (isResend = false) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setErrorText('Bitte geben Sie eine gültige E-Mail-Adresse ein.');
+      return;
+    }
+
+    setErrorText('');
+
+    if (isResend) {
+      setIsRequestingCode(true);
+    } else {
+      setState('initial'); // Stay in initial to show spinner on the button
+      setIsRequestingCode(true);
+    }
+
+    const result = await requestOnboardingCode(normalizedEmail);
+    setIsRequestingCode(false);
+
+    if (!result.ok) {
+      setErrorText(mapRequestCodeError(result.code, result.message, result.secondsRemaining));
+      if (result.code === 'RATE_LIMITED' && result.secondsRemaining && result.secondsRemaining > 0) {
+        startCooldown(result.secondsRemaining);
+        if (!isResend) setState('code_sent');
+      }
+      return;
+    }
+
+    startCooldown(CODE_COOLDOWN_SECONDS);
+    setCode('');
+    setState('code_sent');
+  };
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const normalizedCode = code.replace(/\D/g, '');
+
+    if (normalizedCode.length !== 6) {
+      setErrorText('Bitte geben Sie den 6-stelligen Code aus der E-Mail ein.');
+      return;
+    }
+
+    setState('verifying');
+    setErrorText('');
+
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim().toLowerCase(),
+      token: normalizedCode,
+      type: 'email',
+    });
+
+    if (error) {
+      setErrorText('Der eingegebene Code ist ungültig oder abgelaufen. Bitte fordern Sie einen neuen Code an.');
+      setState('code_sent');
+      return;
+    }
+
+    setState('needs_password');
+  };
+
+  const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (password.length < 8) {
@@ -229,111 +228,167 @@ const AcceptInvite: React.FC = () => {
 
     try {
       const { error: passwordError } = await supabase.auth.updateUser({ password });
-      if (passwordError) {
-        throw passwordError;
-      }
+      if (passwordError) throw passwordError;
 
-      await completeClaimFlow(isRecoveryFlow ? 'recovery' : 'invite');
+      if (!isRecovery) {
+        await claimMyInvitation();
+      }
 
       setState('success');
       window.setTimeout(() => navigate('/'), 1200);
-    } catch (error) {
-      setErrorText(error instanceof Error ? error.message : 'Passwort konnte nicht gesetzt werden.');
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : 'Passwort konnte nicht gesetzt werden.');
       setState('needs_password');
     }
   };
 
+  const title = isRecovery ? 'Passwort zurücksetzen' : 'Konto einrichten';
+  const isCodeButtonDisabled = cooldownSeconds > 0 || isRequestingCode;
+
   return (
     <AuthScreenShell>
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">
-          {isRecoveryFlow ? 'Passwort zurücksetzen' : isSignupVerificationFlow ? 'Registrierung abschließen' : 'Einladung abschließen'}
-        </h2>
+      <h2 className="text-2xl font-bold text-slate-900 mb-2">{title}</h2>
 
-        {state === 'loading' && (
+      {(state === 'loading' || state === 'verifying' || state === 'saving') && (
+        <p className="text-sm text-slate-600">
+          {state === 'loading' ? 'Link wird geprüft...' : state === 'verifying' ? 'Code wird geprüft...' : 'Wird gespeichert...'}
+        </p>
+      )}
+
+      {state === 'error' && (
+        <div className="space-y-4">
+          <p className="text-sm text-red-700 bg-red-50 p-3 rounded-lg">{errorText}</p>
+          <Link
+            to="/"
+            className="inline-flex items-center justify-center w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors"
+          >
+            Zur Anmeldung
+          </Link>
+        </div>
+      )}
+
+      {/* Step 1: Email + "Code anfordern" */}
+      {state === 'initial' && !isRecovery && (
+        <div className="space-y-4">
           <p className="text-sm text-slate-600">
-            {isSignupVerificationFlow ? 'Registrierung wird geprüft...' : 'Einladung wird geprüft...'}
+            Fordern Sie Ihren Bestätigungscode an. Die Einladung ist mit folgender E-Mail verknüpft:
           </p>
-        )}
-
-        {state === 'saving' && isSignupVerificationFlow && (
-          <p className="text-sm text-slate-600">Zugang wird aktiviert...</p>
-        )}
-
-        {state === 'error' && (
-          <div className="space-y-4">
-            <p className="text-sm text-red-700 bg-red-50 p-3 rounded-lg">{errorText}</p>
-            <Link
-              to="/"
-              className="inline-flex items-center justify-center w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors"
-            >
-              Zur Anmeldung
-            </Link>
-            {isSignupVerificationFlow && (
-              <Link
-                to="/auth/register"
-                className="inline-flex items-center justify-center w-full border border-slate-300 hover:border-slate-400 text-slate-700 px-4 py-2.5 rounded-lg font-semibold transition-colors"
-              >
-                Neu registrieren
-              </Link>
-            )}
-          </div>
-        )}
-
-        {(state === 'needs_password' || (state === 'saving' && !isSignupVerificationFlow)) && (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <p className="text-sm text-slate-600">
-              {isRecoveryFlow
-                ? 'Legen Sie jetzt ein neues Passwort fest, um wieder Zugriff zu erhalten.'
-                : 'Legen Sie jetzt Ihr Passwort fest. Danach wird Ihr Zugang automatisch aktiviert.'}
+          <div>
+            <p className="text-sm font-semibold text-slate-900 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">
+              {email}
             </p>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Neues Passwort</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white/80 border transition-all"
-                placeholder="Mindestens 8 Zeichen"
-                minLength={8}
-                required
-                disabled={state === 'saving'}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Passwort wiederholen</label>
-              <input
-                type="password"
-                value={passwordConfirm}
-                onChange={e => setPasswordConfirm(e.target.value)}
-                className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white/80 border transition-all"
-                minLength={8}
-                required
-                disabled={state === 'saving'}
-              />
-            </div>
-            {errorText && <p className="text-sm text-red-700 bg-red-50 p-2 rounded">{errorText}</p>}
-            <button
-              type="submit"
-              disabled={state === 'saving'}
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors disabled:opacity-50"
-            >
-              {state === 'saving' ? 'Wird gespeichert...' : 'Passwort setzen'}
-            </button>
-          </form>
-        )}
-
-        {state === 'success' && (
-          <div className="space-y-3">
-            <p className="text-sm text-emerald-700 bg-emerald-50 p-3 rounded-lg">
-              {isRecoveryFlow
-                ? 'Passwort erfolgreich zurückgesetzt.'
-                : isSignupVerificationFlow
-                  ? 'E-Mail erfolgreich bestätigt. Ihr Zugang wurde aktiviert.'
-                  : 'Passwort erfolgreich gesetzt. Ihr Zugang wurde aktiviert.'}
-            </p>
-            <p className="text-sm text-slate-600">Sie werden weitergeleitet...</p>
           </div>
-        )}
+          {errorText && <p className="text-sm text-red-700 bg-red-50 p-2 rounded">{errorText}</p>}
+          <button
+            type="button"
+            onClick={() => handleRequestCode(false)}
+            disabled={isRequestingCode}
+            className="w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-3 rounded-lg font-semibold text-base transition-colors disabled:opacity-50"
+          >
+            {isRequestingCode ? 'Code wird gesendet...' : 'Code per E-Mail anfordern'}
+          </button>
+        </div>
+      )}
+
+      {/* Step 2: Code entry */}
+      {state === 'code_sent' && !isRecovery && (
+        <form onSubmit={handleVerifyCode} className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Wir haben einen 6-stelligen Code an <strong>{email}</strong> gesendet.
+          </p>
+
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">Bestätigungscode</label>
+            <input
+              type="text"
+              value={code}
+              onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white/80 border transition-all tracking-widest text-center text-2xl font-mono"
+              placeholder="000000"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              required
+              autoFocus
+            />
+          </div>
+
+          {errorText && <p className="text-sm text-red-700 bg-red-50 p-2 rounded">{errorText}</p>}
+
+          <button
+            type="submit"
+            disabled={code.replace(/\D/g, '').length !== 6}
+            className="w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors disabled:opacity-50"
+          >
+            Weiter
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleRequestCode(true)}
+            disabled={isCodeButtonDisabled}
+            className="w-full border border-slate-300 hover:border-slate-400 text-slate-700 px-4 py-2.5 rounded-lg font-semibold transition-colors disabled:opacity-50"
+          >
+            {isRequestingCode
+              ? 'Code wird gesendet...'
+              : cooldownSeconds > 0
+                ? `Neuen Code anfordern (${cooldownSeconds}s)`
+                : 'Neuen Code anfordern'}
+          </button>
+        </form>
+      )}
+
+      {/* Step 3: Set password */}
+      {state === 'needs_password' && (
+        <form onSubmit={handleSetPassword} className="space-y-4">
+          <p className="text-sm text-slate-600">
+            {isRecovery
+              ? 'Legen Sie jetzt ein neues Passwort fest.'
+              : 'Legen Sie jetzt Ihr Passwort fest. Danach wird Ihr Zugang aktiviert.'}
+          </p>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">Neues Passwort</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white/80 border transition-all"
+              placeholder="Mindestens 8 Zeichen"
+              minLength={8}
+              required
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">Passwort wiederholen</label>
+            <input
+              type="password"
+              value={passwordConfirm}
+              onChange={e => setPasswordConfirm(e.target.value)}
+              className="w-full border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white/80 border transition-all"
+              minLength={8}
+              required
+            />
+          </div>
+          {errorText && <p className="text-sm text-red-700 bg-red-50 p-2 rounded">{errorText}</p>}
+          <button
+            type="submit"
+            className="w-full bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors"
+          >
+            Passwort festlegen
+          </button>
+        </form>
+      )}
+
+      {state === 'success' && (
+        <div className="space-y-3">
+          <p className="text-sm text-emerald-700 bg-emerald-50 p-3 rounded-lg">
+            {isRecovery ? 'Passwort erfolgreich zurückgesetzt.' : 'Passwort gesetzt. Ihr Zugang wurde aktiviert.'}
+          </p>
+          <p className="text-sm text-slate-600">Sie werden weitergeleitet...</p>
+        </div>
+      )}
     </AuthScreenShell>
   );
 };

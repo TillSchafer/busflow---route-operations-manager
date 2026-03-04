@@ -13,6 +13,7 @@ export interface PublicRegisterTrialResult {
   accountSlug?: string;
   reusedPending?: boolean;
   existingInvitationId?: string;
+  emailSent?: boolean;
 }
 
 export class PublicRegisterError extends Error {

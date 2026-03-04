@@ -11,7 +11,11 @@ import {
   getAccountMembers,
   getBusTypes,
   getMapDefaultView,
-  upsertMapDefaultView
+  upsertMapDefaultView,
+  getMapPageDefaultView,
+  upsertMapPageDefaultView,
+  getMapPageSettings,
+  upsertMapPageSettings
 } from './settings.api';
 import {
   createCustomer,
@@ -59,5 +63,9 @@ export const BusFlowApi = {
   commitCustomerImport,
   deleteCustomer,
   getMapDefaultView,
-  upsertMapDefaultView
+  upsertMapDefaultView,
+  getMapPageDefaultView,
+  upsertMapPageDefaultView,
+  getMapPageSettings,
+  upsertMapPageSettings
 };

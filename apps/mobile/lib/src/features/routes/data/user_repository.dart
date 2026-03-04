@@ -42,19 +42,20 @@ class UserRepository {
         .single();
 
     String role = 'VIEWER';
+    String? resolvedAccountId;
     final globalRole = profileRow['global_role']?.toString() ?? 'USER';
     if (globalRole.trim().toUpperCase() == 'ADMIN') {
       role = 'ADMIN';
     }
 
     // Prefer role in configured account.
-    final accountId = AppConfig.accountId.trim();
-    if (role != 'ADMIN' && accountId.isNotEmpty) {
+    final configuredAccountId = AppConfig.accountId.trim();
+    if (role != 'ADMIN' && configuredAccountId.isNotEmpty) {
       final membershipRows = await _client
           .from('account_memberships')
-          .select('role,status')
+          .select('role,status,account_id')
           .eq('user_id', userId)
-          .eq('account_id', accountId);
+          .eq('account_id', configuredAccountId);
 
       for (final row in membershipRows as List<dynamic>) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -63,15 +64,16 @@ class UserRepository {
         final nextRole = _normalizeRole(map['role']?.toString());
         if (_rolePriority(nextRole) > _rolePriority(role)) {
           role = nextRole;
+          resolvedAccountId = map['account_id']?.toString();
         }
       }
     }
 
     // Fallback: if no account-specific role found, evaluate all active memberships.
-    if (role == 'VIEWER' && accountId.isEmpty) {
+    if (role == 'VIEWER' && configuredAccountId.isEmpty) {
       final membershipRows = await _client
           .from('account_memberships')
-          .select('role,status')
+          .select('role,status,account_id')
           .eq('user_id', userId);
 
       for (final row in membershipRows as List<dynamic>) {
@@ -81,6 +83,7 @@ class UserRepository {
         final nextRole = _normalizeRole(map['role']?.toString());
         if (_rolePriority(nextRole) > _rolePriority(role)) {
           role = nextRole;
+          resolvedAccountId = map['account_id']?.toString();
         }
       }
     }
@@ -91,6 +94,7 @@ class UserRepository {
       fullName: profileRow['full_name']?.toString(),
       membershipRole: role,
       globalRole: globalRole,
+      accountId: configuredAccountId.isNotEmpty ? configuredAccountId : resolvedAccountId,
     );
   }
 }

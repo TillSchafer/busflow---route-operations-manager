@@ -1,5 +1,24 @@
 project_id = "jgydzxdiwpldgrqkfbfk"
 
+[auth]
+additional_redirect_urls = [
+  "https://127.0.0.1:3000",
+  "https://schaeferit.vercel.app/",
+  "https://schaeferit.vercel.app/**",
+  "https://schaeferit-tills-projects-87eedcde.vercel.app/",
+  "https://schaeferit-tills-projects-87eedcde.vercel.app/**",
+  "https://schaeferit-*-tills-projects-87eedcde.vercel.app",
+  "https://schaeferit-*-tills-projects-87eedcde.vercel.app/**",
+  "https://schaeferit-tillschafer-tills-projects-87eedcde.vercel.app/",
+  "https://schaeferit-tillschafer-tills-projects-87eedcde.vercel.app/**",
+  "https://schaeferit-*-tillschafer-tills-projects-87eedcde.vercel.app",
+  "https://schaeferit-*-tillschafer-tills-projects-87eedcde.vercel.app/**",
+]
+
+# NOTE: Email template is managed in the Supabase Dashboard (Auth → Email Templates → Invite).
+# Template file: supabase/templates/invite.html
+# The template uses {{ .Data.accept_invite_url }} as plain onboarding link.
+
 [functions.invite-account-user]
 verify_jwt = false
 
@@ -37,3 +56,14 @@ verify_jwt = false
 
 [functions.self-profile-security-v1]
 verify_jwt = false
+
+[functions.request-onboarding-code-v1]
+verify_jwt = false
+
+[auth.email.template.invite]
+subject = "BusFlow – Einladung"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.magic_link]
+subject = "BusFlow – Ihr Bestätigungscode"
+content_path = "./supabase/templates/magic_link.html"

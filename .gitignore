@@ -39,3 +39,4 @@ apps/mobile/android/app/release/
 apps/mobile/ios/Flutter/ephemeral/
 apps/mobile/ios/.symlinks/
 apps/mobile/ios/Pods/
+.vercel

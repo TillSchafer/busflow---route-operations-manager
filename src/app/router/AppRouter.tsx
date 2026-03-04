@@ -8,6 +8,7 @@ import { useToast } from '../../shared/components/ToastProvider';
 import { ProfileSecurityApi } from '../../shared/api/profile/profileSecurity.api';
 import AppLoadingBridge, { RouteLoadingFallback } from '../../shared/loading/AppLoadingBridge';
 import AuthCallbackNormalizer from './AuthCallbackNormalizer';
+import { BusFlowShell } from '../../shared/components/BusFlowShell';
 
 const Home = lazy(() => import('../../features/home/pages/HomePage'));
 const PlatformAdmin = lazy(() => import('../../features/admin/platform/pages/PlatformAdminPage'));
@@ -17,6 +18,7 @@ const AcceptInvite = lazy(() => import('../../features/auth/pages/AcceptInvitePa
 const AccountSecurity = lazy(() => import('../../features/auth/pages/AccountSecurityPage'));
 const Register = lazy(() => import('../../features/auth/pages/RegisterPage'));
 const BusflowApp = lazy(() => import('../../features/busflow/pages/BusflowAppPage'));
+const MapPage = lazy(() => import('../../features/map/pages/MapPage'));
 
 const LoginScreen: React.FC<{
   email: string;
@@ -106,6 +108,35 @@ const LoginScreen: React.FC<{
   </AuthScreenShell>
 );
 
+const mapLoginError = (error: unknown): string => {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes('invalid login credentials') || msg.includes('invalid credentials') || msg.includes('user not found')) {
+      return 'E-Mail-Adresse oder Passwort ist falsch.';
+    }
+    if (msg.includes('email not confirmed')) {
+      return 'E-Mail-Adresse noch nicht bestätigt. Bitte prüfen Sie Ihr Postfach.';
+    }
+    if (msg.includes('too many requests') || msg.includes('rate limit')) {
+      return 'Zu viele Anmeldeversuche. Bitte warten Sie kurz.';
+    }
+  }
+  return 'Anmeldung fehlgeschlagen.';
+};
+
+const hasAuthCallbackParam = (params: URLSearchParams): boolean =>
+  [
+    'token',
+    'token_hash',
+    'code',
+    'access_token',
+    'refresh_token',
+    'type',
+    'error',
+    'error_code',
+    'error_description',
+  ].some(key => params.has(key));
+
 const AppRouter: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -146,8 +177,7 @@ const AppRouter: React.FC = () => {
       });
       if (error) throw error;
     } catch (error: unknown) {
-      const fallbackMessage = 'Anmeldung fehlgeschlagen.';
-      const message = error instanceof Error ? error.message || fallbackMessage : fallbackMessage;
+      const message = mapLoginError(error);
       setAuthMessage({ type: 'error', text: message });
       pushToast({ type: 'error', title: 'Anmelden fehlgeschlagen', message });
     } finally {
@@ -160,7 +190,7 @@ const AppRouter: React.FC = () => {
     if (!normalizedEmail) {
       const message = 'Bitte zuerst Ihre E-Mail-Adresse eingeben.';
       setAuthMessage({ type: 'error', text: message });
-      pushToast({ type: 'error', title: 'Anmelden fehlgeschlagen', message });
+      pushToast({ type: 'error', title: 'E-Mail fehlt', message });
       return;
     }
 
@@ -306,33 +336,17 @@ const AppRouter: React.FC = () => {
   }
 
   const isAcceptInviteRoute = location.pathname === '/auth/accept-invite';
+  const isAccountSecurityRoute = location.pathname === '/auth/account-security';
+  const searchParams = new URLSearchParams(location.search);
+  const hashParams = new URLSearchParams(location.hash.startsWith('#') ? location.hash.slice(1) : location.hash);
+  const hasPendingAuthCallback = hasAuthCallbackParam(searchParams) || hasAuthCallbackParam(hashParams);
 
-  if (!user.isPlatformAdmin && !activeAccountId && !isAcceptInviteRoute) {
+  if (!user.isPlatformAdmin && !activeAccountId && !isAcceptInviteRoute && !isAccountSecurityRoute && !hasPendingAuthCallback) {
     return (
-      <AuthScreenShell>
-        <div className="text-center space-y-4">
-          <h2 className="text-xl font-bold text-slate-900">Konto-Zugang ausstehend</h2>
-          <p className="text-sm text-slate-600">
-            Ihr Konto-Zugang wurde noch nicht vollständig aktiviert. Klicken Sie auf die Schaltfläche unten, um den
-            Aktivierungsprozess abzuschließen.
-          </p>
-          <Link
-            to="/auth/accept-invite"
-            className="inline-block bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors text-sm"
-          >
-            Zugang aktivieren
-          </Link>
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="text-sm text-slate-500 hover:text-slate-700 font-semibold"
-            >
-              Abmelden
-            </button>
-          </div>
-        </div>
-      </AuthScreenShell>
+      <>
+        <AuthCallbackNormalizer />
+        <Navigate to="/auth/accept-invite" replace />
+      </>
     );
   }
 
@@ -368,24 +382,30 @@ const AppRouter: React.FC = () => {
               />
             }
           />
-          <Route
-            path="/busflow"
-            element={
-              activeAccountId ? (
-                <BusflowApp
-                  authUser={user}
-                  activeAccountId={activeAccountId}
-                  onProfile={() => navigate('/profile')}
-                  onLogout={handleLogout}
-                  onGoHome={() => navigate('/')}
-                  onAdmin={goAdmin}
-                  onOwner={user.isPlatformOwner ? goOwner : undefined}
-                />
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+          <Route element={<BusFlowShell />}>
+            <Route
+              path="/busflow"
+              element={
+                activeAccountId ? (
+                  <BusflowApp
+                    authUser={user}
+                    activeAccountId={activeAccountId}
+                    onProfile={() => navigate('/profile')}
+                    onLogout={handleLogout}
+                    onGoHome={() => navigate('/')}
+                    onAdmin={goAdmin}
+                    onOwner={user.isPlatformOwner ? goOwner : undefined}
+                  />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              }
+            />
+            <Route
+              path="/karte"
+              element={activeAccountId ? <MapPage /> : <Navigate to="/" replace />}
+            />
+          </Route>
           <Route
             path="/owner-bereich"
             element={

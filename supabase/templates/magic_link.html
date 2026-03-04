@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BusFlow – Ihr Bestätigungscode</title>
+  <style>
+    body { margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .wrapper { max-width: 520px; margin: 40px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    .header { background-color: #0f172a; padding: 28px 32px; }
+    .header h1 { margin: 0; color: #ffffff; font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+    .body { padding: 32px; }
+    .body p { margin: 0 0 16px; color: #475569; font-size: 15px; line-height: 1.6; }
+    .code-box { background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0; }
+    .code-box .label { font-size: 13px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; }
+    .code-box .code { font-size: 42px; font-weight: 800; letter-spacing: 12px; color: #0f172a; font-family: 'Courier New', monospace; }
+    .hint { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 14px 16px; font-size: 13px; color: #92400e; line-height: 1.5; }
+    .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 32px; font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <h1>BusFlow</h1>
+    </div>
+    <div class="body">
+      <p>Guten Tag,</p>
+      <p>hier ist Ihr Bestätigungscode. Geben Sie ihn auf der Seite ein, um fortzufahren:</p>
+
+      <div class="code-box">
+        <div class="label">Ihr Bestätigungscode</div>
+        <div class="code">{{ .Token }}</div>
+      </div>
+
+      <div class="hint">
+        <strong>Hinweis:</strong> Dieser Code ist 10 Minuten gültig und kann nur einmal verwendet werden. Falls Sie keinen Code angefordert haben, ignorieren Sie diese E-Mail.
+      </div>
+    </div>
+    <div class="footer">
+      Diese E-Mail wurde automatisch von BusFlow gesendet.<br/>
+      Wenn Sie keine Anfrage gestellt haben, können Sie diese E-Mail ignorieren.
+    </div>
+  </div>
+</body>
+</html>

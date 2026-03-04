@@ -176,6 +176,10 @@ serve(async (req) => {
   }
 
   const email = normalizeEmail(invitationRow.email);
+  const acceptInviteUrl =
+    action === 'RESEND' && redirectTo
+      ? `${new URL(redirectTo).origin}${INVITE_REDIRECT_PATH}?email=${encodeURIComponent(email)}`
+      : null;
   const nowIso = new Date().toISOString();
   const baseMeta = invitationRow.meta && typeof invitationRow.meta === 'object' ? invitationRow.meta : {};
 
@@ -352,6 +356,7 @@ serve(async (req) => {
             invited_account_id: accountId,
             invited_role: invitationRow.role,
             invitation_id: newInvitation.id,
+            accept_invite_url: acceptInviteUrl,
           },
           maxRetries: 2,
         });
