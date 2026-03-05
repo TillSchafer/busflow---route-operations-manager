@@ -130,14 +130,16 @@ const AcceptInvite: React.FC = () => {
     // (OTP verified, component remounted due to AuthContext state change, or redirected
     // here by AppRouter while authenticated without a membership), skip to password step.
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user && email) {
-        // OTP just verified, component remounted due to auth state change → continue to password step.
-        setState('needs_password');
-      } else if (session?.user && !email) {
-        // Authenticated but no invite context (AppRouter redirect loop) → sign out and show login.
-        await supabase.auth.signOut();
-        navigate('/');
-        return;
+      if (session?.user) {
+        if (email) {
+          // OTP just verified, component remounted due to auth state change → continue to password step.
+          setState('needs_password');
+        } else {
+          // Authenticated but no invite context (AppRouter redirect loop) → sign out and show login.
+          await supabase.auth.signOut();
+          navigate('/');
+          return;
+        }
       } else if (!email) {
         setErrorText('Ungültiger Einladungslink. Bitte öffnen Sie den Link erneut aus der E-Mail.');
         setState('error');
