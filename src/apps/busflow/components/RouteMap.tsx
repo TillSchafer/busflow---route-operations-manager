@@ -1,21 +1,21 @@
 import React, { useEffect, useRef } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { Stop } from '../types';
 
+// Fix default marker icons broken by Webpack/Vite asset hashing
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
+delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconUrl: markerIcon,
+  iconRetinaUrl: markerIcon2x,
+  shadowUrl: markerShadow,
+});
+
 type LatLng = [number, number];
-type MarkerLike = { bindPopup: (text: string) => void; remove: () => void };
-type LayerLike = { addTo: (map: MapLike) => LayerLike; remove: () => void };
-type MapLike = {
-  setView: (center: LatLng, zoom: number) => void;
-  fitBounds: (bounds: unknown, options?: { padding?: [number, number] }) => void;
-};
-type LeafletLike = {
-  map: (container: HTMLDivElement, options: { center: LatLng; zoom: number }) => MapLike;
-  tileLayer: (url: string, options: { attribution: string }) => LayerLike;
-  marker: (position: LatLng) => MarkerLike & LayerLike;
-  latLngBounds: (positions: LatLng[]) => unknown;
-  polyline: (positions: LatLng[], options: { color: string; weight: number }) => LayerLike;
-  geoJSON: (line: unknown, options: { style: { color: string; weight: number } }) => LayerLike;
-};
 
 interface Props {
   stops: Stop[];
@@ -25,29 +25,32 @@ interface Props {
 
 const RouteMap: React.FC<Props> = ({ stops, defaultCenter, defaultZoom = 6 }) => {
   const mapRef = useRef<HTMLDivElement | null>(null);
-  const mapInstance = useRef<MapLike | null>(null);
-  const markersRef = useRef<MarkerLike[]>([]);
-  const routeRef = useRef<LayerLike | null>(null);
+  const mapInstance = useRef<L.Map | null>(null);
+  const markersRef = useRef<L.Marker[]>([]);
+  const routeRef = useRef<L.Layer | null>(null);
   const routeRequest = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
-    const L = (window as Window & { L?: LeafletLike }).L;
-    if (!L) return;
 
     mapInstance.current = L.map(mapRef.current, {
       center: [defaultCenter?.lat ?? 51.1657, defaultCenter?.lon ?? 10.4515],
-      zoom: defaultZoom
+      zoom: defaultZoom,
     });
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
+      attribution: '&copy; OpenStreetMap contributors',
     }).addTo(mapInstance.current);
-  }, [defaultCenter?.lat, defaultCenter?.lon, defaultZoom]);
+
+    return () => {
+      mapInstance.current?.remove();
+      mapInstance.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // run once on mount
 
   useEffect(() => {
-    const L = (window as Window & { L?: LeafletLike }).L;
-    if (!L || !mapInstance.current) return;
+    if (!mapInstance.current) return;
 
     markersRef.current.forEach(marker => marker.remove());
     markersRef.current = [];
@@ -69,16 +72,17 @@ const RouteMap: React.FC<Props> = ({ stops, defaultCenter, defaultZoom = 6 }) =>
     }
 
     validStops.forEach((stop, index) => {
-      const marker = L.marker([stop.lat, stop.lon]);
-      marker.addTo(mapInstance.current);
+      const marker = L.marker([stop.lat as number, stop.lon as number]);
+      marker.addTo(mapInstance.current!);
       marker.bindPopup(`${index + 1}. ${stop.location}`);
       markersRef.current.push(marker);
     });
 
-    const bounds = L.latLngBounds(validStops.map(stop => [stop.lat, stop.lon] as LatLng));
+    const positions: LatLng[] = validStops.map(stop => [stop.lat as number, stop.lon as number]);
+    const bounds = L.latLngBounds(positions);
 
     if (validStops.length === 1) {
-      mapInstance.current.setView([validStops[0].lat, validStops[0].lon], 13);
+      mapInstance.current.setView(positions[0], 13);
       return;
     }
 
@@ -92,28 +96,23 @@ const RouteMap: React.FC<Props> = ({ stops, defaultCenter, defaultZoom = 6 }) =>
     routeRequest.current = controller;
     const coordinates = validStops.map(stop => `${stop.lon},${stop.lat}`).join(';');
     const fallbackPolyline = () => {
-      if (routeRef.current) {
-        routeRef.current.remove();
-      }
-      routeRef.current = L.polyline(
-        validStops.map(stop => [stop.lat, stop.lon] as LatLng),
-        { color: '#2563eb', weight: 4 }
-      ).addTo(mapInstance.current);
+      if (routeRef.current) routeRef.current.remove();
+      routeRef.current = L.polyline(positions, { color: '#2563eb', weight: 4 }).addTo(
+        mapInstance.current!
+      );
     };
 
-    fetch(`https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson`, {
-      signal: controller.signal
-    })
+    fetch(
+      `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson`,
+      { signal: controller.signal }
+    )
       .then(response => response.json())
       .then(data => {
-        if (!data?.routes?.length) {
-          fallbackPolyline();
-          return;
-        }
+        if (!data?.routes?.length) { fallbackPolyline(); return; }
         const line = data.routes[0].geometry;
         routeRef.current = L.geoJSON(line, {
-          style: { color: '#2563eb', weight: 4 }
-        }).addTo(mapInstance.current);
+          style: { color: '#2563eb', weight: 4 },
+        }).addTo(mapInstance.current!);
       })
       .catch(error => {
         if (error?.name === 'AbortError') return;

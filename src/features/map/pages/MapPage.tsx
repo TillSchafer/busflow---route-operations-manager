@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { RefreshCw, Settings as SettingsIcon } from 'lucide-react';
 import { useAuth } from '../../../shared/auth/AuthContext';
 import { BusFlowApi } from '../../../apps/busflow/api';
@@ -11,23 +13,6 @@ import MapSettingsPanel, {
   saveMapPageSettings,
 } from './MapSettingsPanel';
 import { useToast } from '../../../shared/components/ToastProvider';
-
-// ── Leaflet types (window.L via CDN, consistent with RouteMap.tsx) ─────────────
-type LatLng = [number, number];
-type MarkerLike = { bindPopup: (html: string) => void; remove: () => void; addTo: (m: MapLike) => void };
-type LayerLike = { addTo: (map: MapLike) => LayerLike; remove: () => void };
-type MapLike = {
-  setView: (center: LatLng, zoom: number) => void;
-  fitBounds: (bounds: unknown, options?: { padding?: [number, number] }) => void;
-  remove: () => void;
-};
-type LeafletLike = {
-  map: (container: HTMLDivElement, options: { center: LatLng; zoom: number }) => MapLike;
-  tileLayer: (url: string, options: { attribution: string }) => LayerLike;
-  marker: (position: LatLng, options?: { icon?: unknown }) => MarkerLike & LayerLike;
-  divIcon: (options: { html: string; className: string; iconSize: [number, number]; iconAnchor: [number, number] }) => unknown;
-  latLngBounds: (positions: LatLng[]) => unknown;
-};
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface DriverLocation {
@@ -50,8 +35,8 @@ const STATUS_COLORS: Record<string, string> = {
   Durchgefuehrt: '#7c3aed',
   Archiviert: '#64748b',
 };
-const DEFAULT_CENTER: LatLng  = [51.1657, 10.4515];
-const DEFAULT_ZOOM             = 6;
+const DEFAULT_CENTER: [number, number] = [51.1657, 10.4515];
+const DEFAULT_ZOOM = 6;
 const MARKER_SIZE: Record<MapPageSettings['markerSize'], number> = {
   small: 24, medium: 32, large: 44,
 };
@@ -89,9 +74,9 @@ export default function MapPage() {
   const { pushToast } = useToast();
 
   const mapRef             = useRef<HTMLDivElement | null>(null);
-  const mapInstance        = useRef<MapLike | null>(null);
-  const stopMarkersRef     = useRef<(MarkerLike & LayerLike)[]>([]);
-  const driverMarkersRef   = useRef<Map<string, MarkerLike & LayerLike>>(new Map());
+  const mapInstance        = useRef<L.Map | null>(null);
+  const stopMarkersRef     = useRef<L.Marker[]>([]);
+  const driverMarkersRef   = useRef<Map<string, L.Marker>>(new Map());
   const initialViewApplied = useRef(false);
   const suppressInitialDriverAutoZoom = useRef(true);
 
@@ -139,7 +124,6 @@ export default function MapPage() {
       const view = await BusFlowApi.getMapPageDefaultView();
       if (view) {
         setMapDefaultView(view);
-        // Apply to map on first load (before driver auto-zoom takes over)
         if (mapInstance.current && !initialViewApplied.current) {
           mapInstance.current.setView([view.lat, view.lon], view.zoom ?? DEFAULT_ZOOM);
           initialViewApplied.current = true;
@@ -160,12 +144,10 @@ export default function MapPage() {
   useEffect(() => {
     setIsLoading(true);
     suppressInitialDriverAutoZoom.current = true;
-    Promise.all([loadRoutes(), loadDrivers(), loadDefaultView(), loadMapSettings()]).finally(() =>
-      {
-        setIsLoading(false);
-        suppressInitialDriverAutoZoom.current = false;
-      },
-    );
+    Promise.all([loadRoutes(), loadDrivers(), loadDefaultView(), loadMapSettings()]).finally(() => {
+      setIsLoading(false);
+      suppressInitialDriverAutoZoom.current = false;
+    });
   }, [loadRoutes, loadDrivers, loadDefaultView, loadMapSettings]);
 
   // ── Auto-refresh ──────────────────────────────────────────────────────────
@@ -210,23 +192,23 @@ export default function MapPage() {
   // ── Init map ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
-    const L = (window as Window & { L?: LeafletLike }).L;
-    if (!L) return;
+
     mapInstance.current = L.map(mapRef.current, {
       center: [mapDefaultView.lat, mapDefaultView.lon],
       zoom: mapDefaultView.zoom ?? DEFAULT_ZOOM,
     });
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
     }).addTo(mapInstance.current);
+
     return () => { mapInstance.current?.remove(); mapInstance.current = null; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // run once on mount
 
   // ── Stop markers ──────────────────────────────────────────────────────────
   useEffect(() => {
-    const L = (window as Window & { L?: LeafletLike }).L;
-    if (!L || !mapInstance.current) return;
+    if (!mapInstance.current) return;
 
     stopMarkersRef.current.forEach(m => m.remove());
     stopMarkersRef.current = [];
@@ -261,18 +243,17 @@ export default function MapPage() {
 
   // ── Driver markers ────────────────────────────────────────────────────────
   useEffect(() => {
-    const L = (window as Window & { L?: LeafletLike }).L;
-    if (!L || !mapInstance.current) return;
+    if (!mapInstance.current) return;
 
     // Remove stale markers
     for (const [userId, marker] of driverMarkersRef.current) {
       if (!drivers.has(userId)) { marker.remove(); driverMarkersRef.current.delete(userId); }
     }
 
-    const positions: LatLng[] = [];
+    const positions: [number, number][] = [];
 
     for (const [userId, driver] of drivers) {
-      const pos: LatLng = [driver.lat, driver.lon];
+      const pos: [number, number] = [driver.lat, driver.lon];
       positions.push(pos);
 
       const size = MARKER_SIZE[mapSettings.markerSize];
@@ -309,7 +290,7 @@ export default function MapPage() {
   // ── Settings helpers ──────────────────────────────────────────────────────
   const handleSettingsChange = (s: MapPageSettings) => {
     setMapSettings(s);
-    saveMapPageSettings(s); // localStorage fallback
+    saveMapPageSettings(s);
     if (activeAccountId) {
       BusFlowApi.setActiveAccountId(activeAccountId);
       BusFlowApi.upsertMapPageSettings(s).catch(() => { /* fire-and-forget */ });
