@@ -87,7 +87,6 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, accou
     [busTypes, formData.busTypeId]
   );
 
-  const customerRequiredForStatus = formData.status !== 'Entwurf';
 
   const selectedBusType = useMemo(
     () => busTypes.find(busType => busType.id === formData.busTypeId),
@@ -105,10 +104,6 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, accou
     if (!formData.name) {
       errors.push('Der Ablaufplan-Name ist erforderlich.');
       invalid.add('name');
-    }
-    if (customerRequiredForStatus && !formData.customerId) {
-      errors.push('Bitte wählen Sie einen Kunden aus der Liste aus (für Geplant/Aktiv/Durchgeführt/Archiviert).');
-      invalid.add('customer');
     }
     if (formData.capacity < 0) {
       errors.push('Die belegten Plätze dürfen nicht negativ sein.');
@@ -304,13 +299,8 @@ const RouteEditor: React.FC<Props> = ({ route, onSave, onCancel, busTypes, accou
               customerContactId={formData.customerContactId}
               customerContactName={formData.customerContactName}
               customers={customers}
-              customerRequiredForStatus={customerRequiredForStatus}
-              hasError={invalidFields.has('customer')}
               onChange={patch => {
                 setFormData(prev => ({ ...prev, ...patch }));
-                if (patch.customerId) {
-                  setInvalidFields(prev => { const s = new Set(prev); s.delete('customer'); return s; });
-                }
               }}
             />
             <div>

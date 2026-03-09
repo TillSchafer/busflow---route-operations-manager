@@ -17,8 +17,6 @@ interface Props {
   customerContactId?: string;
   customerContactName?: string;
   customers: Customer[];
-  customerRequiredForStatus: boolean;
-  hasError?: boolean;
   onChange: (patch: CustomerPatch) => void;
 }
 
@@ -32,13 +30,16 @@ const CustomerContactSelector: React.FC<Props> = ({
   customerContactId,
   customerContactName,
   customers,
-  customerRequiredForStatus,
-  hasError,
   onChange,
 }) => {
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
   const [isCustomerContactDropdownOpen, setIsCustomerContactDropdownOpen] = useState(false);
   const [customerContacts, setCustomerContacts] = useState<CustomerContact[]>([]);
+  // Track the name of the explicitly selected customer to avoid clearing the
+  // selection when the user makes minor edits in the input field.
+  const [committedName, setCommittedName] = useState<string>(
+    customerId ? customerName : ''
+  );
 
   const filteredCustomers = useMemo(() => {
     const q = (customerName || '').trim().toLowerCase();
@@ -47,9 +48,6 @@ const CustomerContactSelector: React.FC<Props> = ({
       .filter(customer => customer.name.toLowerCase().includes(q))
       .slice(0, 8);
   }, [customers, customerName]);
-
-  const hasUnlinkedCustomerText =
-    customerRequiredForStatus && Boolean((customerName || '').trim()) && customerId === '';
 
   useEffect(() => {
     let isMounted = true;
@@ -71,6 +69,35 @@ const CustomerContactSelector: React.FC<Props> = ({
     };
   }, [customerId]);
 
+  const handleTextChange = (newName: string) => {
+    // Keep the linked customer as long as the text still matches the committed
+    // selection. This prevents accidentally unlinking a customer by a stray
+    // keypress. If the text diverges, clear the link so the user must pick
+    // from the dropdown again.
+    const stillMatches = Boolean(committedName) && newName === committedName;
+    if (!stillMatches && committedName) {
+      setCommittedName('');
+    }
+    onChange({
+      customerName: newName,
+      customerId: stillMatches ? customerId : '',
+      customerContactId: stillMatches ? customerContactId : undefined,
+      customerContactName: stillMatches ? customerContactName : undefined,
+    });
+    setIsCustomerDropdownOpen(true);
+  };
+
+  const handleCustomerSelect = (customer: Customer) => {
+    setCommittedName(customer.name);
+    onChange({
+      customerName: customer.name,
+      customerId: customer.id,
+      customerContactId: undefined,
+      customerContactName: undefined,
+    });
+    setIsCustomerDropdownOpen(false);
+  };
+
   return (
     <>
       <div className="col-span-1 md:col-span-2">
@@ -79,47 +106,39 @@ const CustomerContactSelector: React.FC<Props> = ({
           <input
             type="text"
             value={customerName || ''}
-            onChange={e => {
-              onChange({
-                customerName: e.target.value,
-                customerId: '',
-                customerContactId: undefined,
-                customerContactName: undefined
-              });
-              setIsCustomerDropdownOpen(true);
-            }}
+            onChange={e => handleTextChange(e.target.value)}
             onFocus={() => setIsCustomerDropdownOpen(true)}
             onBlur={() => window.setTimeout(() => setIsCustomerDropdownOpen(false), 150)}
-            className={`w-full rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border transition-all ${hasError ? 'border-red-400 ring-1 ring-red-300' : 'border-slate-300'}`}
-            placeholder="z. B. Stadtwerke GmbH"
+            className="w-full rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 bg-white border border-slate-300 transition-all"
+            placeholder="z. B. Stadtwerke GmbH (optional)"
           />
-          {isCustomerDropdownOpen && filteredCustomers.length > 0 && (
-            <div className={dropdownMenuClass}>
-              {filteredCustomers.map(customer => (
-                <button
-                  key={customer.id}
-                  type="button"
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={() => {
-                    onChange({
-                      customerName: customer.name,
-                      customerId: customer.id,
-                      customerContactId: undefined,
-                      customerContactName: undefined
-                    });
-                    setIsCustomerDropdownOpen(false);
-                  }}
-                  className={DROPDOWN_ITEM}
-                >
-                  {customer.name}
-                </button>
-              ))}
-            </div>
+          {isCustomerDropdownOpen && (
+            <>
+              {filteredCustomers.length > 0 && (
+                <div className={dropdownMenuClass}>
+                  {filteredCustomers.map(customer => (
+                    <button
+                      key={customer.id}
+                      type="button"
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => handleCustomerSelect(customer)}
+                      className={DROPDOWN_ITEM}
+                    >
+                      {customer.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {customers.length === 0 && (
+                <div className={dropdownMenuClass}>
+                  <p className="px-3 py-2 text-sm text-slate-500">
+                    Noch keine Kunden angelegt. Kunden können unter <strong>Kunden</strong> erstellt werden.
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
-        {hasUnlinkedCustomerText && (
-          <p className="text-xs text-amber-600 mt-1">Für Geplant/Aktiv/Durchgeführt/Archiviert muss ein Kunde aus der Liste gewählt werden.</p>
-        )}
       </div>
       <div>
         <label className="block text-sm font-semibold text-slate-700 mb-1">Kontaktperson (optional)</label>
