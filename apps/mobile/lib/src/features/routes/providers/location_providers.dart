@@ -9,8 +9,15 @@ import '../models/user_profile.dart';
 /// The stream fires continuously; we throttle here to avoid excessive writes.
 const _maxIdleSeconds = 30;
 
+enum LocationPermissionStatus { unknown, granted, denied, deniedForever }
+
 final locationRepositoryProvider = Provider<LocationRepository>(
   (_) => LocationRepository(),
+);
+
+final locationPermissionStatusProvider =
+    StateProvider<LocationPermissionStatus>(
+  (_) => LocationPermissionStatus.unknown,
 );
 
 /// Manages GPS tracking for the currently logged-in driver.
@@ -35,10 +42,21 @@ class LocationTrackingNotifier extends AsyncNotifier<void> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      return; // user refused — no tracking
+
+    if (permission == LocationPermission.deniedForever) {
+      ref.read(locationPermissionStatusProvider.notifier).state =
+          LocationPermissionStatus.deniedForever;
+      return;
     }
+
+    if (permission == LocationPermission.denied) {
+      ref.read(locationPermissionStatusProvider.notifier).state =
+          LocationPermissionStatus.denied;
+      return;
+    }
+
+    ref.read(locationPermissionStatusProvider.notifier).state =
+        LocationPermissionStatus.granted;
 
     await _positionSub?.cancel();
     _lastSentAt = null;

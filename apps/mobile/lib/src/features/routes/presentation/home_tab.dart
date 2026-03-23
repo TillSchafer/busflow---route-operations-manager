@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 
 import '../../../theme/buspilot_theme.dart';
+import '../providers/location_providers.dart';
 import '../providers/route_providers.dart';
 import 'route_detail_page.dart';
 import 'widgets/route_card.dart';
@@ -32,6 +34,8 @@ class HomeTab extends ConsumerWidget {
     final todayLabel = DateFormat('EEE, d. MMM', 'de_DE').format(DateTime.now());
     final routeCount = todayRoutesAsync.valueOrNull?.length;
 
+    final permissionStatus = ref.watch(locationPermissionStatusProvider);
+
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(todayRoutesProvider);
@@ -40,6 +44,56 @@ class HomeTab extends ConsumerWidget {
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
+          // ── Location permission banner ────────────────────────────────
+          if (permissionStatus == LocationPermissionStatus.deniedForever ||
+              permissionStatus == LocationPermissionStatus.denied)
+            SliverToBoxAdapter(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3CD),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFFCA28)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.location_off_rounded,
+                        color: Color(0xFFF59E0B), size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        permissionStatus == LocationPermissionStatus.deniedForever
+                            ? 'Standortzugriff verweigert. Bitte in den Einstellungen aktivieren.'
+                            : 'Standortzugriff wird benötigt für das GPS-Tracking.',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF92400E),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: () => Geolocator.openAppSettings(),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        'Einstellungen',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFF59E0B),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           // ── Gradient welcome header ──────────────────────────────────
           SliverToBoxAdapter(
             child: _WelcomeHeader(

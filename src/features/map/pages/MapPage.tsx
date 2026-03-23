@@ -200,11 +200,11 @@ export default function MapPage() {
     };
 
     const fallbackToIp = () => {
-      fetch('https://ipapi.co/json/')
+      fetch('https://ip-api.com/json/?fields=lat,lon,status')
         .then(r => r.json())
-        .then((data: { latitude?: number; longitude?: number }) => {
-          if (data.latitude && data.longitude) {
-            zoomToPosition(data.latitude, data.longitude);
+        .then((data: { lat?: number; lon?: number; status?: string }) => {
+          if (data.status === 'success' && data.lat && data.lon) {
+            zoomToPosition(data.lat, data.lon);
           } else {
             setIsLocating(false);
             pushToast({ type: 'error', title: 'Standort nicht verfügbar', message: 'Standort konnte nicht ermittelt werden.' });
