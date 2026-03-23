@@ -48,29 +48,27 @@ class UserRepository {
       role = 'ADMIN';
     }
 
-    // Prefer role in configured account.
+    // Always look up memberships to resolve accountId, regardless of global role.
     final configuredAccountId = AppConfig.accountId.trim();
-    if (role != 'ADMIN' && configuredAccountId.isNotEmpty) {
+    if (configuredAccountId.isNotEmpty) {
       final membershipRows = await _client
           .from('account_memberships')
           .select('role,status,account_id')
           .eq('user_id', userId)
           .eq('account_id', configuredAccountId);
 
+      resolvedAccountId = configuredAccountId;
       for (final row in membershipRows as List<dynamic>) {
         final map = Map<String, dynamic>.from(row as Map);
         final status = map['status']?.toString().trim().toUpperCase();
         if (status != 'ACTIVE') continue;
         final nextRole = _normalizeRole(map['role']?.toString());
-        if (_rolePriority(nextRole) > _rolePriority(role)) {
+        if (role != 'ADMIN' && _rolePriority(nextRole) > _rolePriority(role)) {
           role = nextRole;
-          resolvedAccountId = map['account_id']?.toString();
         }
       }
-    }
-
-    // Fallback: if no account-specific role found, evaluate all active memberships.
-    if (role == 'VIEWER' && configuredAccountId.isEmpty) {
+    } else {
+      // No configured account — pick the first active membership.
       final membershipRows = await _client
           .from('account_memberships')
           .select('role,status,account_id')
@@ -81,10 +79,10 @@ class UserRepository {
         final status = map['status']?.toString().trim().toUpperCase();
         if (status != 'ACTIVE') continue;
         final nextRole = _normalizeRole(map['role']?.toString());
-        if (_rolePriority(nextRole) > _rolePriority(role)) {
+        if (role != 'ADMIN' && _rolePriority(nextRole) > _rolePriority(role)) {
           role = nextRole;
-          resolvedAccountId = map['account_id']?.toString();
         }
+        resolvedAccountId ??= map['account_id']?.toString();
       }
     }
 
@@ -94,7 +92,7 @@ class UserRepository {
       fullName: profileRow['full_name']?.toString(),
       membershipRole: role,
       globalRole: globalRole,
-      accountId: configuredAccountId.isNotEmpty ? configuredAccountId : resolvedAccountId,
+      accountId: resolvedAccountId,
     );
   }
 }

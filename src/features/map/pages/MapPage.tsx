@@ -198,14 +198,24 @@ export default function MapPage() {
       return;
     }
     setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
+    // watchPosition keeps retrying on transient errors (e.g. kCLErrorLocationUnknown)
+    // We stop as soon as we get the first valid fix.
+    // Manual timeout — give CoreLocation up to 20s to get a fix.
+    const manualTimeout = window.setTimeout(() => {
+      navigator.geolocation.clearWatch(watchId);
+      setIsLocating(false);
+      pushToast({ type: 'error', title: 'Standort nicht verfügbar', message: 'Zeitüberschreitung. Bitte erneut versuchen.' });
+    }, 20000);
+
+    const watchId = navigator.geolocation.watchPosition(
       pos => {
+        clearTimeout(manualTimeout);
+        navigator.geolocation.clearWatch(watchId);
         setIsLocating(false);
         const latlng: [number, number] = [pos.coords.latitude, pos.coords.longitude];
         const map = mapInstance.current;
         if (!map) return;
 
-        // Remove old marker
         myLocationMarker.current?.remove();
 
         const icon = L.divIcon({
@@ -220,11 +230,21 @@ export default function MapPage() {
         myLocationMarker.current = marker;
         map.setView(latlng, 15);
       },
-      () => {
-        setIsLocating(false);
-        pushToast({ type: 'error', title: 'Standort nicht verfügbar', message: 'Bitte erlaube den Standortzugriff im Browser.' });
+      err => {
+        // PERMISSION_DENIED is permanent — abort immediately.
+        // POSITION_UNAVAILABLE is transient — keep watching until manual timeout.
+        if (err.code === err.PERMISSION_DENIED) {
+          clearTimeout(manualTimeout);
+          navigator.geolocation.clearWatch(watchId);
+          setIsLocating(false);
+          // Log to help diagnose
+          console.error('[MyLocation] PERMISSION_DENIED', err.message);
+          pushToast({ type: 'error', title: 'Standort verweigert', message: 'Klicke auf das Schloss-Symbol in der Adressleiste → Standort → Erlauben, dann Seite neu laden.' });
+        } else {
+          console.warn('[MyLocation] transient error, retrying...', err.code, err.message);
+        }
       },
-      { enableHighAccuracy: true, timeout: 10000 },
+      { enableHighAccuracy: false, maximumAge: 60000 },
     );
   }, [pushToast]);
 
