@@ -5,10 +5,8 @@ import 'package:geolocator/geolocator.dart';
 import '../data/location_repository.dart';
 import '../models/user_profile.dart';
 
-/// Minimum distance (metres) a driver must move before we send an update.
-const _minDistanceMetres = 20.0;
-
-/// How often to force an update even without movement.
+/// How often (in seconds) to send a location update to Supabase.
+/// The stream fires continuously; we throttle here to avoid excessive writes.
 const _maxIdleSeconds = 30;
 
 final locationRepositoryProvider = Provider<LocationRepository>(
@@ -45,9 +43,9 @@ class LocationTrackingNotifier extends AsyncNotifier<void> {
     await _positionSub?.cancel();
     _lastSentAt = null;
 
-    final settings = LocationSettings(
+    const settings = LocationSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: _minDistanceMetres.toInt(),
+      distanceFilter: 0, // throttle in _onPosition instead
     );
 
     _positionSub = Geolocator.getPositionStream(locationSettings: settings)

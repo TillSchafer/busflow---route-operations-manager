@@ -77,8 +77,10 @@ export default function MapPage() {
   const mapInstance        = useRef<L.Map | null>(null);
   const stopMarkersRef     = useRef<L.Marker[]>([]);
   const driverMarkersRef   = useRef<Map<string, L.Marker>>(new Map());
+  const myLocationMarker   = useRef<L.Marker | null>(null);
   const initialViewApplied = useRef(false);
   const suppressInitialDriverAutoZoom = useRef(true);
+  const [isLocating, setIsLocating] = useState(false);
 
   const [routes,             setRoutes]             = useState<Route[]>([]);
   const [drivers,            setDrivers]            = useState<Map<string, DriverLocation>>(new Map());
@@ -188,6 +190,43 @@ export default function MapPage() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [activeAccountId]);
+
+  // ── My location ───────────────────────────────────────────────────────────
+  const handleMyLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      pushToast({ type: 'error', title: 'Nicht verfügbar', message: 'Geolocation wird von diesem Browser nicht unterstützt.' });
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setIsLocating(false);
+        const latlng: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+        const map = mapInstance.current;
+        if (!map) return;
+
+        // Remove old marker
+        myLocationMarker.current?.remove();
+
+        const icon = L.divIcon({
+          html: `<div style="width:16px;height:16px;border-radius:50%;background:#3b82f6;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,.5);"></div>`,
+          className: '',
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+        });
+        const marker = L.marker(latlng, { icon });
+        marker.addTo(map);
+        marker.bindPopup('<strong>Mein Standort</strong>').openPopup();
+        myLocationMarker.current = marker;
+        map.setView(latlng, 15);
+      },
+      () => {
+        setIsLocating(false);
+        pushToast({ type: 'error', title: 'Standort nicht verfügbar', message: 'Bitte erlaube den Standortzugriff im Browser.' });
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }, [pushToast]);
 
   // ── Init map ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -377,7 +416,30 @@ export default function MapPage() {
       </div>
 
       {/* Map */}
-      <div ref={mapRef} className="flex-1 w-full" />
+      <div className="flex-1 w-full relative">
+        <div ref={mapRef} className="absolute inset-0" />
+        {/* My location button — positioned below Leaflet zoom controls */}
+        <button
+          onClick={handleMyLocation}
+          disabled={isLocating}
+          title="Mein Standort"
+          className="absolute z-[1000] top-[84px] left-[10px] w-[30px] h-[30px] flex items-center justify-center bg-white border border-[rgba(0,0,0,0.2)] rounded-sm shadow-sm hover:bg-gray-100 disabled:opacity-50 transition-colors"
+          style={{ lineHeight: 1 }}
+        >
+          {isLocating ? (
+            <svg className="w-4 h-4 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4 text-gray-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+              <circle cx="12" cy="12" r="8" strokeDasharray="2 4" />
+            </svg>
+          )}
+        </button>
+      </div>
 
       {/* Settings overlay */}
       {settingsOpen && (
