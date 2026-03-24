@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../theme/buspilot_theme.dart';
+import '../../../theme/dizpo_theme.dart';
 import '../providers/route_providers.dart';
 import 'route_detail_page.dart';
 import 'widgets/route_card.dart';
@@ -79,7 +79,7 @@ class _RoutesTabState extends ConsumerState<RoutesTab> {
                         const Text(
                           'Ablaufpläne konnten nicht geladen werden',
                           style: TextStyle(
-                            color: BusPilotTheme.danger,
+                            color: DizpoTheme.danger,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -102,7 +102,7 @@ class _RoutesTabState extends ConsumerState<RoutesTab> {
                             const Icon(
                               Icons.inbox_outlined,
                               size: 28,
-                              color: BusPilotTheme.textMuted,
+                              color: DizpoTheme.textMuted,
                             ),
                             const SizedBox(height: 8),
                             Text(

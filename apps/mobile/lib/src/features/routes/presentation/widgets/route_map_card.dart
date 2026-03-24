@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../../../../theme/buspilot_theme.dart';
+import '../../../../theme/dizpo_theme.dart';
 import '../../models/driver_route.dart';
 
 class RouteMapCard extends StatelessWidget {
@@ -53,14 +53,14 @@ class RouteMapCard extends StatelessWidget {
                   children: [
                     TileLayer(
                       urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.buspilot.mobile',
+                      userAgentPackageName: 'com.dizpo.mobile',
                     ),
                     if (points.length > 1)
                       PolylineLayer(
                         polylines: [
                           Polyline(
                             points: points,
-                            color: BusPilotTheme.primary,
+                            color: DizpoTheme.primary,
                             strokeWidth: 4,
                           ),
                         ],
@@ -75,7 +75,7 @@ class RouteMapCard extends StatelessWidget {
                               height: 34,
                               child: Container(
                                 decoration: const BoxDecoration(
-                                  color: BusPilotTheme.primary,
+                                  color: DizpoTheme.primary,
                                   shape: BoxShape.circle,
                                 ),
                                 alignment: Alignment.center,
@@ -119,10 +119,10 @@ class RouteMapCard extends StatelessWidget {
                   Icons.my_location_outlined,
                   size: 16,
                   color: isLoadingLocation
-                      ? BusPilotTheme.textMuted
+                      ? DizpoTheme.textMuted
                       : (currentLocation == null
-                          ? BusPilotTheme.warning
-                          : BusPilotTheme.success),
+                          ? DizpoTheme.warning
+                          : DizpoTheme.success),
                 ),
                 const SizedBox(width: 6),
                 Text(

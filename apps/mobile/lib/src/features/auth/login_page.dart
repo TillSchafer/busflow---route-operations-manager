@@ -74,7 +74,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Mit demselben Account wie in der BusPilot Web-App einloggen.',
+                        'Mit demselben Account wie in der Dizpo Web-App einloggen.',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 18),

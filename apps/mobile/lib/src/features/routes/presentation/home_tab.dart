@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 
-import '../../../theme/buspilot_theme.dart';
+import '../../../theme/dizpo_theme.dart';
 import '../providers/location_providers.dart';
 import '../providers/route_providers.dart';
 import 'route_detail_page.dart';
@@ -136,7 +136,7 @@ class HomeTab extends ConsumerWidget {
                     padding: const EdgeInsets.all(14),
                     child: Text(
                       'Fehler beim Laden: ${err.toString()}',
-                      style: const TextStyle(color: BusPilotTheme.danger),
+                      style: const TextStyle(color: DizpoTheme.danger),
                     ),
                   ),
                 ),
@@ -154,7 +154,7 @@ class HomeTab extends ConsumerWidget {
                               const Icon(
                                 Icons.inbox_outlined,
                                 size: 32,
-                                color: BusPilotTheme.textMuted,
+                                color: DizpoTheme.textMuted,
                               ),
                               const SizedBox(height: 8),
                               Text(

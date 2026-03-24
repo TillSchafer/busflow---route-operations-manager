@@ -5,16 +5,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/app_config.dart';
 import 'features/auth/login_page.dart';
 import 'features/routes/presentation/route_home_page.dart';
-import 'theme/buspilot_theme.dart';
+import 'theme/dizpo_theme.dart';
 
-class BusPilotMobileApp extends StatelessWidget {
-  const BusPilotMobileApp({super.key});
+class DizpoMobileApp extends StatelessWidget {
+  const DizpoMobileApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'BusPilot Driver',
-      theme: BusPilotTheme.lightTheme,
+      title: 'Dizpo Driver',
+      theme: DizpoTheme.lightTheme,
       debugShowCheckedModeBanner: false,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -59,7 +59,7 @@ class _MissingConfigPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('BusPilot Mobile')),
+      appBar: AppBar(title: const Text('Dizpo Mobile')),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),
@@ -80,7 +80,7 @@ class _MissingConfigPage extends StatelessWidget {
                     'Starte die App mit: '
                     '--dart-define=SUPABASE_URL=... '
                     '--dart-define=SUPABASE_ANON_KEY=... '
-                    '[--dart-define=BUSPILOT_ACCOUNT_ID=...]',
+                    '[--dart-define=DIZPO_ACCOUNT_ID=...]',
                   ),
                 ],
               ),

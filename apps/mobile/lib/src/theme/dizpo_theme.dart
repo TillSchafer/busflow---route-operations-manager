@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class BusPilotTheme {
+class DizpoTheme {
   static const Color background = Color(0xFFF8FAFC);
   static const Color surface = Color(0xFFFFFFFF);
   static const Color textPrimary = Color(0xFF0F172A);

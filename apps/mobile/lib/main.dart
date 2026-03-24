@@ -15,5 +15,5 @@ Future<void> main() async {
     );
   }
 
-  runApp(const ProviderScope(child: BusPilotMobileApp()));
+  runApp(const ProviderScope(child: DizpoMobileApp()));
 }

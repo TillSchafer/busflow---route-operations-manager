@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../theme/buspilot_theme.dart';
+import '../../theme/dizpo_theme.dart';
 import '../routes/providers/route_providers.dart';
 
 class SettingsTab extends ConsumerWidget {
@@ -45,11 +45,11 @@ class SettingsTab extends ConsumerWidget {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.logout_rounded, color: BusPilotTheme.danger),
+                    leading: const Icon(Icons.logout_rounded, color: DizpoTheme.danger),
                     title: const Text(
                       'Abmelden',
                       style: TextStyle(
-                        color: BusPilotTheme.danger,
+                        color: DizpoTheme.danger,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -64,9 +64,9 @@ class SettingsTab extends ConsumerWidget {
             // ── App info ──────────────────────────────────────────────
             const Center(
               child: Text(
-                'BusPilot Driver · v0.1.0',
+                'Dizpo Driver · v0.1.0',
                 style: TextStyle(
-                  color: BusPilotTheme.textMuted,
+                  color: DizpoTheme.textMuted,
                   fontSize: 12,
                 ),
               ),
@@ -90,7 +90,7 @@ class SettingsTab extends ConsumerWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: BusPilotTheme.danger),
+            style: FilledButton.styleFrom(backgroundColor: DizpoTheme.danger),
             child: const Text('Abmelden'),
           ),
         ],
@@ -121,7 +121,7 @@ class _ProfileCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final initials = _initials(name);
     final roleLabel = isDispatcher ? 'Disponent' : 'Fahrer';
-    final roleColor = isDispatcher ? const Color(0xFF1D4ED8) : BusPilotTheme.success;
+    final roleColor = isDispatcher ? const Color(0xFF1D4ED8) : DizpoTheme.success;
     final roleBg = isDispatcher ? const Color(0xFFDBEAFE) : const Color(0xFFDCFCE7);
 
     return Card(
@@ -134,7 +134,7 @@ class _ProfileCard extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: BusPilotTheme.primary,
+                color: DizpoTheme.primary,
                 borderRadius: BorderRadius.circular(999),
               ),
               alignment: Alignment.center,
@@ -159,7 +159,7 @@ class _ProfileCard extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: BusPilotTheme.textPrimary,
+                      color: DizpoTheme.textPrimary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -169,7 +169,7 @@ class _ProfileCard extends StatelessWidget {
                     email,
                     style: const TextStyle(
                       fontSize: 13,
-                      color: BusPilotTheme.textMuted,
+                      color: DizpoTheme.textMuted,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

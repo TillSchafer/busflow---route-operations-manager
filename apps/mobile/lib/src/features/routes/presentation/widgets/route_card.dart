@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../theme/buspilot_theme.dart';
+import '../../../../theme/dizpo_theme.dart';
 import '../../models/driver_route.dart';
 
 class RouteCard extends StatelessWidget {
@@ -22,7 +22,7 @@ class RouteCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: BusPilotTheme.border),
+            border: Border.all(color: DizpoTheme.border),
           ),
           child: Padding(
             padding: const EdgeInsets.all(14),
@@ -37,7 +37,7 @@ class RouteCard extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
-                          color: BusPilotTheme.textPrimary,
+                          color: DizpoTheme.textPrimary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -75,7 +75,7 @@ class RouteCard extends StatelessWidget {
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ),
-                    const Icon(Icons.chevron_right, size: 18, color: BusPilotTheme.textMuted),
+                    const Icon(Icons.chevron_right, size: 18, color: DizpoTheme.textMuted),
                   ],
                 ),
               ],

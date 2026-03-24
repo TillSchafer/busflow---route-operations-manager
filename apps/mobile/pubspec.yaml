@@ -1,5 +1,5 @@
-name: buspilot_mobile
-description: BusPilot mobile app for route visibility and GPS support.
+name: dizpo_mobile
+description: Dizpo mobile app for route visibility and GPS support.
 publish_to: 'none'
 version: 0.1.0+1
 

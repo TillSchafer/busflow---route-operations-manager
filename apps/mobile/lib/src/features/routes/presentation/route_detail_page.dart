@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../theme/buspilot_theme.dart';
+import '../../../theme/dizpo_theme.dart';
 import '../models/driver_route.dart';
 import '../models/stop_edit.dart';
 import '../providers/route_providers.dart';
@@ -258,7 +258,7 @@ class _RouteDetailPageState extends ConsumerState<RouteDetailPage> {
                     Text(
                       errorText!,
                       style: const TextStyle(
-                        color: BusPilotTheme.danger,
+                        color: DizpoTheme.danger,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -451,7 +451,7 @@ class _RouteDetailPageState extends ConsumerState<RouteDetailPage> {
                           Text(
                             errorText!,
                             style: const TextStyle(
-                              color: BusPilotTheme.danger,
+                              color: DizpoTheme.danger,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
@@ -600,14 +600,14 @@ class _RouteDetailPageState extends ConsumerState<RouteDetailPage> {
                     Icon(
                       _status == s ? Icons.radio_button_checked : Icons.radio_button_unchecked,
                       size: 20,
-                      color: _status == s ? BusPilotTheme.primary : BusPilotTheme.textMuted,
+                      color: _status == s ? DizpoTheme.primary : DizpoTheme.textMuted,
                     ),
                     const SizedBox(width: 10),
                     Text(
                       s,
                       style: TextStyle(
                         fontWeight: _status == s ? FontWeight.w700 : FontWeight.normal,
-                        color: _status == s ? BusPilotTheme.primary : BusPilotTheme.textPrimary,
+                        color: _status == s ? DizpoTheme.primary : DizpoTheme.textPrimary,
                       ),
                     ),
                   ],
@@ -652,7 +652,7 @@ class _RouteDetailPageState extends ConsumerState<RouteDetailPage> {
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: FilledButton.styleFrom(
-              backgroundColor: BusPilotTheme.danger,
+              backgroundColor: DizpoTheme.danger,
             ),
             child: const Text('Löschen'),
           ),
@@ -791,7 +791,7 @@ class _RouteDetailPageState extends ConsumerState<RouteDetailPage> {
               _ActionButton(
                 label: 'Ablaufplan starten',
                 icon: Icons.play_arrow_rounded,
-                color: BusPilotTheme.success,
+                color: DizpoTheme.success,
                 isLoading: _isUpdatingStatus,
                 onPressed: _startRoute,
               )
@@ -799,7 +799,7 @@ class _RouteDetailPageState extends ConsumerState<RouteDetailPage> {
               _ActionButton(
                 label: 'Ablaufplan beenden',
                 icon: Icons.stop_rounded,
-                color: BusPilotTheme.danger,
+                color: DizpoTheme.danger,
                 isLoading: _isUpdatingStatus,
                 onPressed: _endRoute,
               ),
@@ -820,7 +820,7 @@ class _RouteDetailPageState extends ConsumerState<RouteDetailPage> {
                   child: Center(
                     child: Text(
                       'Keine Halte für diesen Ablaufplan.',
-                      style: TextStyle(color: BusPilotTheme.textMuted),
+                      style: TextStyle(color: DizpoTheme.textMuted),
                     ),
                   ),
                 ),
@@ -860,7 +860,7 @@ class _RouteDetailPageState extends ConsumerState<RouteDetailPage> {
                     )
                   : const Icon(Icons.save_outlined),
               label: const Text('Speichern'),
-              backgroundColor: BusPilotTheme.primary,
+              backgroundColor: DizpoTheme.primary,
               foregroundColor: Colors.white,
             )
           : null,
@@ -939,13 +939,13 @@ class _InfoRow extends StatelessWidget {
         crossAxisAlignment:
             multiLine ? CrossAxisAlignment.start : CrossAxisAlignment.center,
         children: [
-          Icon(icon, size: 16, color: BusPilotTheme.textMuted),
+          Icon(icon, size: 16, color: DizpoTheme.textMuted),
           const SizedBox(width: 8),
           SizedBox(
             width: 72,
             child: Text(
               label,
-              style: const TextStyle(fontSize: 13, color: BusPilotTheme.textMuted),
+              style: const TextStyle(fontSize: 13, color: DizpoTheme.textMuted),
             ),
           ),
           Expanded(
@@ -954,7 +954,7 @@ class _InfoRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: isEmpty ? BusPilotTheme.textMuted : BusPilotTheme.textPrimary,
+                color: isEmpty ? DizpoTheme.textMuted : DizpoTheme.textPrimary,
               ),
               maxLines: multiLine ? null : 1,
               overflow: multiLine ? null : TextOverflow.ellipsis,
@@ -1055,8 +1055,8 @@ class _NavigationButton extends StatelessWidget {
       child: OutlinedButton.icon(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          foregroundColor: BusPilotTheme.primary,
-          side: const BorderSide(color: BusPilotTheme.primary, width: 1.5),
+          foregroundColor: DizpoTheme.primary,
+          side: const BorderSide(color: DizpoTheme.primary, width: 1.5),
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),

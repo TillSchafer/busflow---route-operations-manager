@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../../theme/buspilot_theme.dart';
+import '../../../../theme/dizpo_theme.dart';
 import '../../models/driver_route.dart';
 import '../../models/stop_edit.dart';
 
@@ -99,7 +99,7 @@ class StopTile extends StatelessWidget {
                   width: 28,
                   height: 28,
                   decoration: const BoxDecoration(
-                    color: BusPilotTheme.primary,
+                    color: DizpoTheme.primary,
                     shape: BoxShape.circle,
                   ),
                   alignment: Alignment.center,
@@ -119,7 +119,7 @@ class StopTile extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: BusPilotTheme.textPrimary,
+                      color: DizpoTheme.textPrimary,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -128,7 +128,7 @@ class StopTile extends StatelessWidget {
                 IconButton(
                   onPressed: () => _openMaps(context),
                   icon: const Icon(Icons.map_outlined, size: 20),
-                  color: BusPilotTheme.primary,
+                  color: DizpoTheme.primary,
                   tooltip: 'In Maps öffnen',
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -213,7 +213,7 @@ class StopTile extends StatelessWidget {
                   const Icon(
                     Icons.info_outline,
                     size: 14,
-                    color: BusPilotTheme.textMuted,
+                    color: DizpoTheme.textMuted,
                   ),
                   const SizedBox(width: 4),
                   Expanded(
@@ -221,7 +221,7 @@ class StopTile extends StatelessWidget {
                       stop.notes!,
                       style: const TextStyle(
                         fontSize: 12,
-                        color: BusPilotTheme.textMuted,
+                        color: DizpoTheme.textMuted,
                       ),
                     ),
                   ),
@@ -253,7 +253,7 @@ class _TimeLabel extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: BusPilotTheme.textMuted),
+          style: const TextStyle(fontSize: 11, color: DizpoTheme.textMuted),
         ),
         const SizedBox(height: 2),
         Text(
@@ -261,7 +261,7 @@ class _TimeLabel extends StatelessWidget {
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: muted ? BusPilotTheme.textMuted : BusPilotTheme.textPrimary,
+            color: muted ? DizpoTheme.textMuted : DizpoTheme.textPrimary,
           ),
         ),
       ],
@@ -296,7 +296,7 @@ class _ActualTimeButton extends StatelessWidget {
                 : const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: hasValue ? BusPilotTheme.primary : BusPilotTheme.border,
+              color: hasValue ? DizpoTheme.primary : DizpoTheme.border,
             ),
           ),
           child: Column(
@@ -307,8 +307,8 @@ class _ActualTimeButton extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 10,
                   color: enabled
-                      ? (hasValue ? BusPilotTheme.primary : BusPilotTheme.textMuted)
-                      : BusPilotTheme.textMuted,
+                      ? (hasValue ? DizpoTheme.primary : DizpoTheme.textMuted)
+                      : DizpoTheme.textMuted,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -322,8 +322,8 @@ class _ActualTimeButton extends StatelessWidget {
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: enabled
-                            ? (hasValue ? BusPilotTheme.primary : BusPilotTheme.textMuted)
-                            : BusPilotTheme.textMuted,
+                            ? (hasValue ? DizpoTheme.primary : DizpoTheme.textMuted)
+                            : DizpoTheme.textMuted,
                       ),
                     ),
                   ),
@@ -331,8 +331,8 @@ class _ActualTimeButton extends StatelessWidget {
                     Icons.access_time,
                     size: 14,
                     color: enabled
-                        ? (hasValue ? BusPilotTheme.primary : BusPilotTheme.textMuted)
-                        : BusPilotTheme.textMuted,
+                        ? (hasValue ? DizpoTheme.primary : DizpoTheme.textMuted)
+                        : DizpoTheme.textMuted,
                   ),
                 ],
               ),
@@ -364,7 +364,7 @@ class _CounterField extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: BusPilotTheme.textMuted),
+          style: const TextStyle(fontSize: 11, color: DizpoTheme.textMuted),
         ),
         const SizedBox(height: 4),
         Row(
@@ -380,7 +380,7 @@ class _CounterField extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: BusPilotTheme.textPrimary,
+                    color: DizpoTheme.textPrimary,
                   ),
                 ),
               ),
@@ -415,13 +415,13 @@ class _CounterButton extends StatelessWidget {
               : const Color(0xFFF1F5F9),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: onTap != null ? BusPilotTheme.primary : BusPilotTheme.border,
+            color: onTap != null ? DizpoTheme.primary : DizpoTheme.border,
           ),
         ),
         child: Icon(
           icon,
           size: 16,
-          color: onTap != null ? BusPilotTheme.primary : BusPilotTheme.textMuted,
+          color: onTap != null ? DizpoTheme.primary : DizpoTheme.textMuted,
         ),
       ),
     );
