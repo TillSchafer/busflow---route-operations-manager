@@ -31,7 +31,7 @@ export function useRealtimeSync({ activeAccountId, refreshRoutes, refreshSetting
 
     const accountFilter = `account_id=eq.${activeAccountId}`;
     const channel = supabase
-      .channel(`busflow-live-sync-${activeAccountId}`)
+      .channel(`dizpo-live-sync-${activeAccountId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_routes', filter: accountFilter }, scheduleRoutesRefresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_stops', filter: accountFilter }, scheduleRoutesRefresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'busflow_bus_types', filter: accountFilter }, scheduleSettingsRefresh)

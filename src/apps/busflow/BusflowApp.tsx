@@ -19,9 +19,9 @@ import {
   MapDefaultView,
   Route,
 } from './types';
-import { BusFlowApi } from './api';
+import { DizpoApi } from './api';
 import { useToast } from '../../shared/components/ToastProvider';
-import { useBusflowData } from './hooks/useBusflowData';
+import { useDizpoData } from './hooks/useBusflowData';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { useRouteFiltering } from './hooks/useRouteFiltering';
 import { getErrorCode, getErrorMessage } from '../../shared/lib/error-mapping';
@@ -44,7 +44,7 @@ interface Props {
   onOwner?: () => void;
 }
 
-const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onLogout, onGoHome, onAdmin, onOwner }) => {
+const DizpoApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onLogout, onGoHome, onAdmin, onOwner }) => {
   const { pushToast, clearToasts } = useToast();
 
   const [view, setView] = useState<'LIST' | 'EDITOR' | 'PRINT' | 'SETTINGS'>('LIST');
@@ -64,7 +64,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
     routes, busTypes, accountMembers, customers, mapDefaultView,
     setRoutes, setCustomers, setMapDefaultView,
     refreshRoutes, refreshSettingsData,
-  } = useBusflowData(activeAccountId);
+  } = useDizpoData(activeAccountId);
 
   useRealtimeSync({ activeAccountId, refreshRoutes, refreshSettingsData });
 
@@ -140,13 +140,13 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
     try {
       if (isNewRouteDraft) {
         const { id: _draftId, updatedAt: _draftUpdatedAt, ...createPayload } = routeToSave;
-        const created = await BusFlowApi.createRoute(createPayload);
-        await BusFlowApi.saveRouteWithStops(
+        const created = await DizpoApi.createRoute(createPayload);
+        await DizpoApi.saveRouteWithStops(
           { ...routeToSave, id: created.id, updatedAt: created.updatedAt },
           created.updatedAt
         );
       } else {
-        await BusFlowApi.saveRouteWithStops(routeToSave, routeToSave.updatedAt);
+        await DizpoApi.saveRouteWithStops(routeToSave, routeToSave.updatedAt);
       }
       await refreshRoutes();
       setIsNewRouteDraft(false);
@@ -155,7 +155,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
     } catch (error) {
       console.error(error);
       if (getErrorCode(error) === 'ROUTE_CONFLICT') {
-        const fetched = await BusFlowApi.getRoutes();
+        const fetched = await DizpoApi.getRoutes();
         setRoutes(fetched);
         const latestRoute = fetched.find(r => r.id === updatedRoute.id) || null;
         pushToast({
@@ -202,7 +202,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
   const handleCompleteRoute = async (data: CompletionData) => {
     if (!completionRoute) return;
     try {
-      await BusFlowApi.completeRoute(completionRoute.id, data);
+      await DizpoApi.completeRoute(completionRoute.id, data);
       await refreshRoutes();
       setCompletionRoute(null);
       pushToast({ type: 'success', title: 'Fahrt beendet', message: 'Die Fahrt wurde erfolgreich abgeschlossen.' });
@@ -225,7 +225,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
     if (!routeIdToDelete) return;
     setIsDeletingRoute(true);
     try {
-      await BusFlowApi.deleteRoute(routeIdToDelete);
+      await DizpoApi.deleteRoute(routeIdToDelete);
       setRoutes(prev => prev.filter(r => r.id !== routeIdToDelete));
       setRouteIdToDelete(null);
       pushToast({ type: 'success', title: 'Gelöscht', message: 'Der Ablaufplan wurde gelöscht.' });
@@ -256,7 +256,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
   const handleAddBusType = async (busType: BusType) => {
     if (!requireSettings()) return;
     try {
-      await BusFlowApi.createBusType(busType);
+      await DizpoApi.createBusType(busType);
       await refreshSettingsData();
       pushToast({ type: 'success', title: 'Gespeichert', message: 'Bustyp wurde gespeichert.' });
     } catch {
@@ -267,7 +267,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
   const handleRemoveBusType = async (id: string) => {
     if (!requireSettings()) return;
     try {
-      await BusFlowApi.deleteBusType(id);
+      await DizpoApi.deleteBusType(id);
       await refreshSettingsData();
       pushToast({ type: 'success', title: 'Gelöscht', message: 'Bustyp wurde entfernt.' });
     } catch (error) {
@@ -288,8 +288,8 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
   const handleAddCustomerContact = async (contact: CustomerContactFormPayload) => {
     if (!requireSettings()) return;
     try {
-      await BusFlowApi.createCustomerContactWithCompany(contact);
-      const fetched = await BusFlowApi.getCustomersForSuggestions();
+      await DizpoApi.createCustomerContactWithCompany(contact);
+      const fetched = await DizpoApi.getCustomersForSuggestions();
       setCustomers(fetched);
       pushToast({ type: 'success', title: 'Gespeichert', message: 'Kontakt wurde gespeichert.' });
     } catch (error) {
@@ -300,8 +300,8 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
   const handleRemoveCustomerContact = async (contactId: string) => {
     if (!requireSettings()) return;
     try {
-      await BusFlowApi.deleteCustomerContact(contactId);
-      const fetched = await BusFlowApi.getCustomersForSuggestions();
+      await DizpoApi.deleteCustomerContact(contactId);
+      const fetched = await DizpoApi.getCustomersForSuggestions();
       setCustomers(fetched);
       pushToast({ type: 'success', title: 'Gelöscht', message: 'Kontakt wurde entfernt.' });
     } catch (error) {
@@ -311,7 +311,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       }
       if (getErrorCode(error) === 'CONTACT_NOT_FOUND') {
         pushToast({ type: 'error', title: 'Nicht gefunden', message: 'Der Kontakt wurde bereits gelöscht.' });
-        const fetched = await BusFlowApi.getCustomersForSuggestions();
+        const fetched = await DizpoApi.getCustomersForSuggestions();
         setCustomers(fetched);
         return;
       }
@@ -320,14 +320,14 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
   };
 
   const handleFetchCustomerContacts = async (params: CustomerContactListParams): Promise<CustomerContactListResult> => {
-    return BusFlowApi.getCustomerContactsList(params);
+    return DizpoApi.getCustomerContactsList(params);
   };
 
   const handleUpdateCustomerContact = async (id: string, patch: CustomerContactFormPayload) => {
     if (!requireSettings()) return;
     try {
-      await BusFlowApi.updateCustomerContact(id, patch);
-      const fetched = await BusFlowApi.getCustomersForSuggestions();
+      await DizpoApi.updateCustomerContact(id, patch);
+      const fetched = await DizpoApi.getCustomersForSuggestions();
       setCustomers(fetched);
       pushToast({ type: 'success', title: 'Gespeichert', message: 'Kontakt wurde aktualisiert.' });
     } catch (error) {
@@ -342,7 +342,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       return { rows: [], conflicts: [], errors: rows.map(row => ({ rowNumber: row.rowNumber, reason: 'Keine Berechtigung' })) };
     }
     try {
-      return await BusFlowApi.importCustomersPreview(rows);
+      return await DizpoApi.importCustomersPreview(rows);
     } catch (error) {
       pushToast({ type: 'error', title: 'Import-Vorschau fehlgeschlagen', message: `CSV konnte nicht geprüft werden.${getErrorMessage(error) ? ` ${getErrorMessage(error)}` : ''}` });
       return { rows: [], conflicts: [], errors: rows.map(row => ({ rowNumber: row.rowNumber, reason: 'Vorschau fehlgeschlagen.' })) };
@@ -359,8 +359,8 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       return { insertedCompanies: 0, insertedContacts: 0, updatedContacts: 0, skipped: preview.rows.length, conflicts: preview.conflicts.length, errors: preview.rows.map(row => ({ rowNumber: row.rowNumber, reason: 'Keine Berechtigung' })) };
     }
     try {
-      const result = await BusFlowApi.commitCustomerImport(preview, resolutions, onProgress);
-      const fetched = await BusFlowApi.getCustomersForSuggestions();
+      const result = await DizpoApi.commitCustomerImport(preview, resolutions, onProgress);
+      const fetched = await DizpoApi.getCustomersForSuggestions();
       setCustomers(fetched);
       pushToast({ type: 'success', title: 'Import abgeschlossen', message: `Firmen: +${result.insertedCompanies}, Kontakte: +${result.insertedContacts}, Updates: ${result.updatedContacts}.` });
       return result;
@@ -384,7 +384,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
     onProgress?.({ current: 0, total: items.length });
     for (const item of items) {
       try {
-        await BusFlowApi.deleteCustomerContact(item.id);
+        await DizpoApi.deleteCustomerContact(item.id);
         deleted += 1;
       } catch (error) {
         const errorCode = getErrorCode(error);
@@ -393,7 +393,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
       processed += 1;
       onProgress?.({ current: processed, total: items.length });
     }
-    const fetched = await BusFlowApi.getCustomersForSuggestions();
+    const fetched = await DizpoApi.getCustomersForSuggestions();
     setCustomers(fetched);
     if (deleted > 0 && failed.length === 0) {
       pushToast({ type: 'success', title: 'Gelöscht', message: `${deleted} Kontakt(e) wurden gelöscht.` });
@@ -408,7 +408,7 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
   const handleSaveMapDefaultView = async (mapView: MapDefaultView) => {
     if (!requireSettings()) return;
     try {
-      await BusFlowApi.upsertMapDefaultView(mapView);
+      await DizpoApi.upsertMapDefaultView(mapView);
       setMapDefaultView(mapView);
       pushToast({ type: 'success', title: 'Gespeichert', message: 'Karten-Standard wurde gespeichert.' });
     } catch {
@@ -636,4 +636,4 @@ const BusflowApp: React.FC<Props> = ({ authUser, activeAccountId, onProfile, onL
   );
 };
 
-export default BusflowApp;
+export default DizpoApp;

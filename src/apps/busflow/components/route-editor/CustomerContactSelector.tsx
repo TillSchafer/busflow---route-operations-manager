@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Customer, CustomerContact } from '../../types';
-import { BusFlowApi } from '../../api';
+import { DizpoApi } from '../../api';
 import { DROPDOWN_ITEM, DROPDOWN_MENU, DROPDOWN_TRIGGER } from '../../../../shared/components/form/dropdownStyles';
 
 interface CustomerPatch {
@@ -57,7 +57,7 @@ const CustomerContactSelector: React.FC<Props> = ({
         return;
       }
       try {
-        const contacts = await BusFlowApi.getCustomerContacts(customerId);
+        const contacts = await DizpoApi.getCustomerContacts(customerId);
         if (isMounted) setCustomerContacts(contacts);
       } catch {
         if (isMounted) setCustomerContacts([]);

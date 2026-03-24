@@ -3,7 +3,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { RefreshCw, Settings as SettingsIcon } from 'lucide-react';
 import { useAuth } from '../../../shared/auth/AuthContext';
-import { BusFlowApi } from '../../../apps/busflow/api';
+import { DizpoApi } from '../../../apps/busflow/api';
 import { supabase } from '../../../shared/lib/supabase';
 import { MapDefaultView, Route } from '../../../apps/busflow/types';
 import MapSettingsPanel, {
@@ -97,9 +97,9 @@ export default function MapPage() {
   // ── Load initial data ─────────────────────────────────────────────────────
   const loadRoutes = useCallback(async () => {
     if (!activeAccountId) return;
-    BusFlowApi.setActiveAccountId(activeAccountId);
+    DizpoApi.setActiveAccountId(activeAccountId);
     try {
-      const fetched = await BusFlowApi.getRoutes();
+      const fetched = await DizpoApi.getRoutes();
       setRoutes(fetched);
     } catch { /* ignore */ }
   }, [activeAccountId]);
@@ -120,9 +120,9 @@ export default function MapPage() {
 
   const loadDefaultView = useCallback(async () => {
     if (!activeAccountId) return;
-    BusFlowApi.setActiveAccountId(activeAccountId);
+    DizpoApi.setActiveAccountId(activeAccountId);
     try {
-      const view = await BusFlowApi.getMapPageDefaultView();
+      const view = await DizpoApi.getMapPageDefaultView();
       if (view) {
         setMapDefaultView(view);
         if (mapInstance.current && !initialViewApplied.current) {
@@ -135,9 +135,9 @@ export default function MapPage() {
 
   const loadMapSettings = useCallback(async () => {
     if (!activeAccountId) return;
-    BusFlowApi.setActiveAccountId(activeAccountId);
+    DizpoApi.setActiveAccountId(activeAccountId);
     try {
-      const saved = await BusFlowApi.getMapPageSettings();
+      const saved = await DizpoApi.getMapPageSettings();
       if (saved) setMapSettings({ ...DEFAULT_MAP_PAGE_SETTINGS, ...saved });
     } catch { /* fallback to localStorage/defaults already set */ }
   }, [activeAccountId]);
@@ -356,16 +356,16 @@ export default function MapPage() {
     setMapSettings(s);
     saveMapPageSettings(s);
     if (activeAccountId) {
-      BusFlowApi.setActiveAccountId(activeAccountId);
-      BusFlowApi.upsertMapPageSettings(s).catch(() => { /* fire-and-forget */ });
+      DizpoApi.setActiveAccountId(activeAccountId);
+      DizpoApi.upsertMapPageSettings(s).catch(() => { /* fire-and-forget */ });
     }
   };
 
   const handleSaveDefaultView = async (view: MapDefaultView) => {
     if (!activeAccountId) return;
-    BusFlowApi.setActiveAccountId(activeAccountId);
+    DizpoApi.setActiveAccountId(activeAccountId);
     try {
-      await BusFlowApi.upsertMapPageDefaultView(view);
+      await DizpoApi.upsertMapPageDefaultView(view);
       setMapDefaultView(view);
       mapInstance.current?.setView([view.lat, view.lon], view.zoom ?? DEFAULT_ZOOM);
       pushToast({ type: 'success', title: 'Gespeichert', message: 'Standardansicht wurde gespeichert.' });

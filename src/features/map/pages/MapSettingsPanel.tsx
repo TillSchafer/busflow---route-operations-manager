@@ -7,7 +7,7 @@ import ModalShell from '../../../shared/ui/dialog/ModalShell';
 export type { MapPageSettings };
 export { DEFAULT_MAP_PAGE_SETTINGS };
 
-const STORAGE_KEY = 'buspilot_map_settings';
+const STORAGE_KEY = 'dizpo_map_settings';
 
 export function loadMapPageSettings(): MapPageSettings {
   try {

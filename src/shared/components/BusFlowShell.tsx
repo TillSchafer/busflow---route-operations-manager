@@ -2,7 +2,7 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { AppSidebar } from './AppSidebar';
 
-export function BusFlowShell() {
+export function DizpoShell() {
   return (
     <div className="flex min-h-screen bg-slate-50">
       <AppSidebar />

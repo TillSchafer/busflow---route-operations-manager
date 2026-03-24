@@ -61,7 +61,7 @@ describe('AppRouter loading integration', () => {
     const { rerender } = render(<RouterHost showRouter />);
 
     expect(screen.queryByText('Lade Ansicht ...')).not.toBeInTheDocument();
-    expect(screen.queryByText('Lade BusFlow Daten...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Lade Dizpo Daten...')).not.toBeInTheDocument();
 
     act(() => {
       vi.advanceTimersByTime(150);
@@ -75,6 +75,6 @@ describe('AppRouter loading integration', () => {
 
     expect(screen.getByTestId('loading-active-count')).toHaveTextContent('0');
     expect(screen.queryByTestId('full-page-loading-screen')).not.toBeInTheDocument();
-    expect(screen.queryByText('Lade BusFlow Daten...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Lade Dizpo Daten...')).not.toBeInTheDocument();
   });
 });

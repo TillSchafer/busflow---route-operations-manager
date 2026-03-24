@@ -8,7 +8,7 @@ import { useToast } from '../../shared/components/ToastProvider';
 import { ProfileSecurityApi } from '../../shared/api/profile/profileSecurity.api';
 import AppLoadingBridge, { RouteLoadingFallback } from '../../shared/loading/AppLoadingBridge';
 import AuthCallbackNormalizer from './AuthCallbackNormalizer';
-import { BusFlowShell } from '../../shared/components/BusFlowShell';
+import { DizpoShell } from '../../shared/components/BusFlowShell';
 
 const Home = lazy(() => import('../../features/home/pages/HomePage'));
 const PlatformAdmin = lazy(() => import('../../features/admin/platform/pages/PlatformAdminPage'));
@@ -17,7 +17,7 @@ const Profile = lazy(() => import('../../features/profile/pages/ProfilePage'));
 const AcceptInvite = lazy(() => import('../../features/auth/pages/AcceptInvitePage'));
 const AccountSecurity = lazy(() => import('../../features/auth/pages/AccountSecurityPage'));
 const Register = lazy(() => import('../../features/auth/pages/RegisterPage'));
-const BusflowApp = lazy(() => import('../../features/busflow/pages/BusflowAppPage'));
+const DizpoApp = lazy(() => import('../../features/busflow/pages/BusflowAppPage'));
 const MapPage = lazy(() => import('../../features/map/pages/MapPage'));
 
 const LoginScreen: React.FC<{
@@ -352,11 +352,11 @@ const AppRouter: React.FC = () => {
 
   const apps = [
     {
-      id: 'busflow',
-      title: 'BusPilot Routenplanung',
+      id: 'dizpo',
+      title: 'Dizpo Routenplanung',
       description: 'Routen, Halte, Fahrgastzahlen und Druckansicht verwalten.',
       icon: Bus,
-      onClick: () => navigate('/busflow'),
+      onClick: () => navigate('/dizpo'),
       onMouseEnter: () => import('../../features/busflow/pages/BusflowAppPage'),
     },
   ];
@@ -382,12 +382,12 @@ const AppRouter: React.FC = () => {
               />
             }
           />
-          <Route element={<BusFlowShell />}>
+          <Route element={<DizpoShell />}>
             <Route
-              path="/busflow"
+              path="/dizpo"
               element={
                 activeAccountId ? (
-                  <BusflowApp
+                  <DizpoApp
                     authUser={user}
                     activeAccountId={activeAccountId}
                     onProfile={() => navigate('/profile')}

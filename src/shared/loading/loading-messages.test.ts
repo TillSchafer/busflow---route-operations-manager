@@ -30,8 +30,8 @@ describe('loading message resolver', () => {
       ['action.team.invitation.resend', 'Sende Einladung erneut...'],
       ['action.owner.account.create', 'Lege Firma an...'],
       ['action.owner.trial.update', 'Aktualisiere Testphase...'],
-      ['action.busflow.route.save', 'Speichere Route...'],
-      ['action.busflow.customer.import.commit', 'Importiere Kontakte...']
+      ['action.dizpo.route.save', 'Speichere Route...'],
+      ['action.dizpo.customer.import.commit', 'Importiere Kontakte...']
     ] as const;
 
     for (const [key, expected] of knownActionKeys) {

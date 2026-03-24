@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { LayoutList, Map, User, LogOut, ChevronLeft, ChevronRight, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 
-const STORAGE_KEY = 'buspilot_sidebar_collapsed';
+const STORAGE_KEY = 'dizpo_sidebar_collapsed';
 
 export const AppSidebar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -46,7 +46,7 @@ export const AppSidebar: React.FC = () => {
       {/* Logo + Toggle */}
       <div className="flex items-center justify-between px-3 py-4 border-b border-slate-700">
         {!collapsed && (
-          <span className="text-white font-bold text-lg tracking-tight truncate">BusPilot</span>
+          <span className="text-white font-bold text-lg tracking-tight truncate">Dizpo</span>
         )}
         <button
           onClick={() => setCollapsed(c => !c)}
@@ -61,7 +61,7 @@ export const AppSidebar: React.FC = () => {
 
       {/* Nav links */}
       <nav className="flex-1 flex flex-col gap-1 p-2 overflow-hidden">
-        <NavLink to="/busflow" className={navItemClass} title="Ablaufplanung">
+        <NavLink to="/dizpo" className={navItemClass} title="Ablaufplanung">
           <LayoutList className="w-5 h-5 shrink-0" />
           {!collapsed && <span className="truncate">Ablaufplanung</span>}
         </NavLink>
