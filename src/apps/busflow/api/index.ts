@@ -18,19 +18,14 @@ import {
   upsertMapPageSettings
 } from './settings.api';
 import {
-  createCustomer,
-  deleteCustomer,
-  getCustomers,
-  getCustomersForSuggestions,
-  updateCustomer
+  getCustomersForSuggestions
 } from './customers.api';
 import {
   createCustomerContactWithCompany,
   deleteCustomerContact,
   getCustomerContacts,
   getCustomerContactsList,
-  updateCustomerContact,
-  upsertCustomerContact
+  updateCustomerContact
 } from './contacts.api';
 import {
   commitCustomerImport,
@@ -38,7 +33,7 @@ import {
 } from './import.api';
 import { setActiveAccountId } from './shared';
 
-export const BusFlowApi = {
+export const DizpoApi = {
   setActiveAccountId,
   getRoutes,
   createRoute,
@@ -49,19 +44,14 @@ export const BusFlowApi = {
   createBusType,
   deleteBusType,
   getAccountMembers,
-  getCustomers,
   getCustomersForSuggestions,
   getCustomerContactsList,
   getCustomerContacts,
-  createCustomer,
-  upsertCustomerContact,
   createCustomerContactWithCompany,
   updateCustomerContact,
   deleteCustomerContact,
-  updateCustomer,
   importCustomersPreview,
   commitCustomerImport,
-  deleteCustomer,
   getMapDefaultView,
   upsertMapDefaultView,
   getMapPageDefaultView,

@@ -40,12 +40,6 @@ export interface Route {
   timeReturnCustomer?: string;
 }
 
-export type RouteAction =
-  | { type: 'ADD_ROUTE'; payload: Route }
-  | { type: 'UPDATE_ROUTE'; payload: Route }
-  | { type: 'DELETE_ROUTE'; payload: string }
-  | { type: 'SET_ROUTES'; payload: Route[] };
-
 export interface BusType {
   id: string;
   name: string;
