@@ -17,6 +17,7 @@ const Profile = lazy(() => import('../../features/profile/pages/ProfilePage'));
 const AcceptInvite = lazy(() => import('../../features/auth/pages/AcceptInvitePage'));
 const AccountSecurity = lazy(() => import('../../features/auth/pages/AccountSecurityPage'));
 const Register = lazy(() => import('../../features/auth/pages/RegisterPage'));
+const PasswordReset = lazy(() => import('../../features/auth/pages/PasswordResetPage'));
 const DizpoApp = lazy(() => import('../../features/busflow/pages/BusflowAppPage'));
 const MapPage = lazy(() => import('../../features/map/pages/MapPage'));
 
@@ -25,17 +26,15 @@ const LoginScreen: React.FC<{
   password: string;
   authMessage: { type: 'error' | 'info'; text: string } | null;
   isLoggingIn: boolean;
-  isSendingReset: boolean;
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
   onSubmit: (e: React.FormEvent) => Promise<void>;
-  onForgotPassword: () => Promise<void>;
+  onForgotPassword: () => void;
 }> = ({
   email,
   password,
   authMessage,
   isLoggingIn,
-  isSendingReset,
   onEmailChange,
   onPasswordChange,
   onSubmit,
@@ -79,11 +78,10 @@ const LoginScreen: React.FC<{
 
       <button
         type="button"
-        disabled={isSendingReset}
         onClick={onForgotPassword}
-        className="w-full text-sm font-semibold text-blue-700 hover:text-blue-600 disabled:opacity-50"
+        className="w-full text-sm font-semibold text-blue-700 hover:text-blue-600"
       >
-        {isSendingReset ? 'Sende Reset-Link...' : 'Passwort vergessen?'}
+        Passwort vergessen?
       </button>
 
       {authMessage && (
@@ -146,7 +144,6 @@ const AppRouter: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [isSendingReset, setIsSendingReset] = useState(false);
   const [authMessage, setAuthMessage] = useState<{ type: 'error' | 'info'; text: string } | null>(null);
 
   const [profileEmailDraft, setProfileEmailDraft] = useState('');
@@ -185,32 +182,12 @@ const AppRouter: React.FC = () => {
     }
   };
 
-  const handleForgotPassword = async () => {
+  const handleForgotPassword = () => {
     const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail) {
-      const message = 'Bitte zuerst Ihre E-Mail-Adresse eingeben.';
-      setAuthMessage({ type: 'error', text: message });
-      pushToast({ type: 'error', title: 'E-Mail fehlt', message });
-      return;
-    }
-
-    setAuthMessage(null);
-    setIsSendingReset(true);
-
-    try {
-      const redirectTo =
-        (import.meta.env.VITE_PASSWORD_RESET_REDIRECT_URL as string | undefined)?.trim() ||
-        `${window.location.origin}/auth/accept-invite`;
-
-      await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo });
-    } catch {
-      // Neutral response on purpose to avoid account enumeration.
-    } finally {
-      setIsSendingReset(false);
-      const message = 'Wenn ein passendes Konto existiert, wurde ein Reset-Link per E-Mail versendet.';
-      setAuthMessage({ type: 'info', text: message });
-      pushToast({ type: 'success', title: 'Reset-Link gesendet', message });
-    }
+    const target = normalizedEmail
+      ? `/auth/passwort-vergessen?email=${encodeURIComponent(normalizedEmail)}`
+      : '/auth/passwort-vergessen';
+    navigate(target);
   };
 
   const handleLogout = async () => {
@@ -313,6 +290,7 @@ const AppRouter: React.FC = () => {
             <Route path="/auth/accept-invite" element={<AcceptInvite />} />
             <Route path="/auth/account-security" element={<AccountSecurity />} />
             <Route path="/auth/register" element={<Register />} />
+            <Route path="/auth/passwort-vergessen" element={<PasswordReset />} />
             <Route
               path="*"
               element={
@@ -321,7 +299,6 @@ const AppRouter: React.FC = () => {
                   password={password}
                   authMessage={authMessage}
                   isLoggingIn={isLoggingIn}
-                  isSendingReset={isSendingReset}
                   onEmailChange={setEmail}
                   onPasswordChange={setPassword}
                   onSubmit={handleAuth}
@@ -337,11 +314,12 @@ const AppRouter: React.FC = () => {
 
   const isAcceptInviteRoute = location.pathname === '/auth/accept-invite';
   const isAccountSecurityRoute = location.pathname === '/auth/account-security';
+  const isPasswordResetRoute = location.pathname === '/auth/passwort-vergessen';
   const searchParams = new URLSearchParams(location.search);
   const hashParams = new URLSearchParams(location.hash.startsWith('#') ? location.hash.slice(1) : location.hash);
   const hasPendingAuthCallback = hasAuthCallbackParam(searchParams) || hasAuthCallbackParam(hashParams);
 
-  if (!user.isPlatformAdmin && !activeAccountId && !isAcceptInviteRoute && !isAccountSecurityRoute && !hasPendingAuthCallback) {
+  if (!user.isPlatformAdmin && !activeAccountId && !isAcceptInviteRoute && !isAccountSecurityRoute && !isPasswordResetRoute && !hasPendingAuthCallback) {
     return (
       <>
         <AuthCallbackNormalizer />
@@ -461,6 +439,7 @@ const AppRouter: React.FC = () => {
           <Route path="/admin" element={<Navigate to={canManageTenantUsers ? '/adminbereich' : '/'} replace />} />
           <Route path="/auth/accept-invite" element={<AcceptInvite />} />
           <Route path="/auth/account-security" element={<AccountSecurity />} />
+          <Route path="/auth/passwort-vergessen" element={<PasswordReset />} />
           <Route
             path="/profile"
             element={
