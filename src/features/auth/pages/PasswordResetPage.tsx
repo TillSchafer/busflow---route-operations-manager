@@ -4,6 +4,7 @@ import { supabase } from '../../../shared/lib/supabase';
 import AuthScreenShell from '../../../shared/components/auth/AuthScreenShell';
 
 type ViewState =
+  | 'loading'         // Checking session on mount (step=set-password in URL)
   | 'initial'         // Email input + "Code anfordern" button
   | 'code_sent'       // Code input visible, cooldown running
   | 'verifying'       // verifyOtp in progress
@@ -16,6 +17,9 @@ const CODE_COOLDOWN_SECONDS = 60;
 const getEmailFromUrl = (): string =>
   new URLSearchParams(window.location.search).get('email')?.trim().toLowerCase() || '';
 
+const getStepFromUrl = (): string =>
+  new URLSearchParams(window.location.search).get('step') || '';
+
 const persistEmailInUrl = (email: string) => {
   const params = new URLSearchParams(window.location.search);
   params.set('email', email);
@@ -23,9 +27,12 @@ const persistEmailInUrl = (email: string) => {
 };
 
 const PasswordResetPage: React.FC = () => {
+  const isSetPasswordStep = getStepFromUrl() === 'set-password';
   const didCheckSessionRef = useRef(false);
 
-  const [state, setState] = useState<ViewState>('initial');
+  // Start in 'loading' when arriving via the set-password redirect
+  // so the user never sees a flash of the email form.
+  const [state, setState] = useState<ViewState>(isSetPasswordStep ? 'loading' : 'initial');
   const [email, setEmail] = useState(getEmailFromUrl);
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
@@ -54,24 +61,25 @@ const PasswordResetPage: React.FC = () => {
     return () => { if (cooldownRef.current) clearInterval(cooldownRef.current); };
   }, []);
 
-  // On mount: check for an existing session (happens after OTP verify causes a component remount).
+  // On mount: when arriving via ?step=set-password, verify the session is still valid.
+  // This runs after the full-page reload that follows a successful OTP verification.
   useEffect(() => {
+    if (!isSetPasswordStep) return;
     if (didCheckSessionRef.current) return;
     didCheckSessionRef.current = true;
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session?.user) return;
-
       const emailInUrl = getEmailFromUrl();
-      if (emailInUrl) {
+      if (session?.user && emailInUrl) {
         setEmail(emailInUrl);
         setState('needs_password');
       } else {
-        // Session exists but no reset context — sign out and go to login.
-        supabase.auth.signOut().then(() => window.location.assign('/'));
+        // Session expired or missing — restart from the beginning.
+        window.history.replaceState({}, '', window.location.pathname);
+        setState('initial');
       }
     });
-  }, []);
+  }, [isSetPasswordStep]);
 
   const handleRequestCode = async (isResend = false) => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -83,11 +91,11 @@ const PasswordResetPage: React.FC = () => {
     setErrorText('');
     setIsRequestingCode(true);
 
-    // Preserve email in URL so it survives a component remount after OTP verify.
+    // Preserve email in URL so it survives a potential remount.
     persistEmailInUrl(normalizedEmail);
 
     // Neutral response regardless of result — prevents account enumeration.
-    // shouldCreateUser: false means Supabase won't create a new user.
+    // shouldCreateUser: false prevents new user creation.
     await supabase.auth.signInWithOtp({
       email: normalizedEmail,
       options: { shouldCreateUser: false },
@@ -123,10 +131,13 @@ const PasswordResetPage: React.FC = () => {
       return;
     }
 
-    // OTP verified — user now has a session.
-    // AppRouter may remount this component; the session check in useEffect handles that case.
-    // Setting state here covers the case where no remount occurs.
-    setState('needs_password');
+    // OTP verified — user now has a session. Do a full-page reload to the
+    // set-password step. This avoids React auth-state-transition issues that
+    // occur when AppRouter switches route trees on the SIGNED_IN event.
+    const emailParam = encodeURIComponent(email.trim().toLowerCase());
+    window.location.assign(
+      `/auth/passwort-vergessen?email=${emailParam}&step=set-password`
+    );
   };
 
   const handleSetPassword = async (e: React.FormEvent) => {
@@ -148,9 +159,8 @@ const PasswordResetPage: React.FC = () => {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
 
-      // Use a full-page reload to '/' instead of React router's navigate().
-      // This avoids redirect issues that occur while auth state is transitioning
-      // after updateUser fires the USER_UPDATED event (which re-triggers AuthContext).
+      // Full-page reload to '/' — avoids React router redirect issues that occur
+      // while auth state is transitioning after updateUser fires USER_UPDATED.
       window.location.assign('/');
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : 'Passwort konnte nicht gesetzt werden.');
@@ -163,6 +173,10 @@ const PasswordResetPage: React.FC = () => {
   return (
     <AuthScreenShell>
       <h2 className="text-2xl font-bold text-slate-900 mb-2">Passwort zurücksetzen</h2>
+
+      {state === 'loading' && (
+        <p className="text-sm text-slate-600">Wird geladen...</p>
+      )}
 
       {(state === 'verifying' || state === 'saving') && (
         <p className="text-sm text-slate-600">
