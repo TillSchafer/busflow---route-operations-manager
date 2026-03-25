@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { supabase } from '../../../shared/lib/supabase';
 import AuthScreenShell from '../../../shared/components/auth/AuthScreenShell';
 
@@ -9,7 +9,6 @@ type ViewState =
   | 'verifying'       // verifyOtp in progress
   | 'needs_password'  // New password form
   | 'saving'          // updateUser in progress
-  | 'success'         // Done
   | 'error';          // Unrecoverable error
 
 const CODE_COOLDOWN_SECONDS = 60;
@@ -24,7 +23,6 @@ const persistEmailInUrl = (email: string) => {
 };
 
 const PasswordResetPage: React.FC = () => {
-  const navigate = useNavigate();
   const didCheckSessionRef = useRef(false);
 
   const [state, setState] = useState<ViewState>('initial');
@@ -56,24 +54,24 @@ const PasswordResetPage: React.FC = () => {
     return () => { if (cooldownRef.current) clearInterval(cooldownRef.current); };
   }, []);
 
-  // Handle remount after OTP verification: user now has a session.
+  // On mount: check for an existing session (happens after OTP verify causes a component remount).
   useEffect(() => {
     if (didCheckSessionRef.current) return;
     didCheckSessionRef.current = true;
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        const emailInUrl = getEmailFromUrl();
-        if (emailInUrl) {
-          setEmail(emailInUrl);
-          setState('needs_password');
-        } else {
-          // Authenticated but arrived here without reset context — sign out and redirect.
-          supabase.auth.signOut().then(() => navigate('/'));
-        }
+      if (!session?.user) return;
+
+      const emailInUrl = getEmailFromUrl();
+      if (emailInUrl) {
+        setEmail(emailInUrl);
+        setState('needs_password');
+      } else {
+        // Session exists but no reset context — sign out and go to login.
+        supabase.auth.signOut().then(() => window.location.assign('/'));
       }
     });
-  }, [navigate]);
+  }, []);
 
   const handleRequestCode = async (isResend = false) => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -85,21 +83,18 @@ const PasswordResetPage: React.FC = () => {
     setErrorText('');
     setIsRequestingCode(true);
 
-    // Preserve email in URL so it survives remount after OTP verify.
+    // Preserve email in URL so it survives a component remount after OTP verify.
     persistEmailInUrl(normalizedEmail);
 
-    // Always use signInWithOtp — neutral response prevents account enumeration.
-    // shouldCreateUser: false means Supabase won't create a new user if email is unknown.
+    // Neutral response regardless of result — prevents account enumeration.
+    // shouldCreateUser: false means Supabase won't create a new user.
     await supabase.auth.signInWithOtp({
       email: normalizedEmail,
       options: { shouldCreateUser: false },
     });
 
     setIsRequestingCode(false);
-
-    if (!isResend) {
-      setCode('');
-    }
+    if (!isResend) setCode('');
     startCooldown(CODE_COOLDOWN_SECONDS);
     setState('code_sent');
   };
@@ -128,9 +123,9 @@ const PasswordResetPage: React.FC = () => {
       return;
     }
 
-    // OTP verified — user now has a session. AppRouter may remount this component.
-    // If it does, the session check in useEffect will set state = 'needs_password'.
-    // Setting it here too covers the case where remount doesn't happen.
+    // OTP verified — user now has a session.
+    // AppRouter may remount this component; the session check in useEffect handles that case.
+    // Setting state here covers the case where no remount occurs.
     setState('needs_password');
   };
 
@@ -153,10 +148,10 @@ const PasswordResetPage: React.FC = () => {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
 
-      // Sign out after reset — user must log in with new password.
-      await supabase.auth.signOut();
-      setState('success');
-      window.setTimeout(() => navigate('/'), 1500);
+      // Use a full-page reload to '/' instead of React router's navigate().
+      // This avoids redirect issues that occur while auth state is transitioning
+      // after updateUser fires the USER_UPDATED event (which re-triggers AuthContext).
+      window.location.assign('/');
     } catch (err) {
       setErrorText(err instanceof Error ? err.message : 'Passwort konnte nicht gesetzt werden.');
       setState('needs_password');
@@ -171,11 +166,11 @@ const PasswordResetPage: React.FC = () => {
 
       {(state === 'verifying' || state === 'saving') && (
         <p className="text-sm text-slate-600">
-          {state === 'verifying' ? 'Code wird geprüft...' : 'Wird gespeichert...'}
+          {state === 'verifying' ? 'Code wird geprüft...' : 'Passwort wird gespeichert...'}
         </p>
       )}
 
-      {/* Step 1: Email + request code */}
+      {/* Step 1: Email input + request code */}
       {state === 'initial' && (
         <div className="space-y-4">
           <p className="text-sm text-slate-500 mb-6">
@@ -214,8 +209,8 @@ const PasswordResetPage: React.FC = () => {
       {state === 'code_sent' && (
         <form onSubmit={handleVerifyCode} className="space-y-4">
           <p className="text-sm text-slate-600">
-            Wir haben einen 6-stelligen Code an <strong>{email}</strong> gesendet. Falls Sie kein Konto
-            mit dieser Adresse haben, erhalten Sie keine E-Mail.
+            Wir haben einen 6-stelligen Code an <strong>{email}</strong> gesendet.
+            Falls Sie kein Konto mit dieser Adresse haben, erhalten Sie keine E-Mail.
           </p>
 
           <div>
@@ -306,15 +301,6 @@ const PasswordResetPage: React.FC = () => {
             Passwort festlegen
           </button>
         </form>
-      )}
-
-      {state === 'success' && (
-        <div className="space-y-3">
-          <p className="text-sm text-emerald-700 bg-emerald-50 p-3 rounded-lg">
-            Passwort erfolgreich zurückgesetzt.
-          </p>
-          <p className="text-sm text-slate-600">Sie werden zur Anmeldung weitergeleitet...</p>
-        </div>
       )}
 
       {state === 'error' && (
