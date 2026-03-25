@@ -169,19 +169,6 @@ export const mapCustomerFromDb = (customer: DbCustomer): Customer => ({
   metadata: customer.metadata || undefined
 });
 
-export const mapCustomerInsert = (customer: Omit<Customer, 'id'>) => ({
-  name: customer.name,
-  notes: customer.notes,
-  phone: customer.phone,
-  street: customer.street,
-  postal_code: customer.postalCode,
-  city: customer.city,
-  country: customer.country,
-  email: customer.email,
-  contact_person: customer.contactPerson,
-  metadata: customer.metadata || {}
-});
-
 export const mapCustomerContactFromDb = (contact: DbCustomerContact): CustomerContact => ({
   id: contact.id,
   customerId: contact.customer_id || '',
