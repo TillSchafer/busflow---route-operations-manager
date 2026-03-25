@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 
-export type FunctionAuthErrorCode = 'AUTH_SESSION_MISSING' | 'AUTH_SESSION_INVALID';
+type FunctionAuthErrorCode = 'AUTH_SESSION_MISSING' | 'AUTH_SESSION_INVALID';
 
 const SESSION_INVALID_MESSAGE = 'Sitzung ungültig/abgelaufen. Bitte neu anmelden.';
 const FUNCTION_INVOKE_FAILED_MESSAGE = 'Function-Aufruf fehlgeschlagen.';
