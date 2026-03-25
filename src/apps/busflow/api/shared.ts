@@ -84,8 +84,8 @@ export type DbRoute = {
   busflow_customer_contacts?: DbCustomerContact | DbCustomerContact[] | null;
 };
 
-export type ErrorWithCode = Error & { code?: string; latestUpdatedAt?: string };
-export type PostgrestLikeError = { code?: string };
+type ErrorWithCode = Error & { code?: string; latestUpdatedAt?: string };
+type PostgrestLikeError = { code?: string };
 
 export const getErrorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;

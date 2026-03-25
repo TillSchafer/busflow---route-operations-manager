@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
-export type Role = 'ADMIN' | 'DISPATCH' | 'VIEWER';
+type Role = 'ADMIN' | 'DISPATCH' | 'VIEWER';
 type GlobalRole = 'ADMIN' | 'USER';
 type MembershipRole = 'ADMIN' | 'DISPATCH' | 'VIEWER';
 
-export interface User {
+interface User {
   id: string;
   name: string;
   role: Role;
@@ -16,7 +16,7 @@ export interface User {
   isPlatformOwner?: boolean;
 }
 
-export interface AccountSummary {
+interface AccountSummary {
   id: string;
   name: string;
   slug: string;
