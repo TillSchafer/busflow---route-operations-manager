@@ -96,13 +96,6 @@ export interface DeleteAccountResult {
   message?: string;
 }
 
-export interface SupportPasswordResetResult {
-  ok: boolean;
-  code?: string;
-  message?: string;
-  auditError?: string | null;
-}
-
 export interface ManageInvitationResult {
   ok: boolean;
   code?: string;
